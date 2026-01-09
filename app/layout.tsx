@@ -36,12 +36,6 @@ export const metadata: Metadata = {
     locale: 'en_NG',
     images: [
       {
-        url: 'https://nimart.ng/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Nimart - Nigeria\'s Service Marketplace',
-      },
-      {
         url: 'https://nimart.ng/logo-square.png',
         width: 300,
         height: 300,
@@ -57,7 +51,7 @@ export const metadata: Metadata = {
     creator: '@nimartng',
     title: 'Nimart - Nigeria\'s #1 Service Marketplace',
     description: 'Find trusted and verified service providers in Nigeria',
-    images: ['https://nimart.ng/twitter-image.png'],
+    images: ['https://nimart.ng/logo-square.png'],
   },
   
   // Robots
@@ -81,8 +75,6 @@ export const metadata: Metadata = {
   // Verification
   verification: {
     google: 'YOUR_GOOGLE_VERIFICATION_CODE',
-    // yandex: 'YOUR_YANDEX_VERIFICATION', // Remove if not using
-    // yahoo: 'YOUR_YAHOO_VERIFICATION', // Remove if not using
   },
   
   // Other meta
@@ -95,6 +87,12 @@ export const metadata: Metadata = {
     email: false,
   },
   metadataBase: new URL('https://nimart.ng'),
+  
+  // Icons - Use only files that exist in your public folder
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/logo-square.png',
+  },
 }
 
 // Structured Data for homepage
@@ -142,42 +140,24 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-  {/* WhatsApp-specific tags - MUST BE FIRST in <head> */}
-  <meta property="og:image" content="https://nimart.ng/logo-square.png" />
-  <meta property="og:image:width" content="300" />
-  <meta property="og:image:height" content="300" />
-  <meta property="og:image:alt" content="Nimart Logo" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:title" content="Nimart - Nigeria's #1 Service Marketplace" />
-  <meta property="og:description" content="Find trusted service providers in Nigeria" />
-  <meta property="og:url" content="https://nimart.ng" />
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        
-        {/* Icons */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="manifest" href="/site.webmanifest" />
-        
-        {/* Open Graph Meta Tags (Critical for WhatsApp/Facebook) */}
+        {/* WhatsApp/Facebook Open Graph Tags - MUST BE FIRST */}
         <meta property="og:title" content="Nimart - Nigeria's #1 Service Marketplace" />
-        <meta property="og:description" content="Find trusted and verified service providers in Nigeria. Connect with mechanics, electricians, plumbers, carpenters, painters, tailors, cleaners, chefs, and 50+ other services." />
+        <meta property="og:description" content="Find trusted service providers in Nigeria" />
         <meta property="og:url" content="https://nimart.ng" />
-        <meta property="og:site_name" content="Nimart" />
-        <meta property="og:type" content="website" />
-        
-        {/* Image for WhatsApp - MUST BE ABSOLUTE URL */}
         <meta property="og:image" content="https://nimart.ng/logo-square.png" />
         <meta property="og:image:width" content="300" />
         <meta property="og:image:height" content="300" />
         <meta property="og:image:alt" content="Nimart Logo" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:site_name" content="Nimart" />
+        <meta property="og:type" content="website" />
         
-        {/* Additional image for Facebook */}
-        <meta property="og:image" content="https://nimart.ng/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        
+        {/* Icons - Only reference files that exist in public/ folder */}
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/logo-square.png" />
         
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
@@ -185,7 +165,7 @@ export default function RootLayout({
         <meta name="twitter:creator" content="@nimartng" />
         <meta name="twitter:title" content="Nimart - Nigeria's #1 Service Marketplace" />
         <meta name="twitter:description" content="Find trusted and verified service providers in Nigeria" />
-        <meta name="twitter:image" content="https://nimart.ng/twitter-image.png" />
+        <meta name="twitter:image" content="https://nimart.ng/logo-square.png" />
         
         {/* Additional SEO */}
         <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
