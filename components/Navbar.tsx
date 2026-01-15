@@ -1,4 +1,4 @@
-// components/Navbar.tsx - FIXED VERSION
+// components/Navbar.tsx - FIXED VERSION WITH IMMEDIATE LOGOUT UPDATE
 'use client'
 
 import { useState, useEffect, useRef, useCallback, memo, ComponentType, ReactNode } from 'react'
@@ -186,6 +186,7 @@ export default function ModernNavbar() {
   // Refs for subscriptions
   const subscriptionRef = useRef<any>(null)
   const mountedRef = useRef(true)
+  const authSubscriptionRef = useRef<any>(null)
 
   // Optimized auth check with caching
   const checkAuth = useCallback(async () => {
@@ -405,19 +406,24 @@ export default function ModernNavbar() {
     }
   }, [user])
 
-  // Handle logout with cleanup
+  // Handle logout with cleanup - FIXED VERSION WITH IMMEDIATE UI UPDATE
   const handleLogout = useCallback(async () => {
     try {
       setUserMenuOpen(false)
       setMobileMenuOpen(false)
       
-      // Cleanup
+      // Immediately update UI state
+      setUser(null)
+      setUserType(null)
+      setUserProfile(null)
+      setUnreadCount(0)
+      setUnreadMessages(0)
+      
+      // Cleanup subscriptions
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe()
         subscriptionRef.current = null
       }
-      
-      mountedRef.current = false
       
       // Clear cache
       localStorage.removeItem('nimart-cached-session')
@@ -425,14 +431,38 @@ export default function ModernNavbar() {
         localStorage.removeItem(`nimart-profile-${user.id}`)
       }
       
-      await supabase.auth.signOut()
-      router.push('/login')
+      // Clear all localStorage auth data
+      const authKeys = Object.keys(localStorage).filter(key => 
+        key.includes('supabase') || 
+        key.includes('auth') || 
+        key.includes('token')
+      )
+      authKeys.forEach(key => localStorage.removeItem(key))
+      
+      // Clear sessionStorage
+      sessionStorage.clear()
+      
+      // Clear cookies
+      document.cookie = 'is-authenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
+      document.cookie = 'user-type=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
+      document.cookie = 'provider-id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut()
+      if (error) console.error('Sign out error:', error)
+      
+      // Force hard redirect to home page
+      setTimeout(() => {
+        router.push('/')
+        router.refresh() // Refresh the page to ensure clean state
+      }, 100)
       
     } catch (error) {
       console.error('Logout error:', error)
-      router.push('/login')
+      // Still redirect even if there's an error
+      router.push('/')
     }
-  }, [router, user?.id])
+  }, [user?.id, router])
 
   // Get user info
   const getUserDisplayName = useCallback(() => {
@@ -450,18 +480,19 @@ export default function ModernNavbar() {
     return null
   }, [user, userProfile])
 
-  // Initialize with optimized loading
-  useEffect(() => {
-    mountedRef.current = true
-    
-    const init = async () => {
-      await checkAuth()
-      
-      // Setup auth listener
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (!mountedRef.current) return
-          
+  // Setup auth state change listener - FIXED FOR IMMEDIATE UPDATES
+  const setupAuthListener = useCallback(() => {
+    // Cleanup existing listener
+    if (authSubscriptionRef.current) {
+      authSubscriptionRef.current.unsubscribe()
+    }
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Navbar: Auth state changed:', event)
+        
+        if (mountedRef.current) {
           setUser(session?.user || null)
           setUserType(session?.user?.user_metadata?.user_type || null)
           
@@ -477,9 +508,13 @@ export default function ModernNavbar() {
             await loadUnreadCounts(session.user.id)
             setupRealtimeSubscription(session.user.id)
           } else {
+            // User logged out
             setUnreadCount(0)
             setUnreadMessages(0)
             setUserProfile(null)
+            
+            // Clear cache
+            localStorage.removeItem('nimart-cached-session')
             
             if (subscriptionRef.current) {
               subscriptionRef.current.unsubscribe()
@@ -487,9 +522,19 @@ export default function ModernNavbar() {
             }
           }
         }
-      )
+      }
+    )
 
-      return () => subscription.unsubscribe()
+    authSubscriptionRef.current = subscription
+  }, [loadUserProfile, loadUnreadCounts, setupRealtimeSubscription])
+
+  // Initialize with optimized loading
+  useEffect(() => {
+    mountedRef.current = true
+    
+    const init = async () => {
+      await checkAuth()
+      setupAuthListener()
     }
 
     init()
@@ -499,8 +544,11 @@ export default function ModernNavbar() {
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe()
       }
+      if (authSubscriptionRef.current) {
+        authSubscriptionRef.current.unsubscribe()
+      }
     }
-  }, [checkAuth, loadUserProfile, loadUnreadCounts, setupRealtimeSubscription])
+  }, [checkAuth, setupAuthListener])
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -962,7 +1010,7 @@ export default function ModernNavbar() {
         </div>
       </div>
       
-      {/* Spacer */}
+      {/* Spacer - This provides the space for the fixed navbar */}
       <div className="h-16"></div>
     </>
   )

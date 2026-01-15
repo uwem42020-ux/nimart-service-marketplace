@@ -1,9 +1,9 @@
-// app/layout.tsx - COMPLETE FIXED VERSION
+// app/layout.tsx - COMPLETE FIXED VERSION (SessionChecker commented out)
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
-import SessionChecker from '@/components/SessionChecker'
+// import SessionChecker from '@/components/SessionChecker' // COMMENTED OUT
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -309,13 +309,6 @@ export default function RootLayout({
           }}
         />
         
-        {/* Preload Critical Assets */}
-        <link
-          rel="preload"
-          href="/_next/static/css/app/layout.css"
-          as="style"
-        />
-        
         {/* Preconnect to CDNs */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -362,14 +355,14 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} antialiased bg-white text-gray-900`}>
-        {/* Session Checker - Handles auth state */}
-        <SessionChecker />
+        {/* Session Checker - COMMENTED OUT TEMPORARILY */}
+        {/* <SessionChecker /> */}
         
         {/* Navbar Component */}
         <Navbar />
         
-        {/* Main Content */}
-        <main className="min-h-screen pt-16">
+        {/* Main Content - REMOVED pt-16 to fix white gap */}
+        <main className="min-h-screen">
           {children}
         </main>
         
@@ -377,7 +370,7 @@ export default function RootLayout({
         <div id="global-loading" className="fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center hidden">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary"></div>
-            <p className="mt-6 text-lg font-semibold text-gray-700">Loading Nimart...</p>
+            <p className="mt-6 text-lg font-semibold text-gray-700">Loading...</p>
             <p className="mt-2 text-sm text-gray-500">Please wait while we load the best service providers for you</p>
           </div>
         </div>
@@ -453,12 +446,37 @@ export default function RootLayout({
           </div>
         </div>
         
-        {/* Global Utility Scripts */}
+        {/* Global Utility Scripts - FIXED VERSION */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               // Global utility functions
               window.Nimart = window.Nimart || {};
+              
+              // Global DOM element references
+              let loadingOverlay = null;
+              let errorModal = null;
+              let successModal = null;
+              let toast = null;
+              
+              // Initialize everything when DOM is ready
+              function initializeNimart() {
+                // Get DOM references
+                loadingOverlay = document.getElementById('global-loading');
+                errorModal = document.getElementById('global-error');
+                successModal = document.getElementById('global-success');
+                toast = document.getElementById('global-toast');
+                
+                // Ensure loading overlay is hidden on initial load
+                if (loadingOverlay) {
+                  loadingOverlay.classList.add('hidden');
+                }
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                console.log('✅ Nimart utilities initialized');
+              }
               
               // Event handler setup
               function setupEventListeners() {
@@ -470,8 +488,7 @@ export default function RootLayout({
                 
                 if (dismissErrorBtn) {
                   dismissErrorBtn.addEventListener('click', function() {
-                    const modal = document.getElementById('global-error');
-                    if (modal) modal.classList.add('hidden');
+                    if (errorModal) errorModal.classList.add('hidden');
                   });
                 }
                 
@@ -483,14 +500,12 @@ export default function RootLayout({
                 
                 if (dismissSuccessBtn) {
                   dismissSuccessBtn.addEventListener('click', function() {
-                    const modal = document.getElementById('global-success');
-                    if (modal) modal.classList.add('hidden');
+                    if (successModal) successModal.classList.add('hidden');
                   });
                 }
                 
                 if (closeToastBtn) {
                   closeToastBtn.addEventListener('click', function() {
-                    const toast = document.getElementById('global-toast');
                     if (toast) toast.classList.add('hidden');
                   });
                 }
@@ -498,47 +513,61 @@ export default function RootLayout({
               
               // Show loading overlay
               Nimart.showLoading = function(message) {
-                const overlay = document.getElementById('global-loading');
-                if (overlay) {
+                if (!loadingOverlay) {
+                  loadingOverlay = document.getElementById('global-loading');
+                }
+                if (loadingOverlay) {
                   if (message) {
-                    const messageEl = overlay.querySelector('p:nth-child(2)');
+                    const messageEl = loadingOverlay.querySelector('p:nth-child(2)');
                     if (messageEl) messageEl.textContent = message;
                   }
-                  overlay.classList.remove('hidden');
+                  loadingOverlay.classList.remove('hidden');
                 }
               };
               
               // Hide loading overlay
               Nimart.hideLoading = function() {
-                const overlay = document.getElementById('global-loading');
-                if (overlay) {
-                  overlay.classList.add('hidden');
+                if (!loadingOverlay) {
+                  loadingOverlay = document.getElementById('global-loading');
+                }
+                if (loadingOverlay) {
+                  loadingOverlay.classList.add('hidden');
                 }
               };
               
               // Show error modal
               Nimart.showError = function(title, message) {
-                const modal = document.getElementById('global-error');
-                if (modal) {
-                  document.getElementById('error-title').textContent = title || 'Something went wrong';
-                  document.getElementById('error-message').textContent = message || 'Please try again later.';
-                  modal.classList.remove('hidden');
+                if (!errorModal) {
+                  errorModal = document.getElementById('global-error');
+                }
+                if (errorModal) {
+                  const titleEl = document.getElementById('error-title');
+                  const messageEl = document.getElementById('error-message');
+                  if (titleEl) titleEl.textContent = title || 'Something went wrong';
+                  if (messageEl) messageEl.textContent = message || 'Please try again later.';
+                  errorModal.classList.remove('hidden');
                 }
               };
               
               // Show success modal
               Nimart.showSuccess = function(title, message) {
-                const modal = document.getElementById('global-success');
-                if (modal) {
-                  document.getElementById('success-title').textContent = title || 'Success!';
-                  document.getElementById('success-message').textContent = message || 'Operation completed successfully.';
-                  modal.classList.remove('hidden');
+                if (!successModal) {
+                  successModal = document.getElementById('global-success');
+                }
+                if (successModal) {
+                  const titleEl = document.getElementById('success-title');
+                  const messageEl = document.getElementById('success-message');
+                  if (titleEl) titleEl.textContent = title || 'Success!';
+                  if (messageEl) messageEl.textContent = message || 'Operation completed successfully.';
+                  successModal.classList.remove('hidden');
                 }
               };
               
               // Show toast notification
               Nimart.showToast = function(options) {
-                const toast = document.getElementById('global-toast');
+                if (!toast) {
+                  toast = document.getElementById('global-toast');
+                }
                 if (!toast) return;
                 
                 const { 
@@ -569,8 +598,10 @@ export default function RootLayout({
                 }
                 
                 // Set content
-                document.getElementById('toast-title').textContent = title;
-                document.getElementById('toast-message').textContent = message;
+                const titleEl = document.getElementById('toast-title');
+                const messageEl = document.getElementById('toast-message');
+                if (titleEl) titleEl.textContent = title;
+                if (messageEl) messageEl.textContent = message;
                 
                 // Show toast
                 toast.classList.remove('hidden');
@@ -578,37 +609,18 @@ export default function RootLayout({
                 // Auto-hide after duration
                 if (duration > 0) {
                   setTimeout(() => {
-                    toast.classList.add('hidden');
+                    if (toast) toast.classList.add('hidden');
                   }, duration);
                 }
               };
               
-              // Initialize loading state
+              // Initialize when DOM is ready
               document.addEventListener('DOMContentLoaded', function() {
-                // Setup event listeners
-                setupEventListeners();
-                
-                // Hide initial loading after page is ready
-                setTimeout(() => {
-                  Nimart.hideLoading();
-                }, 100);
+                initializeNimart();
               });
               
-              // Handle page transitions
-              document.addEventListener('click', function(e) {
-                const link = e.target.closest('a');
-                if (link && link.href && !link.target && link.href.startsWith(window.location.origin)) {
-                  // Show loading for internal navigation
-                  Nimart.showLoading('Loading...');
-                }
-              });
-              
-              // Handle browser back/forward
-              window.addEventListener('pageshow', function(event) {
-                if (event.persisted) {
-                  Nimart.hideLoading();
-                }
-              });
+              // REMOVED PROBLEMATIC CLICK HANDLER - This was causing infinite loading
+              // No automatic loading on link clicks - let Next.js handle navigation
             `
           }}
         />

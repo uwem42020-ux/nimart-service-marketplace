@@ -1,4 +1,4 @@
-// app/page.tsx - FIXED VERSION
+// app/page.tsx - PRODUCTION READY FIXED VERSION
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -39,7 +39,6 @@ export default function Home() {
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [categoriesVisible, setCategoriesVisible] = useState(6)
   const [gridView, setGridView] = useState<'basic' | 'detailed'>('basic')
-  const [isDarkMode, setIsDarkMode] = useState(false)
   
   // Location state
   const [userLocation, setUserLocation] = useState<UserLocation>({
@@ -99,17 +98,6 @@ export default function Home() {
       window.removeEventListener('online', handleOnlineStatus)
       window.removeEventListener('offline', handleOnlineStatus)
     }
-  }, [])
-
-  // Check for dark mode - CLIENT ONLY
-  useEffect(() => {
-    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    setIsDarkMode(darkModeMediaQuery.matches)
-    
-    const handleChange = (e: MediaQueryListEvent) => setIsDarkMode(e.matches)
-    darkModeMediaQuery.addEventListener('change', handleChange)
-    
-    return () => darkModeMediaQuery.removeEventListener('change', handleChange)
   }, [])
 
   // Load service categories with provider counts using SQL function
@@ -847,17 +835,25 @@ export default function Home() {
     loadFeaturedProviders()
   }
 
-  // Handle provider profile click
-  const handleProviderProfileClick = (providerId: string, e: React.MouseEvent) => {
+  // PRODUCTION-READY: Handle provider profile click with proper auth check
+  const handleProviderProfileClick = async (providerId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     
-    // Check if user is logged in
-    const isLoggedIn = localStorage.getItem('nimart-auth-token') || false
-    
-    if (isLoggedIn) {
-      router.push(`/providers/${providerId}`)
-    } else {
+    try {
+      // Check if user is authenticated with Supabase
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        // User is authenticated, navigate to provider page
+        router.push(`/providers/${providerId}`)
+      } else {
+        // User is not authenticated, redirect to login with proper redirect
+        router.push(`/login?redirect=/providers/${providerId}`)
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+      // Fallback to login page on error
       router.push(`/login?redirect=/providers/${providerId}`)
     }
   }
@@ -870,9 +866,9 @@ export default function Home() {
   ]
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Section - FIXED ELEVATED AND ENHANCED */}
-      <div className={`relative overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-white'} border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+      <div className="relative overflow-hidden bg-white border-b border-gray-200">
         
         {/* Enhanced background */}
         <div className="absolute inset-0 overflow-hidden opacity-10">
@@ -886,32 +882,32 @@ export default function Home() {
             {/* FIXED: SINGLE LINE TITLE ON ALL SCREENS */}
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight px-2 mb-2 sm:mb-3">
               <span className="text-primary">Find Trusted Service Providers</span>
-              <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>&nbsp;near you</span>
+              <span className="text-gray-900">&nbsp;near you</span>
             </h1>
-            <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">
               Connect with verified professionals in your area
             </p>
           </div>
 
           <div className="max-w-4xl mx-auto px-2 sm:px-0">
             <form onSubmit={handleSearch} className="relative">
-              <div className={`relative ${isDarkMode ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700' : 'bg-white/95 backdrop-blur-sm border-gray-300'} rounded-2xl sm:rounded-3xl border-2 shadow-2xl p-2 sm:p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-0`}>
+              <div className="relative bg-white/95 backdrop-blur-sm border-gray-300 rounded-2xl sm:rounded-3xl border-2 shadow-2xl p-2 sm:p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-0">
                 <div className="flex-1 flex items-center min-w-0">
-                  <Search className={`h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} ml-3 sm:ml-5 mr-2 sm:mr-4`} />
+                  <Search className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0 text-gray-500 ml-3 sm:ml-5 mr-2 sm:mr-4" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchInput(e.target.value)}
                     onFocus={() => searchQuery.length > 1 && setShowSuggestions(true)}
                     placeholder="Search for services or providers (e.g., tailor, mechanic, electrician)"
-                    className={`flex-1 min-w-0 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border-0 focus:outline-none focus:ring-0 bg-transparent ${isDarkMode ? 'text-white placeholder-gray-400' : 'text-gray-900 placeholder-gray-500'}`}
+                    className="flex-1 min-w-0 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border-0 focus:outline-none focus:ring-0 bg-transparent text-gray-900 placeholder-gray-500"
                     aria-label="Search for services"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={clearSearch}
-                      className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                      className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors"
                       aria-label="Clear search"
                     >
                       <X className="h-5 w-5 text-gray-400" />
@@ -935,7 +931,7 @@ export default function Home() {
               
               {/* Search Suggestions Dropdown - FIXED WITH SCROLL */}
               {showSuggestions && searchSuggestions.length > 0 && (
-                <div className={`absolute z-[100] w-full mt-2 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-2 rounded-xl shadow-2xl max-h-60 overflow-y-auto`}>
+                <div className="absolute z-[100] w-full mt-2 bg-white border-gray-200 border-2 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
                   <div className="py-2">
                     {searchSuggestions.map((suggestion, index) => (
                       <button
@@ -946,7 +942,7 @@ export default function Home() {
                           performSearch(suggestion.suggestion)
                           setShowSuggestions(false)
                         }}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${isDarkMode ? 'text-gray-200' : 'text-gray-800'} transition-colors`}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center text-gray-800 transition-colors"
                       >
                         <Search className="h-4 w-4 mr-3 text-gray-400" />
                         <div>
@@ -963,14 +959,14 @@ export default function Home() {
             {/* Popular Search Tags - FIXED WITH SCROLL */}
             <div className="mt-6 sm:mt-8">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Popular Services:</span>
+                <span className="text-sm font-medium text-gray-500">Popular Services:</span>
               </div>
               
               <div className="relative">
                 <div 
                   ref={popularTagsRef}
-                  className="flex overflow-x-auto gap-3 pb-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent px-1"
-                  style={{ scrollbarWidth: 'thin', scrollbarColor: `${isDarkMode ? '#4B5563 #1F2937' : '#D1D5DB #F9FAFB'}` }}
+                  className="flex overflow-x-auto gap-3 pb-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1"
+                  style={{ scrollbarWidth: 'thin', scrollbarColor: '#D1D5DB #F9FAFB' }}
                 >
                   {popularServices.map((tag) => (
                     <button
@@ -979,7 +975,7 @@ export default function Home() {
                         setSearchQuery(tag)
                         performSearch(tag)
                       }}
-                      className="flex-shrink-0 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-all duration-300 hover:scale-105 whitespace-nowrap"
+                      className="flex-shrink-0 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-all duration-300 hover:scale-105 whitespace-nowrap"
                     >
                       {tag}
                     </button>
@@ -987,8 +983,8 @@ export default function Home() {
                 </div>
                 
                 {/* Gradient fade edges */}
-                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 dark:from-gray-900 to-transparent pointer-events-none"></div>
-                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 dark:from-gray-900 to-transparent pointer-events-none"></div>
+                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none"></div>
+                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 to-transparent pointer-events-none"></div>
               </div>
             </div>
           </div>
@@ -997,14 +993,14 @@ export default function Home() {
 
       {/* SEARCH RESULTS SECTION - SHOWS ON TOP WHEN SEARCHING */}
       {showSearchResults && (
-        <div className={`py-8 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className="py-8 bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className={`text-lg sm:text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
                   Search Results for "{searchQuery}"
                 </h2>
-                <p className={`mt-1 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <p className="mt-1 text-sm text-gray-600">
                   {searchResultsLoading ? 'Searching...' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} found`}
                 </p>
               </div>
@@ -1013,7 +1009,7 @@ export default function Home() {
                   setShowSearchResults(false)
                   setSearchResults([])
                 }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
               >
                 <X className="h-4 w-4" />
                 Close results
@@ -1025,13 +1021,13 @@ export default function Home() {
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div 
                     key={`search-skeleton-${i}`}
-                    className={`rounded-lg overflow-hidden animate-pulse ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}
+                    className="rounded-lg overflow-hidden animate-pulse bg-gray-200"
                   >
-                    <div className={`aspect-square ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+                    <div className="aspect-square bg-gray-300"></div>
                     <div className="p-3 sm:p-4">
-                      <div className={`h-4 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} rounded mb-3 w-3/4`}></div>
-                      <div className={`h-3 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} rounded mb-3 w-1/2`}></div>
-                      <div className={`h-8 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} rounded w-full`}></div>
+                      <div className="h-4 bg-gray-300 rounded mb-3 w-3/4"></div>
+                      <div className="h-3 bg-gray-300 rounded mb-3 w-1/2"></div>
+                      <div className="h-8 bg-gray-300 rounded w-full"></div>
                     </div>
                   </div>
                 ))}
@@ -1039,26 +1035,25 @@ export default function Home() {
             ) : searchResults.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
                 {searchResults.map((provider) => (
-                  <div key={provider.id} onClick={(e) => handleProviderProfileClick(provider.id, e)}>
-                    <ProviderCard 
-                      provider={provider}
-                      gridView="basic"
-                      isDarkMode={isDarkMode}
-                      userState={userLocation.state}
-                      userLGA={userLocation.lga}
-                    />
-                  </div>
+                  <ProviderCard 
+                    key={provider.id}
+                    provider={provider}
+                    gridView="basic"
+                    isDarkMode={false}
+                    userState={userLocation.state}
+                    userLGA={userLocation.lga}
+                  />
                 ))}
               </div>
             ) : (
               <div className="text-center py-8 sm:py-12">
-                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} mb-4`}>
-                  <Search className={`h-8 w-8 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                  <Search className="h-8 w-8 text-gray-400" />
                 </div>
-                <h3 className={`text-lg sm:text-xl font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                <h3 className="text-lg sm:text-xl font-semibold mb-2 text-gray-900">
                   No Results Found
                 </h3>
-                <p className={`mb-4 text-sm sm:text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <p className="mb-4 text-sm sm:text-base text-gray-600">
                   No providers found for "{searchQuery}". Try a different search term.
                 </p>
               </div>
@@ -1068,13 +1063,13 @@ export default function Home() {
       )}
 
       {/* Location Detection Section - FIXED TO SHOW STATE AND LGA */}
-      <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-white'} border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Mobile toggle button */}
           <div className="sm:hidden py-4">
             <button
               onClick={() => setShowLocationSection(!showLocationSection)}
-              className={`w-full flex items-center justify-between p-4 rounded-xl ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'} transition-all duration-300`}
+              className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-50 transition-all duration-300"
             >
               <div className="flex items-center">
                 <div className="relative mr-3">
@@ -1096,7 +1091,7 @@ export default function Home() {
           
           {/* Location section */}
           <div className={`${showLocationSection ? 'block' : 'hidden'} sm:block py-8 sm:py-10`}>
-            <div className={`p-5 sm:p-6 rounded-2xl ${isDarkMode ? 'bg-gray-800/50' : 'bg-gradient-to-r from-gray-50 to-blue-50'} border ${isDarkMode ? 'border-gray-700' : 'border-blue-100'} shadow-lg`}>
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 border border-blue-100 shadow-lg">
               <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                 <div className="flex-1">
                   <div className="flex items-center mb-4">
@@ -1110,10 +1105,10 @@ export default function Home() {
                       )}
                     </div>
                     <div>
-                      <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <h3 className="text-lg font-bold text-gray-900">
                         Find Services in Your Area
                       </h3>
-                      <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <p className="text-sm mt-1 text-gray-600">
                         {userLocation.detected && userLocation.state 
                           ? `📍 Services near ${userLocation.lga ? userLocation.lga + ', ' : ''}${userLocation.state}`
                           : 'Set your location to find the closest professionals'}
@@ -1122,22 +1117,22 @@ export default function Home() {
                   </div>
                   
                   {/* Current Location Display */}
-                  <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-gray-900/50' : 'bg-white'} border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} shadow-sm`}>
+                  <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-sm">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <MapPin className="h-5 w-5 text-primary mr-2" />
-                        <span className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span className="font-medium text-gray-700">
                           Your Location:
                         </span>
                       </div>
-                      <span className={`font-bold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <span className="font-bold text-sm sm:text-base text-gray-900">
                         {currentLocationText}
                       </span>
                     </div>
                     
                     {/* Location Accuracy Indicator */}
                     {userLocation.detected && userLocation.coordinates && (
-                      <div className="mt-3 flex items-center text-xs text-green-600 dark:text-green-400">
+                      <div className="mt-3 flex items-center text-xs text-green-600">
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         <span>High accuracy location detected</span>
                       </div>
@@ -1146,13 +1141,13 @@ export default function Home() {
                     {/* Show detected State and LGA */}
                     {userLocation.state && (
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">State</div>
+                        <div className="p-2 rounded-lg bg-gray-50">
+                          <div className="text-xs text-gray-500">State</div>
                           <div className="font-medium">{userLocation.state}</div>
                         </div>
                         {userLocation.lga && (
-                          <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">LGA</div>
+                          <div className="p-2 rounded-lg bg-gray-50">
+                            <div className="text-xs text-gray-500">LGA</div>
                             <div className="font-medium">{userLocation.lga}</div>
                           </div>
                         )}
@@ -1212,10 +1207,7 @@ export default function Home() {
                           setSelectedState(e.target.value)
                           setSelectedLGA('')
                         }}
-                        className={`pl-10 pr-4 py-3 rounded-xl border w-full appearance-none ${isDarkMode 
-                          ? 'bg-gray-800 border-gray-700 text-white focus:border-primary' 
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-primary'
-                        } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+                        className="pl-10 pr-4 py-3 rounded-xl border w-full appearance-none bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                       >
                         <option value="">Select State</option>
                         {states.map((state) => (
@@ -1232,10 +1224,7 @@ export default function Home() {
                         value={selectedLGA}
                         onChange={(e) => setSelectedLGA(e.target.value)}
                         disabled={!selectedState}
-                        className={`pl-10 pr-4 py-3 rounded-xl border w-full appearance-none ${isDarkMode 
-                          ? 'bg-gray-800 border-gray-700 text-white focus:border-primary' 
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-primary'
-                        } ${!selectedState ? 'opacity-50 cursor-not-allowed' : ''} focus:outline-none focus:ring-2 focus:ring-primary/20`}
+                        className={`pl-10 pr-4 py-3 rounded-xl border w-full appearance-none bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${!selectedState ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <option value="">Select LGA</option>
                         {getLGAsForState(selectedState).map((lga) => (
@@ -1249,10 +1238,7 @@ export default function Home() {
                     <button
                       onClick={handleLocationSelect}
                       disabled={!selectedState}
-                      className={`px-6 py-3 rounded-xl font-semibold transition-all ${isDarkMode 
-                        ? 'bg-gray-700 hover:bg-gray-600 text-white' 
-                        : 'bg-gray-800 hover:bg-gray-900 text-white'
-                      } ${!selectedState ? 'opacity-50 cursor-not-allowed' : 'shadow-md hover:shadow-lg'}`}
+                      className={`px-6 py-3 rounded-xl font-semibold transition-all bg-gray-800 hover:bg-gray-900 text-white ${!selectedState ? 'opacity-50 cursor-not-allowed' : 'shadow-md hover:shadow-lg'}`}
                     >
                       Set Location
                     </button>
@@ -1265,28 +1251,26 @@ export default function Home() {
       </div>
 
       {/* Featured Providers Section - FIXED MOBILE GRID SPACING */}
-      <section className={`py-10 sm:py-14 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <section className="py-10 sm:py-14 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 sm:mb-10">
             <div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                 Featured Service Providers
               </h2>
-              <p className={`mt-2 text-sm sm:text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className="mt-2 text-sm sm:text-base text-gray-600">
                 {filteredProviders.length} verified professional{filteredProviders.length !== 1 ? 's' : ''} available near you
               </p>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full md:w-auto mt-4 sm:mt-5 md:mt-0">
               {/* View Toggle */}
-              <div className={`inline-flex rounded-xl border ${isDarkMode ? 'border-gray-700' : 'border-gray-300'} p-1`}>
+              <div className="inline-flex rounded-xl border border-gray-300 p-1">
                 <button
                   onClick={() => setGridView('basic')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all ${gridView === 'basic'
                     ? 'bg-primary text-white shadow-sm'
-                    : isDarkMode 
-                      ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   <Grid className="h-4 w-4 mr-2" />
@@ -1296,9 +1280,7 @@ export default function Home() {
                   onClick={() => setGridView('detailed')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all ${gridView === 'detailed'
                     ? 'bg-primary text-white shadow-sm'
-                    : isDarkMode 
-                      ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   <List className="h-4 w-4 mr-2" />
@@ -1314,9 +1296,7 @@ export default function Home() {
                     onClick={() => setSortBy(option.key)}
                     className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${sortBy === option.key
                       ? 'bg-primary text-white shadow-sm'
-                      : isDarkMode 
-                        ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800' 
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                     }`}
                   >
                     {option.label}
@@ -1329,13 +1309,13 @@ export default function Home() {
           {/* Providers Grid - FIXED MOBILE SPACING */}
           {!onlineStatus ? (
             <div className="text-center py-12 sm:py-16">
-              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} mb-6`}>
-                <WifiOff className={`h-10 w-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+                <WifiOff className="h-10 w-10 text-gray-400" />
               </div>
-              <h3 className={`text-xl sm:text-2xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className="text-xl sm:text-2xl font-semibold mb-3 text-gray-900">
                 No Internet Connection
               </h3>
-              <p className={`mb-6 max-w-md mx-auto text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className="mb-6 max-w-md mx-auto text-base text-gray-600">
                 Please check your internet connection and try again.
               </p>
               <button
@@ -1348,20 +1328,20 @@ export default function Home() {
             </div>
           ) : (
             <div className={gridView === 'basic' 
-              ? "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 md:gap-6" // Reduced mobile gap
+              ? "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 md:gap-6"
               : "grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6"
             }>
               {loadingProviders ? (
                 Array.from({ length: gridView === 'basic' ? 10 : 4 }).map((_, i) => (
                   <div 
                     key={`skeleton-${i}`}
-                    className={`rounded-xl overflow-hidden animate-pulse ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                    className="rounded-xl overflow-hidden animate-pulse bg-gray-200"
                   >
-                    <div className={`aspect-square ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                    <div className="aspect-square bg-gray-300"></div>
                     <div className="p-3 sm:p-4">
-                      <div className={`h-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'} rounded mb-3 w-3/4`}></div>
-                      <div className={`h-3 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'} rounded mb-3 w-1/2`}></div>
-                      <div className={`h-10 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'} rounded w-full`}></div>
+                      <div className="h-4 bg-gray-300 rounded mb-3 w-3/4"></div>
+                      <div className="h-3 bg-gray-300 rounded mb-3 w-1/2"></div>
+                      <div className="h-10 bg-gray-300 rounded w-full"></div>
                     </div>
                   </div>
                 ))
@@ -1371,7 +1351,7 @@ export default function Home() {
                     <ProviderCard 
                       provider={provider}
                       gridView={gridView}
-                      isDarkMode={isDarkMode}
+                      isDarkMode={false}
                       userState={userLocation.state}
                       userLGA={userLocation.lga}
                     />
@@ -1379,13 +1359,13 @@ export default function Home() {
                 ))
               ) : (
                 <div className="col-span-full text-center py-12 sm:py-16">
-                  <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} mb-6`}>
-                    <Briefcase className={`h-10 w-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+                    <Briefcase className="h-10 w-10 text-gray-400" />
                   </div>
-                  <h3 className={`text-xl sm:text-2xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <h3 className="text-xl sm:text-2xl font-semibold mb-3 text-gray-900">
                     No Providers Found
                   </h3>
-                  <p className={`mb-6 text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className="mb-6 text-base text-gray-600">
                     {selectedState || selectedLGA 
                       ? 'No providers match your selected filters. Try changing your location or filters.'
                       : searchQuery
@@ -1433,7 +1413,7 @@ export default function Home() {
             <div className="text-center mt-8 sm:mt-10">
               <Link
                 href="/marketplace"
-                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 dark:hover:bg-green-900/10 rounded-xl font-semibold text-base transition-all hover:scale-105"
+                className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 rounded-xl font-semibold text-base transition-all hover:scale-105"
               >
                 View All Providers
                 <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 ml-3" />
@@ -1444,13 +1424,13 @@ export default function Home() {
       </section>
 
       {/* Service Categories Section */}
-      <section className={`py-10 sm:py-14 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+      <section className="py-10 sm:py-14 bg-white border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8 sm:mb-12">
-            <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4 text-gray-900">
               Browse by Category
             </h2>
-            <p className={`text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className="text-base text-gray-600">
               {serviceCategories.length}+ professional service categories
             </p>
           </div>
@@ -1460,15 +1440,15 @@ export default function Home() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div 
                   key={`skeleton-category-${i}`} 
-                  className={`p-5 rounded-xl animate-pulse ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}
+                  className="p-5 rounded-xl animate-pulse bg-gray-200"
                 >
                   <div className="flex items-center">
-                    <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} mr-4`}>
+                    <div className="p-3 rounded-lg bg-gray-300 mr-4">
                       <div className="h-6 w-6"></div>
                     </div>
                     <div className="flex-1">
-                      <div className={`h-4 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} rounded mb-3 w-3/4`}></div>
-                      <div className={`h-3 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} rounded w-1/2`}></div>
+                      <div className="h-4 bg-gray-300 rounded mb-3 w-3/4"></div>
+                      <div className="h-3 bg-gray-300 rounded w-1/2"></div>
                     </div>
                   </div>
                 </div>
@@ -1481,22 +1461,19 @@ export default function Home() {
                   <Link
                     key={category.id}
                     href={`/marketplace?service=${encodeURIComponent(category.name)}`}
-                    className={`group p-3 sm:p-4 rounded-xl transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${isDarkMode 
-                      ? `${category.darkColor} border border-gray-700 hover:border-primary/50` 
-                      : `${category.color} border border-gray-200 hover:border-primary`
-                    }`}
+                    className={`group p-3 sm:p-4 rounded-xl transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${category.color} border border-gray-200 hover:border-primary`}
                   >
                     <div className="flex flex-col items-center text-center">
-                      <div className={`p-3 sm:p-4 rounded-xl ${isDarkMode ? 'bg-gray-900/30' : 'bg-white/50'} mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300`}>
-                        <div className={isDarkMode ? category.darkColor?.split(' ')[0] : category.color?.split(' ')[0]}>
+                      <div className="p-3 sm:p-4 rounded-xl bg-white/50 mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300">
+                        <div className={category.color.split(' ')[0]}>
                           {getIconComponent(category.icon)}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-bold text-sm sm:text-base mb-1 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        <h3 className="font-bold text-sm sm:text-base mb-1 truncate text-gray-900">
                           {category.name}
                         </h3>
-                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`} title={category.description || ''}>
+                        <p className="text-xs text-gray-600" title={category.description || ''}>
                           {category.description || 'Professional services'}
                         </p>
                       </div>
@@ -1510,7 +1487,7 @@ export default function Home() {
                   {categoriesVisible < serviceCategories.length ? (
                     <button
                       onClick={handleShowMoreCategories}
-                      className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 dark:hover:bg-green-900/10 rounded-xl font-semibold text-base transition-all hover:scale-105"
+                      className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 rounded-xl font-semibold text-base transition-all hover:scale-105"
                     >
                       <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 mr-3" />
                       Show More Categories ({categoriesVisible}/{serviceCategories.length})
@@ -1518,14 +1495,14 @@ export default function Home() {
                   ) : (
                     <button
                       onClick={handleShowLessCategories}
-                      className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 dark:hover:bg-green-900/10 rounded-xl font-semibold text-base transition-all hover:scale-105"
+                      className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary hover:bg-green-50 rounded-xl font-semibold text-base transition-all hover:scale-105"
                     >
                       <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 mr-3 rotate-180" />
                       Show Less Categories
                     </button>
                   )}
                   
-                  <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className="mt-4 text-sm text-gray-600">
                     Showing {categoriesVisible} of {serviceCategories.length} categories
                   </p>
                 </div>
@@ -1533,13 +1510,13 @@ export default function Home() {
             </>
           ) : (
             <div className="text-center py-12 sm:py-16">
-              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} mb-6`}>
-                <Briefcase className={`h-10 w-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+                <Briefcase className="h-10 w-10 text-gray-400" />
               </div>
-              <h3 className={`text-xl sm:text-2xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className="text-xl sm:text-2xl font-semibold mb-3 text-gray-900">
                 No Categories Found
               </h3>
-              <p className={`mb-6 text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className="mb-6 text-base text-gray-600">
                 Service categories will appear here once added.
               </p>
             </div>
@@ -1547,8 +1524,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-gradient-to-br from-gray-900 via-primary/20 to-green-900/20' : 'bg-gradient-to-br from-primary via-green-600 to-blue-600'}`}>
+  {/* CTA Section */}
+  <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-primary via-green-600 to-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 sm:mb-8">
@@ -1577,7 +1554,7 @@ export default function Home() {
       </section>
 
       {/* ENHANCED PROFESSIONAL FOOTER */}
-      <footer className={`${isDarkMode ? 'bg-gray-950 text-gray-300' : 'bg-gray-50 text-gray-800'} pt-12 sm:pt-16 pb-8 sm:pb-12`}>
+      <footer className="bg-gray-50 text-gray-800 pt-12 sm:pt-16 pb-8 sm:pb-12">
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-10">
           {/* 2-COLUMN GRID ON MOBILE, 4-COLUMN ON DESKTOP */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12">
@@ -1593,7 +1570,7 @@ export default function Home() {
                     sizes="160px"
                   />
                 </div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-8 leading-relaxed">
+                <p className="text-gray-600 text-sm mb-8 leading-relaxed">
                   Nigeria's premier service marketplace connecting customers with trusted professionals across all 36 states.
                 </p>
               </div>
@@ -1601,21 +1578,21 @@ export default function Home() {
               <div className="space-y-4 mb-8">
                 <a 
                   href="mailto:info@nimart.ng" 
-                  className="flex items-center space-x-3 text-gray-700 dark:text-gray-300 hover:text-primary transition-colors group"
+                  className="flex items-center space-x-3 text-gray-700 hover:text-primary transition-colors group"
                 >
-                  <div className="p-2 bg-white dark:bg-gray-800 rounded-lg group-hover:bg-primary/10 transition-colors">
+                  <div className="p-2 bg-white rounded-lg group-hover:bg-primary/10 transition-colors">
                     <Mail className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
                   </div>
                   <span className="text-sm font-medium">info@nimart.ng</span>
                 </a>
                 <a 
                   href="tel:+2348038887589" 
-                  className="flex items-center space-x-3 text-gray-700 dark:text-gray-300 hover:text-primary transition-colors group"
+                  className="flex items-center space-x-3 text-gray-700 hover:text-primary transition-colors group"
                 >
-                  <div className="p-2 bg-white dark:bg-gray-800 rounded-lg group-hover:bg-primary/10 transition-colors">
+                  <div className="p-2 bg-white rounded-lg group-hover:bg-primary/10 transition-colors">
                     <Phone className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
                   </div>
-                  <span className="text-sm font-medium">+234 803 888 7589</span>
+                  <span className="text-sm font-medium">+234 803 888 758</span>
                 </a>
               </div>
 
