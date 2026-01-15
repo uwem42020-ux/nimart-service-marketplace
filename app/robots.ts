@@ -1,4 +1,4 @@
-// app/robots.ts - Robots.txt Generator
+// app/robots.ts
 import { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
@@ -23,8 +23,27 @@ export default function robots(): MetadataRoute.Robots {
           '/admin/',
           '/auth/callback',
         ],
+        crawlDelay: 0.5, // Slower crawl for better indexing
+      },
+      // Additional bots
+      {
+        userAgent: 'Bingbot',
+        allow: '/',
+        disallow: ['/api/', '/admin/'],
+        crawlDelay: 1,
+      },
+      {
+        userAgent: 'Slurp',
+        allow: '/',
+        disallow: ['/api/', '/admin/'],
+        crawlDelay: 1,
       },
     ],
-    sitemap: 'https://nimart.ng/sitemap.xml',
+    sitemap: [
+      'https://nimart.ng/sitemap.xml',
+      'https://nimart.ng/nimart-sitemap.xml', // Additional sitemap
+    ],
+    // Additional directives
+    host: 'https://nimart.ng',
   }
 }

@@ -1,6 +1,7 @@
-// lib/supabase.ts
+// lib/supabase.ts - COMPLETE FIXED VERSION
 import { createClient } from '@supabase/supabase-js'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { ensureUserProfile } from './profile-sync'
 
 // Define types
 interface ServerContext {
@@ -51,6 +52,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'x-application-version': process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
     },
   },
+  // REALTIME CONFIGURATION - ADDED
+  realtime: {
+    params: {
+      apikey: supabaseAnonKey,
+      eventsPerSecond: 10,
+    },
+  },
 })
 
 // Server-side client (for API routes)
@@ -68,6 +76,12 @@ export const createServerSupabaseClient = (context: ServerContext) => {
         Authorization: req.headers.get('Authorization') || '',
       },
     },
+    // Also add for server if needed
+    realtime: {
+      params: {
+        apikey: supabaseAnonKey,
+      },
+    },
   })
 }
 
@@ -83,6 +97,9 @@ export const handleSupabaseError = (error: any): { error: string } => {
     'Failed to fetch': 'Network error. Please check your connection.',
     'JWT': 'Session expired. Please login again.',
     'network': 'Network error. Please check your connection.',
+    'foreign key constraint': 'Profile data missing. Please refresh the page.',
+    'profiles!messages_sender_id_fkey': 'Sender profile not found',
+    'profiles!messages_receiver_id_fkey': 'Receiver profile not found',
   }
   
   // Find matching error message
@@ -103,6 +120,11 @@ export const checkAuth = async (): Promise<AuthResult> => {
     
     if (error) {
       throw error
+    }
+    
+    // Ensure profile exists for current user
+    if (session?.user?.id) {
+      await ensureUserProfile(session.user.id)
     }
     
     return {
@@ -155,9 +177,14 @@ export const signOut = async (): Promise<SignOutResult> => {
   }
 }
 
-// Subscribe to auth changes
+// Subscribe to auth changes with profile sync
 export const onAuthStateChange = (callback: AuthCallback) => {
-  return supabase.auth.onAuthStateChange((event, session) => {
+  return supabase.auth.onAuthStateChange(async (event, session) => {
+    // Ensure profile exists when user signs in
+    if (event === 'SIGNED_IN' && session?.user?.id) {
+      await ensureUserProfile(session.user.id)
+    }
+    
     callback(event, session)
     
     // Update cookies when auth state changes

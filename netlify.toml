@@ -5,15 +5,17 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# REMOVE the catch-all redirect that's breaking everything
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
 
-[[redirects]]
-  from = "/_next/static/*"
-  to = "/_next/static/:splat"
-  status = 200
+# Keep only the static files redirect (this is already handled by Next.js)
+# [[redirects]]
+#   from = "/_next/static/*"
+#   to = "/_next/static/:splat"
+#   status = 200
 
 [[headers]]
   for = "/*"
@@ -21,3 +23,14 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Optional: Add redirects for changed routes
+[[redirects]]
+  from = "/old-forgot-password"
+  to = "/forgot-password"
+  status = 301
+
+[[redirects]]
+  from = "/old-reset-password"
+  to = "/auth/reset-password"
+  status = 301

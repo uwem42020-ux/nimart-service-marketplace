@@ -1,4 +1,4 @@
-// app/verify/page.tsx - UPDATED for both user types
+// app/verify/page.tsx - UPDATED WITH RESEND
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -141,49 +141,88 @@ export default function VerifyPage() {
     try {
       console.log('📧 Verifying OTP for:', email)
       
-      // OTP verification
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: otp.trim(),
-        type: 'email'
-      })
+      // Try both methods:
+      // 1. First try Supabase verification
+      let verificationSuccess = false;
+      let userId: string | undefined;
+      
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: otp.trim(),
+          type: 'email'
+        });
 
-      if (error) {
-        console.error('OTP error:', error)
-        throw new Error('Invalid or expired OTP. Please request a new one.')
-      }
-      
-      console.log('✅ OTP verified successfully')
-      
-      const userId = data.user?.id
-      const metadata = data.user?.user_metadata || {}
-      
-      // Handle based on user type
-      if (userType === 'provider' && userId) {
-        await updateProviderVerification(userId, email)
-      } else if (userType === 'customer' && userId) {
-        await createCustomerProfile(userId, email, metadata.name)
-      }
-      
-      // Set cookies for middleware
-      const maxAge = 7 * 24 * 60 * 60
-      document.cookie = `user-type=${userType}; path=/; max-age=${maxAge}`
-      
-      // If provider, set provider-id cookie
-      if (userType === 'provider' && metadata.provider_id) {
-        document.cookie = `provider-id=${metadata.provider_id}; path=/; max-age=${maxAge}`
-      }
-      
-      setMessage(`✅ Email verified successfully! Your ${userType} account is now active. Redirecting...`)
-      
-      // Wait for cookies to set, then redirect
-      setTimeout(() => {
-        if (userType === 'provider') {
-          window.location.href = '/provider/dashboard'
-        } else {
-          window.location.href = '/'
+        if (!error && data.user) {
+          verificationSuccess = true;
+          userId = data.user.id;
         }
-      }, 1500)
+      } catch (supabaseError) {
+        console.log('Supabase OTP verification failed, trying custom...');
+      }
+
+      // 2. If Supabase fails, try custom verification
+      if (!verificationSuccess) {
+        const { data: otpData, error: otpError } = await supabase
+          .from('otp_storage')
+          .select('*')
+          .eq('email', email.trim())
+          .eq('otp', otp.trim())
+          .gt('expires_at', new Date().toISOString())
+          .single();
+
+        if (otpError || !otpData) {
+          throw new Error('Invalid or expired OTP. Please request a new one.');
+        }
+        
+        verificationSuccess = true;
+        
+        // Clean up used OTP
+        await supabase
+          .from('otp_storage')
+          .delete()
+          .eq('email', email.trim());
+        
+        // Get user ID from auth
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+      }
+
+      if (verificationSuccess && userId) {
+        console.log('✅ OTP verified successfully')
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        const metadata = user?.user_metadata || {}
+        
+        // Handle based on user type
+        if (userType === 'provider' && userId) {
+          await updateProviderVerification(userId, email)
+        } else if (userType === 'customer' && userId) {
+          await createCustomerProfile(userId, email, metadata.name)
+        }
+        
+        // Set cookies for middleware
+        const maxAge = 7 * 24 * 60 * 60
+        document.cookie = `user-type=${userType}; path=/; max-age=${maxAge}`
+        
+        // If provider, set provider-id cookie
+        if (userType === 'provider' && metadata.provider_id) {
+          document.cookie = `provider-id=${metadata.provider_id}; path=/; max-age=${maxAge}`
+        }
+        
+        setMessage(`✅ Email verified successfully! Your ${userType} account is now active. Redirecting...`)
+        
+        // Wait for cookies to set, then redirect
+        setTimeout(() => {
+          if (userType === 'provider') {
+            window.location.href = '/provider/dashboard'
+          } else {
+            window.location.href = '/'
+          }
+        }, 1500)
+      } else {
+        throw new Error('Verification failed. Please try again.');
+      }
       
     } catch (error: any) {
       console.error('Verification error:', error)
@@ -205,19 +244,20 @@ export default function VerifyPage() {
     }
 
     setLoading(true)
-    setMessage('Sending new OTP...')
+    setMessage('Sending new OTP via Resend...')
     
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          shouldCreateUser: false
-        }
-      })
+      // Use our API endpoint
+      const response = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), type: 'resend' })
+      });
 
-      if (error) {
-        console.error('Resend OTP error:', error)
-        throw new Error('Failed to resend OTP. Please try again later.')
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send OTP')
       }
       
       setMessage('✅ New OTP sent! Check your email (including spam folder).')
