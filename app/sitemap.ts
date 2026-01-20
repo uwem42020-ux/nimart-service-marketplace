@@ -1,4 +1,4 @@
-// app/sitemap.ts - ENHANCED FOR "NIMART" RANKING
+// app/sitemap.ts - UPDATED TO MATCH YOUR ACTUAL FOLDER STRUCTURE
 import { MetadataRoute } from 'next'
 
 // Nigerian States - Comprehensive list
@@ -10,71 +10,10 @@ const NIGERIAN_STATES = [
   'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
 ]
 
-// Service Categories - Expanded with variations
+// Service Categories - Based on your actual services
 const SERVICE_CATEGORIES = [
-  // Primary Keywords: Nimart + Service
-  { name: 'Nimart Mechanics', slug: 'nimart-mechanics' },
-  { name: 'Nimart Electricians', slug: 'nimart-electricians' },
-  { name: 'Nimart Plumbers', slug: 'nimart-plumbers' },
-  { name: 'Nimart Carpenters', slug: 'nimart-carpenters' },
-  { name: 'Nimart Painters', slug: 'nimart-painters' },
-  { name: 'Nimart Tailors', slug: 'nimart-tailors' },
-  { name: 'Nimart Cleaners', slug: 'nimart-cleaners' },
-  { name: 'Nimart Chefs', slug: 'nimart-chefs' },
-  
-  // Additional Services with Nimart prefix
-  { name: 'Nimart Drivers', slug: 'nimart-drivers' },
-  { name: 'Nimart Gardeners', slug: 'nimart-gardeners' },
-  { name: 'Nimart Security', slug: 'nimart-security' },
-  { name: 'Nimart Makeup Artists', slug: 'nimart-makeup-artists' },
-  { name: 'Nimart Photographers', slug: 'nimart-photographers' },
-  { name: 'Nimart Videographers', slug: 'nimart-videographers' },
-  { name: 'Nimart Tutors', slug: 'nimart-tutors' },
-  { name: 'Nimart IT Support', slug: 'nimart-it-support' },
-  { name: 'Nimart Web Developers', slug: 'nimart-web-developers' },
-  { name: 'Nimart Graphic Designers', slug: 'nimart-graphic-designers' },
-  { name: 'Nimart Accountants', slug: 'nimart-accountants' },
-  { name: 'Nimart Lawyers', slug: 'nimart-lawyers' },
-  { name: 'Nimart Doctors', slug: 'nimart-doctors' },
-  { name: 'Nimart Nurses', slug: 'nimart-nurses' },
-  { name: 'Nimart Fitness Trainers', slug: 'nimart-fitness-trainers' },
-  { name: 'Nimart Caterers', slug: 'nimart-caterers' },
-  { name: 'Nimart Event Planners', slug: 'nimart-event-planners' },
-  { name: 'Nimart Interior Designers', slug: 'nimart-interior-designers' },
-  { name: 'Nimart Architects', slug: 'nimart-architects' },
-  { name: 'Nimart Builders', slug: 'nimart-builders' },
-  
-  // Location-based Nimart services
-  { name: 'Nimart Nigeria', slug: 'nimart-nigeria' },
-  { name: 'Nimart Lagos', slug: 'nimart-lagos' },
-  { name: 'Nimart Abuja', slug: 'nimart-abuja' },
-  { name: 'Nimart Port Harcourt', slug: 'nimart-port-harcourt' },
-  { name: 'Nimart Ibadan', slug: 'nimart-ibadan' },
-  { name: 'Nimart Kano', slug: 'nimart-kano' },
-  
-  // Service type variations
-  { name: 'Nimart Service Providers', slug: 'nimart-service-providers' },
-  { name: 'Nimart Professionals', slug: 'nimart-professionals' },
-  { name: 'Nimart Verified Providers', slug: 'nimart-verified-providers' },
-  { name: 'Nimart Marketplace', slug: 'nimart-marketplace' },
-  { name: 'Nimart Booking', slug: 'nimart-booking' },
-  { name: 'Nimart Services', slug: 'nimart-services' },
-  
-  // Common search variations
-  { name: 'Nimart Near Me', slug: 'nimart-near-me' },
-  { name: 'Nimart Online', slug: 'nimart-online' },
-  { name: 'Nimart App', slug: 'nimart-app' },
-  { name: 'Nimart Website', slug: 'nimart-website' },
-  { name: 'Nimart Contact', slug: 'nimart-contact' },
-  { name: 'Nimart Support', slug: 'nimart-support' }
-]
-
-// Popular Nigerian Cities
-const NIGERIAN_CITIES = [
-  'Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Kano', 'Benin City',
-  'Kaduna', 'Warri', 'Aba', 'Onitsha', 'Enugu', 'Calabar',
-  'Uyo', 'Owerri', 'Abeokuta', 'Akure', 'Ado Ekiti', 'Osogbo',
-  'Ilorin', 'Jos', 'Maiduguri', 'Sokoto', 'Yola', 'Bauchi'
+  'Mechanics', 'Electricians', 'Plumbers', 'Carpenters', 'Painters',
+  'Tailors', 'Cleaners', 'Chefs', 'Home Services', 'Professional Services'
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -82,38 +21,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const currentDate = new Date()
   const sitemapEntries: MetadataRoute.Sitemap = []
   
-  // CRITICAL PAGES - Highest Priority
-  const criticalPages = [
-    {
-      url: baseUrl,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/marketplace`,
-      lastModified: currentDate,
-      changeFrequency: 'hourly' as const,
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/about`,
-      lastModified: currentDate,
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/contact`,
-      lastModified: currentDate,
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-    }
-  ]
-  
-  sitemapEntries.push(...criticalPages)
-  
-  // AUTH PAGES
-  const authPages = [
+  // CRITICAL PAGES - Highest Priority (HOME)
+  sitemapEntries.push({
+    url: baseUrl,
+    lastModified: currentDate,
+    changeFrequency: 'daily' as const,
+    priority: 1.0,
+  })
+
+  // AUTH PAGES - ACTUAL PAGES
+  sitemapEntries.push(
     {
       url: `${baseUrl}/login`,
       lastModified: currentDate,
@@ -138,268 +55,217 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'yearly' as const,
       priority: 0.3,
     }
-  ]
-  
-  sitemapEntries.push(...authPages)
-  
-  // LEGAL PAGES
-  const legalPages = [
+  )
+
+  // LEGAL PAGES - From /links folder
+  sitemapEntries.push(
     {
-      url: `${baseUrl}/privacy`,
+      url: `${baseUrl}/links/privacy-policy`,
       lastModified: currentDate,
       changeFrequency: 'yearly' as const,
-      priority: 0.3,
+      priority: 0.4,
     },
     {
-      url: `${baseUrl}/terms`,
+      url: `${baseUrl}/links/terms-conditions`,
       lastModified: currentDate,
       changeFrequency: 'yearly' as const,
-      priority: 0.3,
+      priority: 0.4,
     },
     {
-      url: `${baseUrl}/cookies`,
+      url: `${baseUrl}/links/terms-of-service`,
+      lastModified: currentDate,
+      changeFrequency: 'yearly' as const,
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/links/cookie-policy`,
       lastModified: currentDate,
       changeFrequency: 'yearly' as const,
       priority: 0.3,
     }
-  ]
-  
-  sitemapEntries.push(...legalPages)
-  
-  // HELP & INFO PAGES
-  const infoPages = [
+  )
+
+  // INFO PAGES - From /links folder
+  sitemapEntries.push(
     {
-      url: `${baseUrl}/how-it-works`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/help`,
-      lastModified: currentDate,
-      changeFrequency: 'weekly' as const,
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/faq`,
+      url: `${baseUrl}/links/about`,
       lastModified: currentDate,
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/blog`,
+      url: `${baseUrl}/links/how-it-works`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/links/help-center`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/links/contact`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/links/blog`,
       lastModified: currentDate,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/careers`,
+      url: `${baseUrl}/links/careers`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.4,
+    }
+  )
+
+  // PROVIDER-RELATED PAGES - From /links folder
+  sitemapEntries.push(
+    {
+      url: `${baseUrl}/links/become-a-provider`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/links/provider-benefits`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/links/provider-support`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    }
+  )
+
+  // MARKETPLACE PAGE
+  sitemapEntries.push({
+    url: `${baseUrl}/links/marketplace`,
+    lastModified: currentDate,
+    changeFrequency: 'hourly' as const,
+    priority: 0.9,
+  })
+
+  // USER PAGES
+  sitemapEntries.push(
+    {
+      url: `${baseUrl}/profile`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/messages`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/notifications`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/bookings`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/bookings/new`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    }
+  )
+
+  // PROVIDER DASHBOARD PAGES
+  sitemapEntries.push(
+    {
+      url: `${baseUrl}/provider/dashboard`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/provider/bookings`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/provider/settings`,
       lastModified: currentDate,
       changeFrequency: 'monthly' as const,
       priority: 0.5,
     }
-  ]
-  
-  sitemapEntries.push(...infoPages)
-  
-  // NIMART-SPECIFIC KEYWORD PAGES - HIGH PRIORITY
-  const nimartKeywordPages = [
-    {
-      url: `${baseUrl}/nimart`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/nimart-services`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/nimart-marketplace`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/nimart-nigeria`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/nimart-online`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.8,
-    }
-  ]
-  
-  sitemapEntries.push(...nimartKeywordPages)
-  
-  // SERVICE CATEGORY PAGES - All include "Nimart" keyword
-  const servicePages = SERVICE_CATEGORIES.map(service => ({
-    url: `${baseUrl}/services/${service.slug}`,
+  )
+
+  // ADMIN PAGES
+  sitemapEntries.push({
+    url: `${baseUrl}/admin/verifications`,
+    lastModified: currentDate,
+    changeFrequency: 'weekly' as const,
+    priority: 0.4,
+  })
+
+  // DYNAMIC PROVIDER PAGES
+  // Note: These would be generated dynamically from your database
+  // For now, we'll add the base provider page pattern
+  sitemapEntries.push({
+    url: `${baseUrl}/providers`,
     lastModified: currentDate,
     changeFrequency: 'daily' as const,
     priority: 0.8,
-  }))
-  
-  // Only add a reasonable number to stay under limits
-  sitemapEntries.push(...servicePages.slice(0, 100))
-  
-  // STATE PAGES with Nimart keyword
-  const statePages = NIGERIAN_STATES.map(state => ({
-    url: `${baseUrl}/nimart-${state.toLowerCase().replace(/\s+/g, '-')}`,
-    lastModified: currentDate,
-    changeFrequency: 'daily' as const,
-    priority: 0.7,
-  }))
-  
-  sitemapEntries.push(...statePages)
-  
-  // CITY PAGES with Nimart keyword
-  const cityPages = NIGERIAN_CITIES.map(city => ({
-    url: `${baseUrl}/nimart-${city.toLowerCase().replace(/\s+/g, '-')}`,
-    lastModified: currentDate,
-    changeFrequency: 'daily' as const,
-    priority: 0.6,
-  }))
-  
-  sitemapEntries.push(...cityPages)
-  
-  // SERVICE + LOCATION COMBINATION PAGES
-  // Top 5 services x Top 10 cities = 50 pages
-  const topServices = SERVICE_CATEGORIES.slice(0, 5)
-  const topCities = NIGERIAN_CITIES.slice(0, 10)
-  
-  const serviceLocationPages = topServices.flatMap(service => 
-    topCities.map(city => ({
-      url: `${baseUrl}/nimart-${service.slug}-in-${city.toLowerCase().replace(/\s+/g, '-')}`,
+  })
+
+  // SERVICE CATEGORY PAGES - Based on your actual service categories
+  SERVICE_CATEGORIES.forEach(service => {
+    sitemapEntries.push({
+      url: `${baseUrl}/links/marketplace?service=${encodeURIComponent(service)}`,
       lastModified: currentDate,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
-    }))
+    })
+  })
+
+  // STATE-SPECIFIC MARKETPLACE PAGES
+  NIGERIAN_STATES.slice(0, 10).forEach(state => {
+    sitemapEntries.push({
+      url: `${baseUrl}/links/marketplace?state=${encodeURIComponent(state)}`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    })
+  })
+
+  // NIMART-SPECIFIC KEYWORD PAGES
+  sitemapEntries.push(
+    {
+      url: `${baseUrl}/nimart`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly' as const,
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/nimart-sitemap.xml`,
+      lastModified: currentDate,
+      changeFrequency: 'daily' as const,
+      priority: 0.3,
+    }
   )
-  
-  sitemapEntries.push(...serviceLocationPages)
-  
-  // DYNAMIC FILTER PAGES for SEO
-  const filterPages = [
-    // Price filters
-    {
-      url: `${baseUrl}/marketplace?price=affordable`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/marketplace?price=premium`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.6,
-    },
-    
-    // Rating filters
-    {
-      url: `${baseUrl}/marketplace?rating=4+`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/marketplace?rating=5`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.6,
-    },
-    
-    // Verification filters
-    {
-      url: `${baseUrl}/marketplace?verified=true`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
-    },
-    
-    // Availability filters
-    {
-      url: `${baseUrl}/marketplace?available=now`,
-      lastModified: currentDate,
-      changeFrequency: 'hourly' as const,
-      priority: 0.7,
-    }
-  ]
-  
-  sitemapEntries.push(...filterPages)
-  
-  // SPECIAL COLLECTION PAGES
-  const collectionPages = [
-    {
-      url: `${baseUrl}/top-rated-providers`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/new-providers`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/trending-services`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/emergency-services`,
-      lastModified: currentDate,
-      changeFrequency: 'daily' as const,
-      priority: 0.8,
-    }
-  ]
-  
-  sitemapEntries.push(...collectionPages)
-  
-  // STATIC FAQ PAGES for common questions
-  const faqPages = [
-    {
-      url: `${baseUrl}/faq/what-is-nimart`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/faq/how-to-book-nimart`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/faq/nimart-pricing`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/faq/become-nimart-provider`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/faq/nimart-safety`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    }
-  ]
-  
-  sitemapEntries.push(...faqPages)
-  
+
   // Return limited to 5000 URLs (Google's limit)
-  return sitemapEntries.slice(0, 5000)
+  // Currently we have about 50-60 URLs, well within limits
+  return sitemapEntries
 }

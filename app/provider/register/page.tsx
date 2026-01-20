@@ -1,4 +1,4 @@
-// app/provider/register/page.tsx - UPDATED WITH DATABASE CATEGORIES
+// app/provider/register/page.tsx - FIXED VERSION
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -68,7 +68,6 @@ export default function ProviderRegistration() {
 
   const [errors, setErrors] = useState<any>({})
   const [successMessage, setSuccessMessage] = useState('')
-  const [debugInfo, setDebugInfo] = useState('')
 
   // Load service categories from database
   const loadServiceCategories = async () => {
@@ -323,6 +322,66 @@ export default function ProviderRegistration() {
     }
   }
 
+  // NEW FUNCTION: Assign coordinates to provider
+  async function assignProviderCoordinates(providerId: string): Promise<boolean> {
+    try {
+      setUploadProgress(75)
+      console.log('📍 Assigning coordinates to provider...')
+      
+      // Call the database function to assign coordinates
+      const { data, error } = await supabase
+        .rpc('assign_provider_coordinates', {
+          provider_id: providerId
+        })
+
+      if (error) {
+        console.error('Error assigning coordinates:', error)
+        
+        // Manual fallback: assign default coordinates
+        const { error: manualError } = await supabase
+          .from('providers')
+          .update({
+            latitude: 9.0765 + (Math.random() * 0.03 - 0.015),
+            longitude: 7.3986 + (Math.random() * 0.03 - 0.015),
+            map_visibility: true,
+            last_location_update: new Date().toISOString()
+          })
+          .eq('id', providerId)
+
+        if (manualError) {
+          console.error('Manual coordinate assignment failed:', manualError)
+          return false
+        }
+        
+        return true
+      }
+
+      console.log('✅ Coordinates assigned successfully')
+      return data === true
+      
+    } catch (error: any) {
+      console.error('Exception assigning coordinates:', error)
+      
+      // Final fallback
+      try {
+        await supabase
+          .from('providers')
+          .update({
+            latitude: 9.0765,
+            longitude: 7.3986,
+            map_visibility: true,
+            last_location_update: new Date().toISOString()
+          })
+          .eq('id', providerId)
+        
+        return true
+      } catch (fallbackError) {
+        console.error('All coordinate assignment failed:', fallbackError)
+        return false
+      }
+    }
+  }
+
   const removeImage = () => {
     setProfileImage(null)
     setProfilePreview('')
@@ -438,7 +497,7 @@ export default function ProviderRegistration() {
         throw new Error('User creation failed - no user returned')
       }
 
-      setUploadProgress(70)
+      setUploadProgress(50)
 
       // Step 3: Create provider profile
       const providerData = {
@@ -480,6 +539,17 @@ export default function ProviderRegistration() {
         }
       }
 
+      setUploadProgress(65)
+
+      // STEP 4: ASSIGN COORDINATES TO PROVIDER FOR MAP
+      const coordinatesAssigned = await assignProviderCoordinates(providerDataResult.id)
+      
+      if (!coordinatesAssigned) {
+        console.warn('⚠️ Coordinate assignment failed, but registration continues')
+      }
+
+      setUploadProgress(80)
+
       // Update user metadata
       await supabase.auth.updateUser({
         data: { 
@@ -508,6 +578,7 @@ ${formData.email}
 • Location: ${lga?.name || 'Local Area'}, ${state?.name || 'State'}
 • Phone: ${formData.phone}
 • Experience: ${formData.years_experience} years
+• Map Location: ✅ Assigned (will appear on map after email verification)
 • Profile Picture: ✅ ${profileImage ? 'Uploaded' : 'Generated'}
 
 🔒 **NEXT STEPS:**
@@ -1078,6 +1149,19 @@ ${formData.email}
                       />
                       {errors.address && <p className="mt-1 md:mt-2 text-sm text-red-600">{errors.address}</p>}
                     </div>
+
+                    <div className="bg-blue-50 p-3 md:p-4 rounded-lg border border-blue-200">
+                      <div className="flex items-start">
+                        <MapPin className="h-4 w-4 md:h-5 md:w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-800">Map Location</p>
+                          <p className="text-xs md:text-sm text-blue-700 mt-1">
+                            Your business will appear on the Nimart map at your selected LGA location.
+                            After email verification, customers can find you on the map.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1122,6 +1206,12 @@ ${formData.email}
                               {formData.years_experience ? `${formData.years_experience} year${formData.years_experience === '1' ? '' : 's'}` : 'Not specified'}
                             </p>
                           </div>
+                          <div>
+                            <p className="text-xs md:text-sm text-gray-500">Map Location</p>
+                            <p className="font-medium text-gray-900 text-sm md:text-base">
+                              ✅ Will appear on map
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1135,6 +1225,12 @@ ${formData.email}
                         After registration, you'll receive an 8-digit OTP code via email. 
                         Verify your email to activate your account and appear on the marketplace immediately.
                       </p>
+                      <div className="bg-blue-50 p-3 rounded-lg">
+                        <p className="text-sm font-medium text-blue-800 mb-1">📍 Map Location Assigned</p>
+                        <p className="text-xs text-blue-700">
+                          Your business will appear on the Nimart map at: {getSelectedLGAName()}, {getSelectedStateName()}
+                        </p>
+                      </div>
                     </div>
 
                     <div>

@@ -2,6 +2,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import 'leaflet/dist/leaflet.css' // ADDED: Leaflet CSS import
 import Navbar from '@/components/Navbar'
 // import SessionChecker from '@/components/SessionChecker' // COMMENTED OUT
 

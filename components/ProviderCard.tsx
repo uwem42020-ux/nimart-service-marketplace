@@ -1,4 +1,4 @@
-// app/components/ProviderCard.tsx - UPDATED WITH SIMPLIFIED MOBILE VIEW
+// app/components/ProviderCard.tsx - UPDATED WITH CORRECT VERIFICATION LOGIC
 'use client'
 
 import Link from 'next/link'
@@ -43,8 +43,7 @@ export default function ProviderCard({
             key={star}
             className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${star <= Math.floor(safeRating) 
               ? 'text-yellow-500 fill-yellow-500' 
-              : 'text-gray-300 dark:text-gray-600'
-            }`}
+              : 'text-gray-300 dark:text-gray-600'}`}
             fill="currentColor"
           />
         ))}
@@ -113,6 +112,9 @@ export default function ProviderCard({
   const reviewsCount = provider.total_reviews || 0
   const ratingValue = provider.rating || 0
   const proximityInfo = getProximityInfo()
+  
+  // CRITICAL: Show verified badge ONLY when verification_status is 'verified' (admin approved)
+  const isAdminVerified = provider.verification_status === 'verified'
 
   // BASIC GRID VIEW - SIMPLIFIED FOR MOBILE
   if (gridView === 'basic') {
@@ -153,8 +155,8 @@ export default function ProviderCard({
             
             {/* Badges - SIMPLIFIED */}
             <div className="absolute top-2 left-2 right-2 flex justify-between">
-              {/* Verification Badge */}
-              {provider.is_verified && (
+              {/* Verification Badge - ONLY show when admin verified */}
+              {isAdminVerified && (
                 <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500 text-white">
                   <Shield className="h-3 w-3 mr-1" />
                   Verified
@@ -205,6 +207,23 @@ export default function ProviderCard({
                   {getLocationDisplay(provider)}
                 </span>
               </div>
+            </div>
+
+            {/* Status Indicator - Show verification status */}
+            <div className="mb-3">
+              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                provider.verification_status === 'verified' 
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                  : provider.verification_status === 'pending'
+                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+              }`}>
+                {provider.verification_status === 'verified' 
+                  ? '✓ Verified' 
+                  : provider.verification_status === 'pending'
+                  ? '⏳ Pending Review'
+                  : 'Unverified'}
+              </span>
             </div>
 
             {/* Proximity Badge - Only show if relevant */}
@@ -275,7 +294,7 @@ export default function ProviderCard({
                   <h3 className={`font-bold text-lg mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                     {provider.business_name}
                   </h3>
-                  {provider.is_verified && (
+                  {isAdminVerified && (
                     <Shield className="h-4 w-4 text-blue-500 flex-shrink-0" />
                   )}
                 </div>
@@ -290,6 +309,23 @@ export default function ProviderCard({
                       Online
                     </span>
                   )}
+                </div>
+                
+                {/* Status Indicator */}
+                <div className="mb-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                    provider.verification_status === 'verified' 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : provider.verification_status === 'pending'
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                  }`}>
+                    {provider.verification_status === 'verified' 
+                      ? '✓ Verified by Admin' 
+                      : provider.verification_status === 'pending'
+                      ? '⏳ Documents Pending Review'
+                      : 'Unverified'}
+                  </span>
                 </div>
                 
                 {/* Rating and Location */}
@@ -429,10 +465,24 @@ export default function ProviderCard({
                         <span className="ml-2 font-medium">{provider.service_type}</span>
                       </span>
                       
-                      {provider.is_verified && (
+                      {/* Verification Badge - ONLY when admin verified */}
+                      {isAdminVerified && (
                         <span className="inline-flex items-center px-3 py-1.5 rounded text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                           <Shield className="h-3 w-3 mr-2" />
-                          Verified
+                          Verified by Admin
+                        </span>
+                      )}
+                      
+                      {/* Verification Status */}
+                      {!isAdminVerified && (
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded text-sm font-medium ${
+                          provider.verification_status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                        }`}>
+                          {provider.verification_status === 'pending'
+                            ? '⏳ Documents Under Review'
+                            : 'Unverified'}
                         </span>
                       )}
                       

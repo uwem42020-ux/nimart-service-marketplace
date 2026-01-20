@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+/* app/globals.css - OPTIMIZED VERSION WITH MOBILE ENHANCEMENTS */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -12,28 +13,29 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Custom scrollbar */
+/* SIMPLIFIED scrollbar - ONE definition only */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #008751;
-  border-radius: 5px;
+  background: #888;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #006b40;
+  background: #555;
 }
 
-/* Custom utility classes */
+/* ESSENTIAL Custom utility classes */
 @layer components {
   .btn-primary {
     @apply bg-primary text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors duration-200;
@@ -41,10 +43,6 @@ body {
   
   .btn-secondary {
     @apply border border-primary text-primary px-4 py-2 rounded-md hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors duration-200;
-  }
-  
-  .btn-disabled {
-    @apply bg-gray-300 text-gray-500 px-4 py-2 rounded-md cursor-not-allowed;
   }
   
   .input-field {
@@ -55,20 +53,12 @@ body {
     @apply bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300;
   }
   
-  .card-hover {
-    @apply transform hover:-translate-y-1 transition-transform duration-300;
-  }
-  
   .gradient-text {
     @apply bg-gradient-primary bg-clip-text text-transparent;
   }
   
   .gradient-bg {
     @apply bg-gradient-primary text-white;
-  }
-  
-  .glass-effect {
-    @apply backdrop-blur-md bg-white/80 border border-white/20;
   }
   
   .section-padding {
@@ -80,23 +70,15 @@ body {
   }
   
   .heading-1 {
-    @apply text-4xl md:text-5xl font-bold font-heading text-gray-900;
+    @apply text-3xl md:text-4xl font-bold text-gray-900;
   }
   
   .heading-2 {
-    @apply text-3xl md:text-4xl font-bold font-heading text-gray-900;
+    @apply text-2xl md:text-3xl font-bold text-gray-900;
   }
   
   .heading-3 {
-    @apply text-2xl md:text-3xl font-semibold font-heading text-gray-900;
-  }
-  
-  .heading-4 {
-    @apply text-xl md:text-2xl font-semibold font-heading text-gray-900;
-  }
-  
-  .body-large {
-    @apply text-lg text-gray-600;
+    @apply text-xl md:text-2xl font-semibold text-gray-900;
   }
   
   .body-base {
@@ -119,167 +101,20 @@ body {
     @apply bg-blue-100 text-blue-800;
   }
   
-  .badge-warning {
-    @apply bg-yellow-100 text-yellow-800;
-  }
-  
-  .badge-error {
-    @apply bg-red-100 text-red-800;
-  }
-  
-  .loading-spinner {
-    @apply inline-block animate-spin rounded-full border-t-2 border-b-2 border-primary;
-  }
-  
   .skeleton {
     @apply animate-pulse bg-gray-200 rounded;
   }
 }
 
-/* Hide scrollbar but keep functionality */
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  .text-gradient-primary {
-    @apply bg-gradient-primary bg-clip-text text-transparent;
-  }
-  
-  .bg-gradient-primary {
-    background: linear-gradient(135deg, #008751 0%, #00a862 100%);
-  }
+/* ESSENTIAL animations only */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
-/* Animations */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite linear;
-  background: linear-gradient(to right, #f6f7f8 4%, #edeef1 25%, #f6f7f8 36%);
-  background-size: 1000px 100%;
-}
-/* Add this AT THE END of your existing globals.css file */
-
-/* Custom animations */
-@keyframes pulse-slow {
-  0%, 100% { opacity: 0.1; }
-  50% { opacity: 0.3; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) translateX(0); }
-  33% { transform: translateY(-10px) translateX(10px); }
-  66% { transform: translateY(10px) translateX(-10px); }
-}
-
-@keyframes move-right {
-  0%, 100% { transform: translateX(0) translateY(0); }
-  25% { transform: translateX(20px) translateY(-10px); }
-  50% { transform: translateX(40px) translateY(0); }
-  75% { transform: translateX(20px) translateY(10px); }
-}
-
-@keyframes move-left {
-  0%, 100% { transform: translateX(0) translateY(0); }
-  25% { transform: translateX(-20px) translateY(10px); }
-  50% { transform: translateX(-40px) translateY(0); }
-  75% { transform: translateX(-20px) translateY(-10px); }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
-}
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-.animate-move-right {
-  animation: move-right 5s ease-in-out infinite;
-}
-
-.animate-move-left {
-  animation: move-left 5s ease-in-out infinite;
-}
-
-.animation-delay-500 {
-  animation-delay: 500ms;
-}
-
-.animation-delay-1000 {
-  animation-delay: 1000ms;
-}
-
-.animation-delay-1500 {
-  animation-delay: 1500ms;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Loading animation */
-.loading-dots:after {
-  content: '.';
-  animation: dots 1.5s steps(4, end) infinite;
-}
-
-@keyframes dots {
-  0%, 20% {
-    content: '.';
-  }
-  40% {
-    content: '..';
-  }
-  60% {
-    content: '...';
-  }
-  80%, 100% {
-    content: '';
-  }
-}
-
-/* Modern navbar animations */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slide-in-from-top {
@@ -293,11 +128,30 @@ body {
   }
 }
 
-.animate-in {
-  animation: fade-in 0.2s ease-out;
+/* NEW: Footer slide animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
-.fade-in {
+@keyframes slide-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-in {
   animation: fade-in 0.2s ease-out;
 }
 
@@ -305,22 +159,32 @@ body {
   animation: slide-in-from-top 0.2s ease-out;
 }
 
-/* Add to your global.css or tailwind.config.js */
-@layer utilities {
-  .pt-safe {
-    padding-top: env(safe-area-inset-top);
+/* NEW: Footer animations */
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
+}
+
+/* Gradient background animation */
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
   }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .min-h-screen-safe {
-    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  50% {
+    background-position: 100% 50%;
   }
 }
 
-/* Add to your globals.css */
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 2s ease infinite;
+}
+
+/* Safe area utilities - ONE clean set */
 @layer utilities {
-  /* Safe area utilities */
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
@@ -333,30 +197,6 @@ body {
   .pr-safe {
     padding-right: env(safe-area-inset-right);
   }
-  .px-safe {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-  .py-safe {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .p-safe {
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-  
-  .mt-safe {
-    margin-top: env(safe-area-inset-top);
-  }
-  .mb-safe {
-    margin-bottom: env(safe-area-inset-bottom);
-  }
-  .ml-safe {
-    margin-left: env(safe-area-inset-left);
-  }
-  .mr-safe {
-    margin-right: env(safe-area-inset-right);
-  }
   
   /* Dynamic viewport height */
   .min-h-dvh {
@@ -366,30 +206,53 @@ body {
     height: 100dvh;
   }
   
-  /* Animation delays */
-  .animation-delay-100 {
-    animation-delay: 100ms;
+  /* Scrollbar hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-  .animation-delay-200 {
-    animation-delay: 200ms;
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
-  .animation-delay-300 {
-    animation-delay: 300ms;
+  
+  /* Text balance */
+  .text-balance {
+    text-wrap: balance;
   }
-  .animation-delay-400 {
-    animation-delay: 400ms;
+  
+  /* Line clamping */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .animation-delay-500 {
-    animation-delay: 500ms;
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .animation-delay-1000 {
-    animation-delay: 1000ms;
+  
+  /* Gradient background */
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #008751 0%, #00a862 100%);
   }
-  .animation-delay-1500 {
-    animation-delay: 1500ms;
+  
+  /* Bottom navigation safe area */
+  .pb-safe-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
   }
-  .animation-delay-2000 {
-    animation-delay: 2000ms;
+  
+  /* Hide scrollbar but keep functionality */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -399,244 +262,220 @@ body {
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* REMOVED: All unnecessary animations, complex keyframes, duplicate utilities, heavy filters */
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .leaflet-container {
+    font-size: 12px;
+  }
   
-  input[type="date"],
-  input[type="time"] {
-    appearance: none;
-    min-height: 44px;
+  .leaflet-control-zoom {
+    transform: scale(0.9);
   }
 }
 
-/* Scrollbar styling for dark mode */
-.dark {
-  scrollbar-color: #4b5563 #1f2937;
-}
-
-.dark ::-webkit-scrollbar {
-  width: 10px;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: #1f2937;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 5px;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
-}
-/* Add to your globals.css */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-@media (max-width: 640px) {
-  .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
-  }
-}
-
-/* Improve card image aspect ratio */
-.aspect-card {
-  aspect-ratio: 4/3;
-}
-
-/* Better line clamping */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+/* Custom marker styles */
+.custom-marker {
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   overflow: hidden;
+  background: white;
 }
 
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.verified-marker {
+  border-color: #10b981; /* Green for verified */
 }
 
-/* Smooth image loading */
-.image-loading {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
+.unverified-marker {
+  border-color: #f59e0b; /* Orange/Yellow for unverified */
 }
 
-@keyframes loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+.pending-marker {
+  border-color: #3b82f6; /* Blue for pending */
 }
 
-/* Add these animations to your globals.css */
-
-@keyframes shimmer {
+/* Pulse animation for user location */
+@keyframes pulse {
   0% {
-    transform: translateX(-100%);
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1.2);
+    opacity: 0.7;
   }
   100% {
-    transform: translateX(100%);
+    transform: scale(0.8);
+    opacity: 1;
   }
 }
 
-@keyframes gradient-x {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+.user-location-pulse {
+  animation: pulse 2s infinite;
 }
 
-.animate-shimmer {
-  animation: shimmer 2s infinite;
+/* Map popup customization */
+.leaflet-popup-content {
+  margin: 13px 19px;
+  min-width: 200px;
 }
 
-.animate-gradient-x {
-  background-size: 200% 200%;
-  animation: gradient-x 3s ease infinite;
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.animation-delay-300 {
-  animation-delay: 300ms;
+/* Fullscreen map styles */
+.fullscreen-map {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 9999 !important;
 }
 
-.animation-delay-600 {
-  animation-delay: 600ms;
-}
-
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Enhanced transitions */
-* {
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-
-/* Remove white space fix */
-.-mt-1 {
-  margin-top: -0.25rem;
-}
-/* Add these new styles to your existing globals.css */
-
-/* Marquee animation */
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.animate-marquee {
-  animation: marquee 30s linear infinite;
+/* Map controls */
+.map-controls-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
   display: flex;
-  width: max-content;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.animate-marquee:hover {
-  animation-play-state: paused;
+.map-control-button {
+  background: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-/* Location detection animations */
-@keyframes ping-small {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0.5;
-  }
+.map-control-button:hover {
+  background: #f3f4f6;
+  transform: scale(1.05);
 }
 
-@keyframes radar {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(3);
-    opacity: 0;
-  }
+.map-control-button:active {
+  transform: scale(0.95);
 }
 
-.animate-ping-small {
-  animation: ping-small 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+/* Cluster markers */
+.marker-cluster {
+  background-clip: padding-box;
+  border-radius: 20px;
 }
 
-.animate-radar {
-  animation: radar 2s linear infinite;
+.marker-cluster div {
+  width: 30px;
+  height: 30px;
+  margin-left: 5px;
+  margin-top: 5px;
+  text-align: center;
+  border-radius: 15px;
+  font-weight: bold;
 }
 
-/* Smooth hover effects */
-.hover-lift {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+.marker-cluster span {
+  line-height: 30px;
 }
 
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+/* Nigerian map specific */
+.nigeria-map-container {
+  background: #f8f9fa;
 }
 
-/* Gradient text animation */
-@keyframes gradient-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+/* Loading state */
+.map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  background: #f8f9fa;
+  border-radius: 12px;
 }
 
-.animate-gradient-shift {
-  background-size: 200% auto;
-  animation: gradient-shift 3s ease infinite;
+/* Responsive map container */
+.responsive-map-container {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* Footer mobile optimization */
-@media (max-width: 640px) {
-  footer .grid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-  
-  footer .text-left {
-    text-align: left !important;
-  }
-  
-  footer .flex-wrap {
-    justify-content: flex-start;
-  }
+/* Desktop map */
+.desktop-map {
+  height: 500px;
 }
 
-/* Loading spinner variations */
-.spinner-slow {
-  animation: spin 3s linear infinite;
-}
-
-.spinner-fast {
-  animation: spin 0.5s linear infinite;
-}
-
-/* Card hover effects */
-.card-hover-glow {
+/* Mobile map preview */
+.mobile-map-preview {
+  height: 250px;
+  cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.card-hover-glow:hover {
-  box-shadow: 0 20px 40px rgba(0, 135, 81, 0.15);
-  border-color: #008751;
+.mobile-map-preview:hover {
+  transform: scale(1.005);
+  box-shadow: 0 6px 12px -1px rgba(0, 0, 0, 0.15);
+}
+
+/* Mobile fullscreen map */
+.mobile-fullscreen-map {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: white;
+}
+
+.mobile-map-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.mobile-map-content {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }

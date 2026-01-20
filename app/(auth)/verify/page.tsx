@@ -1,4 +1,4 @@
-// app/verify/page.tsx - UPDATED WITH RESEND
+// app/verify/page.tsx - FINAL CORRECTED VERSION
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,7 +9,7 @@ import { CheckCircle, AlertCircle, RefreshCw, Mail, Shield, Loader2, User, Brief
 export default function VerifyPage() {
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState<string>('')
-  const [userType, setUserType] = useState<'customer' | 'provider'>('customer')
+  const [userType, setUserType] = useState<'customer' | 'provider'>('provider')
   const [otp, setOtp] = useState<string>('')
   const [message, setMessage] = useState<string>('')
   const [countdown, setCountdown] = useState<number>(0)
@@ -28,14 +28,8 @@ export default function VerifyPage() {
     if (urlUserType && (urlUserType === 'customer' || urlUserType === 'provider')) {
       setUserType(urlUserType)
     } else {
-      // Try to get from session
-      const loadUserType = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.user_metadata?.user_type) {
-          setUserType(user.user_metadata.user_type)
-        }
-      }
-      loadUserType()
+      // Default to provider since this is the provider registration flow
+      setUserType('provider')
     }
   }, [searchParams])
 
@@ -50,39 +44,85 @@ export default function VerifyPage() {
     setCountdown(60)
   }
 
+  // CRITICAL: Update provider verification after OTP confirmation
   const updateProviderVerification = async (userId: string, email: string) => {
     try {
-      console.log('📝 Updating provider verification status for:', email)
+      console.log('🔐 Updating provider verification status for:', email)
       
-      // Update provider record to verified
-      const { data: providerData, error: providerError } = await supabase
+      // First find the provider by user_id OR email
+      let providerId = null
+      let providerData = null
+      
+      // Try by user_id first
+      const { data: providerByUser } = await supabase
+        .from('providers')
+        .select('id, business_name, email, verification_status')
+        .eq('user_id', userId)
+        .maybeSingle()
+      
+      if (providerByUser) {
+        providerId = providerByUser.id
+        providerData = providerByUser
+      } else {
+        // Try by email as fallback
+        const { data: providerByEmail } = await supabase
+          .from('providers')
+          .select('id, business_name, email, verification_status')
+          .eq('email', email.trim())
+          .maybeSingle()
+        
+        if (providerByEmail) {
+          providerId = providerByEmail.id
+          providerData = providerByEmail
+        }
+      }
+      
+      if (!providerId) {
+        console.error('Provider not found for user:', userId, 'email:', email)
+        throw new Error('Provider profile not found. Please contact support.')
+      }
+      
+      console.log('Found provider:', providerId, providerData?.business_name, 'Current status:', providerData?.verification_status)
+      
+      // CRITICAL: Update provider from 'pending_email' to 'unverified' (so they appear on homepage)
+      const { data: updatedProvider, error: updateError } = await supabase
         .from('providers')
         .update({
-          is_verified: true,
-          verification_status: 'verified',
-          verification_step: 'completed',
+          is_verified: false, // ← NOT true yet, only admin can set to true after document approval
+          verification_status: 'unverified', // ← Changed from 'pending_email' to 'unverified'
+          verification_step: 'email_verified',
           updated_at: new Date().toISOString()
         })
-        .or(`user_id.eq.${userId},email.eq.${email}`)
+        .eq('id', providerId)
         .select()
         .single()
 
-      if (providerError) {
-        console.error('Error updating provider verification:', providerError)
+      if (updateError) {
+        console.error('Error updating provider verification:', updateError)
+        throw new Error('Failed to update provider status')
       } else {
-        console.log('✅ Provider verification status updated:', providerData)
+        console.log('✅ Provider OTP confirmed and status updated:', {
+          id: updatedProvider.id,
+          name: updatedProvider.business_name,
+          new_status: updatedProvider.verification_status,
+          is_verified: updatedProvider.is_verified,
+          note: 'Provider will now appear on homepage (unverified status)'
+        })
       }
 
-      // Also update user metadata
+      // Update user metadata
       await supabase.auth.updateUser({
         data: {
-          provider_id: providerData?.id,
-          provider_status: 'verified'
+          provider_id: providerId,
+          provider_status: 'unverified' // ← Changed from 'email_verified'
         }
       })
 
+      return updatedProvider
+
     } catch (error) {
       console.error('Error in updateProviderVerification:', error)
+      throw error
     }
   }
 
@@ -141,88 +181,109 @@ export default function VerifyPage() {
     try {
       console.log('📧 Verifying OTP for:', email)
       
-      // Try both methods:
-      // 1. First try Supabase verification
-      let verificationSuccess = false;
-      let userId: string | undefined;
+      // Try multiple verification methods
+      let verificationSuccess = false
+      let userId: string | null = null
       
+      // Method 1: Supabase OTP verification
       try {
         const { data, error } = await supabase.auth.verifyOtp({
           email: email.trim(),
           token: otp.trim(),
           type: 'email'
-        });
+        })
 
         if (!error && data.user) {
-          verificationSuccess = true;
-          userId = data.user.id;
+          verificationSuccess = true
+          userId = data.user.id
+          console.log('✅ Supabase OTP verified')
         }
       } catch (supabaseError) {
-        console.log('Supabase OTP verification failed, trying custom...');
+        console.log('Supabase OTP verification failed, trying custom...')
       }
 
-      // 2. If Supabase fails, try custom verification
+      // Method 2: Custom OTP verification from otp_storage table
       if (!verificationSuccess) {
+        console.log('Trying custom OTP verification...')
         const { data: otpData, error: otpError } = await supabase
           .from('otp_storage')
           .select('*')
           .eq('email', email.trim())
           .eq('otp', otp.trim())
           .gt('expires_at', new Date().toISOString())
-          .single();
+          .single()
 
         if (otpError || !otpData) {
-          throw new Error('Invalid or expired OTP. Please request a new one.');
+          throw new Error('Invalid or expired OTP. Please request a new one.')
         }
         
-        verificationSuccess = true;
+        verificationSuccess = true
+        
+        // Get user from auth
+        const { data: { user } } = await supabase.auth.getUser()
+        userId = user?.id || null
         
         // Clean up used OTP
         await supabase
           .from('otp_storage')
           .delete()
-          .eq('email', email.trim());
-        
-        // Get user ID from auth
-        const { data: { user } } = await supabase.auth.getUser();
-        userId = user?.id;
+          .eq('email', email.trim())
+          
+        console.log('✅ Custom OTP verified')
       }
 
-      if (verificationSuccess && userId) {
-        console.log('✅ OTP verified successfully')
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        const metadata = user?.user_metadata || {}
-        
-        // Handle based on user type
-        if (userType === 'provider' && userId) {
-          await updateProviderVerification(userId, email)
-        } else if (userType === 'customer' && userId) {
-          await createCustomerProfile(userId, email, metadata.name)
-        }
-        
-        // Set cookies for middleware
-        const maxAge = 7 * 24 * 60 * 60
-        document.cookie = `user-type=${userType}; path=/; max-age=${maxAge}`
-        
-        // If provider, set provider-id cookie
-        if (userType === 'provider' && metadata.provider_id) {
-          document.cookie = `provider-id=${metadata.provider_id}; path=/; max-age=${maxAge}`
-        }
-        
-        setMessage(`✅ Email verified successfully! Your ${userType} account is now active. Redirecting...`)
-        
-        // Wait for cookies to set, then redirect
-        setTimeout(() => {
-          if (userType === 'provider') {
-            window.location.href = '/provider/dashboard'
-          } else {
-            window.location.href = '/'
-          }
-        }, 1500)
-      } else {
-        throw new Error('Verification failed. Please try again.');
+      if (!verificationSuccess) {
+        throw new Error('OTP verification failed. Please try again.')
       }
+
+      // If we don't have userId but verification succeeded, try to get it
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        userId = user?.id || null
+      }
+
+      console.log('✅ OTP verified successfully, User ID:', userId)
+      
+      // Handle based on user type - CRITICAL FIX HERE
+      if (userType === 'provider' && userId) {
+        try {
+          const updatedProvider = await updateProviderVerification(userId, email)
+          console.log('✅ Provider verification completed successfully')
+          
+          // Show success message with next steps
+          setMessage(`✅ Email verified successfully! Your provider account is now active.
+          
+📋 **Next Steps:**
+1. Login to your provider dashboard
+2. Upload required verification documents
+3. Wait for admin approval
+4. Once approved, you'll get the "Verified" badge on your profile
+
+📍 **You can now appear on the Nimart marketplace!**
+`)
+        } catch (providerError: any) {
+          console.error('❌ Provider verification update failed:', providerError)
+          // Still show success but warn about provider update
+          setMessage(`✅ Email verified but provider profile update failed. 
+You can still login to your account. Please contact support if you don't appear on the marketplace.`)
+        }
+      } else if (userType === 'customer' && userId) {
+        await createCustomerProfile(userId, email)
+        setMessage('✅ Email verified successfully! Your customer account is now active.')
+      }
+      
+      // Set cookies for middleware
+      const maxAge = 7 * 24 * 60 * 60
+      document.cookie = `user-type=${userType}; path=/; max-age=${maxAge}`
+      
+      // Wait for cookies to set, then redirect
+      setTimeout(() => {
+        if (userType === 'provider') {
+          window.location.href = '/provider/dashboard'
+        } else {
+          window.location.href = '/'
+        }
+      }, 5000)
       
     } catch (error: any) {
       console.error('Verification error:', error)
@@ -244,9 +305,11 @@ export default function VerifyPage() {
     }
 
     setLoading(true)
-    setMessage('Sending new OTP via Resend...')
+    setMessage('Sending new OTP...')
     
     try {
+      console.log('📧 Resending OTP to:', email)
+      
       // Use our API endpoint
       const response = await fetch('/api/send-otp', {
         method: 'POST',
@@ -264,7 +327,13 @@ export default function VerifyPage() {
       startCountdown()
     } catch (error: any) {
       console.error('Resend OTP error:', error)
-      setMessage(error.message || 'Failed to resend OTP. Please try again.')
+      
+      // If API fails, show helpful message
+      if (error.message.includes('Failed to fetch')) {
+        setMessage('Network error. Please check your internet connection.')
+      } else {
+        setMessage(error.message || 'Failed to resend OTP. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -343,7 +412,7 @@ export default function VerifyPage() {
 
             {/* Message Display */}
             {message && (
-              <div className={`p-3 rounded-lg ${message.includes('✅') ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className={`p-3 rounded-lg whitespace-pre-line ${message.includes('✅') ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                 <div className="flex items-start">
                   {message.includes('✅') ? (
                     <CheckCircle className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
