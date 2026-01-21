@@ -1,4 +1,4 @@
-// lib/seo.ts - COMPLETE VERSION
+// lib/seo.ts - COMPLETE FIXED VERSION
 interface SEOProps {
   title: string;
   description: string;
@@ -171,6 +171,27 @@ export function generateMarketplaceSEO(filters?: { service?: string; state?: str
   });
 }
 
+// Service Category SEO - ADDED THIS FUNCTION
+export function generateCategorySEO(category: any) {
+  return generateSEOMetadata({
+    title: `${category.name} Services in Nigeria | Find ${category.name}s | Nimart`,
+    description: category.description || `Find and hire verified ${category.name.toLowerCase()}s in Nigeria. Professional ${category.name.toLowerCase()} services near you.`,
+    keywords: [
+      `${category.name} services`,
+      `${category.name.toLowerCase()} near me`,
+      `${category.name} in Nigeria`,
+      `hire ${category.name.toLowerCase()}`,
+      `${category.name} professionals`,
+      'Nimart',
+    ],
+    url: `/links/marketplace?service=${encodeURIComponent(category.name.toLowerCase())}`,
+    image: '/og-category.png',
+  });
+}
+
+// Alias for generateServiceCategorySEO
+export const generateServiceCategorySEO = generateCategorySEO;
+
 // Structured Data generators
 export function generateStructuredData(type: 'Organization' | 'Service' | 'WebSite' | 'LocalBusiness' | 'Person', data?: any) {
   const baseData = {
@@ -312,22 +333,4 @@ export function generateFAQSchema(questions: Array<{ question: string; answer: s
       },
     })),
   };
-}
-
-// Service Category SEO
-export function generateServiceCategorySEO(category: any) {
-  return generateSEOMetadata({
-    title: `${category.name} Services in Nigeria | Find ${category.name}s | Nimart`,
-    description: category.description || `Find and hire verified ${category.name.toLowerCase()}s in Nigeria. Professional ${category.name.toLowerCase()} services near you.`,
-    keywords: [
-      `${category.name} services`,
-      `${category.name.toLowerCase()} near me`,
-      `${category.name} in Nigeria`,
-      `hire ${category.name.toLowerCase()}`,
-      `${category.name} professionals`,
-      'Nimart',
-    ],
-    url: `/marketplace?service=${encodeURIComponent(category.name.toLowerCase())}`,
-    image: '/og-category.png',
-  });
 }
