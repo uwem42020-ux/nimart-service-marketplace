@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { MapContainerProps as LeafletMapContainerProps } from 'react-leaflet'
 import { forwardRef, ForwardedRef, useEffect, useRef, useState } from 'react'
 
-// Dynamically import MapContainer to avoid SSR issues with Leaflet
+// Dynamically import MapContainer to avoid SSR issues
 const LazyMapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
   { 
@@ -39,14 +39,13 @@ interface MapContainerProps extends Omit<LeafletMapContainerProps, 'ref'> {
   children: React.ReactNode
   className?: string
   isFullscreen?: boolean
-  innerRef?: ForwardedRef<any>
 }
 
+// FIXED: Proper forwardRef implementation
 const MapContainer = forwardRef(function MapContainerComponent({
   children,
   className = '',
   isFullscreen = false,
-  innerRef,
   center = [9.0765, 7.3986], // Abuja, Nigeria as default
   zoom = 6,
   ...props
@@ -57,22 +56,18 @@ const MapContainer = forwardRef(function MapContainerComponent({
   
   // Safe DOM cleanup function with null checks
   const safeCleanup = () => {
-    // Check if containerRef.current exists
     if (!containerRef || !containerRef.current) return;
     
     try {
       const container = containerRef.current;
       
-      // Check if element still exists and is connected to DOM
       if (container && container.isConnected) {
         const leafletContainers = container.querySelectorAll('.leaflet-container');
         leafletContainers.forEach((containerElement: Element) => {
-          // Type guard to ensure it's an HTMLElement
           if (containerElement && containerElement.parentNode === container) {
             try {
               container.removeChild(containerElement);
             } catch (err) {
-              // Element might already be removed, ignore
               console.log('Cleanup warning: Element already removed');
             }
           }
@@ -85,17 +80,13 @@ const MapContainer = forwardRef(function MapContainerComponent({
   
   useEffect(() => {
     setIsMounted(true);
-    
-    // Increment key to force fresh instance
     setMapKey(prev => prev + 1);
     
     return () => {
-      // Only cleanup if component is actually unmounting
       safeCleanup();
     }
   }, []);
   
-  // Generate a unique key to force fresh map instance
   const uniqueKey = `map-${mapKey}-${isMounted ? 'mounted' : 'loading'}`;
 
   if (!isMounted) {
@@ -143,7 +134,7 @@ const MapContainer = forwardRef(function MapContainerComponent({
         touchZoom={true}
         doubleClickZoom={true}
         dragging={true}
-        ref={innerRef}
+        ref={ref} // FIXED: Use the forwarded ref directly
         {...props}
       >
         <LazyTileLayer

@@ -1,4 +1,4 @@
-/* app/globals.css - OPTIMIZED VERSION WITH MOBILE ENHANCEMENTS */
+/* app/globals.css - COMPLETE OPTIMIZED VERSION WITH ALL FIXES */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -14,6 +14,7 @@ body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
 }
 
 /* SIMPLIFIED scrollbar - ONE definition only */
@@ -128,7 +129,7 @@ body {
   }
 }
 
-/* NEW: Footer slide animations */
+/* Footer slide animations */
 @keyframes slide-up {
   from {
     transform: translateY(100%);
@@ -159,7 +160,7 @@ body {
   animation: slide-in-from-top 0.2s ease-out;
 }
 
-/* NEW: Footer animations */
+/* Footer animations */
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
@@ -182,6 +183,143 @@ body {
   background-size: 200% 200%;
   animation: gradient-x 2s ease infinite;
 }
+
+/* ==================== MAP FIXES ==================== */
+
+/* Fix map z-index and positioning issues */
+.responsive-map-container,
+.desktop-map,
+.mobile-map-preview {
+  position: relative !important;
+  z-index: 1 !important;
+  overflow: hidden;
+}
+
+/* Fix fullscreen map z-index */
+.fullscreen-map {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 9999 !important;
+  background: white;
+}
+
+/* Ensure navbar stays on top */
+nav, header {
+  position: relative;
+  z-index: 50;
+}
+
+/* Ensure main content has proper stacking context */
+main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix Leaflet controls */
+.leaflet-control {
+  z-index: 800 !important;
+}
+
+/* Map controls container */
+.map-controls-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-control-button {
+  background: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.map-control-button:hover {
+  background: #f3f4f6;
+  transform: scale(1.05);
+}
+
+.map-control-button:active {
+  transform: scale(0.95);
+}
+
+/* Mobile fullscreen map */
+.mobile-fullscreen-map {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: white;
+}
+
+.mobile-map-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.mobile-map-content {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Mobile map preview */
+.mobile-map-preview {
+  height: 250px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mobile-map-preview:hover {
+  transform: scale(1.005);
+  box-shadow: 0 6px 12px -1px rgba(0, 0, 0, 0.15);
+}
+
+/* Desktop map */
+.desktop-map {
+  height: 500px;
+}
+
+/* Loading state */
+.map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+/* ==================== END MAP FIXES ==================== */
 
 /* Safe area utilities - ONE clean set */
 @layer utilities {
@@ -254,6 +392,24 @@ body {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+  
+  /* Map specific utilities */
+  .map-container-fixed {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  
+  .z-map {
+    z-index: 10 !important;
+  }
+  
+  .z-map-controls {
+    z-index: 1000 !important;
+  }
+  
+  .z-map-fullscreen {
+    z-index: 9999 !important;
+  }
 }
 
 /* iOS input zoom prevention */
@@ -264,16 +420,26 @@ body {
   }
 }
 
-/* REMOVED: All unnecessary animations, complex keyframes, duplicate utilities, heavy filters */
-
 /* Leaflet Map Styles */
 .leaflet-container {
   font-family: inherit;
   font-size: 14px;
+  z-index: 1;
+  position: relative;
 }
 
 .leaflet-control-attribution {
   font-size: 10px;
+}
+
+.leaflet-popup-content {
+  margin: 13px 19px;
+  min-width: 200px;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 /* Mobile optimizations */
@@ -284,6 +450,14 @@ body {
   
   .leaflet-control-zoom {
     transform: scale(0.9);
+  }
+  
+  .mobile-map-preview {
+    height: 250px;
+  }
+  
+  .desktop-map {
+    height: 400px;
   }
 }
 
@@ -309,7 +483,7 @@ body {
 }
 
 /* Pulse animation for user location */
-@keyframes pulse {
+@keyframes user-pulse {
   0% {
     transform: scale(0.8);
     opacity: 1;
@@ -325,64 +499,11 @@ body {
 }
 
 .user-location-pulse {
-  animation: pulse 2s infinite;
+  animation: user-pulse 2s infinite;
 }
 
-/* Map popup customization */
-.leaflet-popup-content {
-  margin: 13px 19px;
-  min-width: 200px;
-}
-
-.leaflet-popup-content-wrapper {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Fullscreen map styles */
-.fullscreen-map {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 9999 !important;
-}
-
-/* Map controls */
-.map-controls-container {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+.user-location-marker {
   z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.map-control-button {
-  background: white;
-  border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.map-control-button:hover {
-  background: #f3f4f6;
-  transform: scale(1.05);
-}
-
-.map-control-button:active {
-  transform: scale(0.95);
 }
 
 /* Cluster markers */
@@ -410,72 +531,106 @@ body {
   background: #f8f9fa;
 }
 
-/* Loading state */
-.map-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-  background: #f8f9fa;
-  border-radius: 12px;
+/* Animation delay utilities */
+.animation-delay-300 {
+  animation-delay: 300ms;
 }
 
-/* Responsive map container */
-.responsive-map-container {
-  position: relative;
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+.animation-delay-500 {
+  animation-delay: 500ms;
 }
 
-/* Desktop map */
-.desktop-map {
-  height: 500px;
+.animation-delay-700 {
+  animation-delay: 700ms;
 }
 
-/* Mobile map preview */
-.mobile-map-preview {
-  height: 250px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+/* Selection styles */
+::selection {
+  background-color: rgba(0, 135, 81, 0.2);
+  color: #008751;
 }
 
-.mobile-map-preview:hover {
-  transform: scale(1.005);
-  box-shadow: 0 6px 12px -1px rgba(0, 0, 0, 0.15);
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid #008751;
+  outline-offset: 2px;
 }
 
-/* Mobile fullscreen map */
-.mobile-fullscreen-map {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 9999;
-  background: white;
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
 }
 
-.mobile-map-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: white;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 10000;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-.mobile-map-content {
-  position: absolute;
-  top: 60px;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --foreground-rgb: 0, 0, 0;
+    --background-rgb: 255, 255, 255;
+  }
+  
+  .btn-primary {
+    border: 2px solid black;
+  }
 }
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-rgb: 17, 24, 39;
+  }
+  
+  body {
+    color: rgb(var(--foreground-rgb));
+    background: rgb(var(--background-rgb));
+  }
+  
+  .leaflet-tile {
+    filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+  }
+  
+  .leaflet-container {
+    background: #1f2937;
+  }
+  
+  .map-control-button {
+    background: #374151;
+    color: white;
+  }
+  
+  .map-control-button:hover {
+    background: #4b5563;
+  }
+}
+
+/* Performance optimizations */
+@media (prefers-reduced-data: reduce) {
+  * {
+    background-image: none !important;
+  }
+  
+  .animate-gradient-x {
+    animation: none;
+  }
+}
+
+/* REMOVED: All unnecessary animations, complex keyframes, duplicate utilities, heavy filters */
+/* END OF CSS*/

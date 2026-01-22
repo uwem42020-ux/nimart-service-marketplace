@@ -16,9 +16,7 @@ export default function ProviderMarker({ marker, onClick }: ProviderMarkerProps)
   const router = useRouter()
   
   useEffect(() => {
-    // Cleanup function
     return () => {
-      // Remove custom icon from memory
       if ((L as any).markerCache) {
         delete (L as any).markerCache[marker.id]
       }

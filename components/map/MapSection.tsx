@@ -26,38 +26,62 @@ import {
 } from '@/lib/map-utils'
 import { getMapProviders, getMapSettings } from '@/lib/map-services'
 
-// Dynamically import components to avoid SSR issues
+// FIXED: All dynamic imports with proper loading states
 const MapContainer = dynamic(() => import('./MapContainer'), { 
   ssr: false,
   loading: () => (
     <div className="w-full h-full bg-gray-100 rounded-lg animate-pulse flex items-center justify-center">
-      <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary mb-1"></div>
+        <p className="text-xs text-gray-500">Loading map...</p>
+      </div>
     </div>
   )
 })
-const ProviderMarker = dynamic(() => import('./ProviderMarker'), { ssr: false })
-const UserLocationMarker = dynamic(() => import('./UserLocationMarker'), { ssr: false })
-const MapControls = dynamic(() => import('./MapControls'), { ssr: false })
-const MapFilterModal = dynamic(() => import('./MapFilterModal'), { ssr: false })
-const MapSkeleton = dynamic(() => import('./MapSkeleton'), { ssr: false })
+
+const ProviderMarker = dynamic(() => import('./ProviderMarker'), { 
+  ssr: false,
+  loading: () => null
+})
+
+const UserLocationMarker = dynamic(() => import('./UserLocationMarker'), { 
+  ssr: false,
+  loading: () => null
+})
+
+const MapControls = dynamic(() => import('./MapControls'), { 
+  ssr: false,
+  loading: () => null
+})
+
+const MapFilterModal = dynamic(() => import('./MapFilterModal'), { 
+  ssr: false,
+  loading: () => null
+})
+
+const MapSkeleton = dynamic(() => import('./MapSkeleton'), { 
+  ssr: false,
+  loading: () => (
+    <div className="map-loading">
+      <div className="text-center">
+        <Loader2 className="h-10 w-10 text-primary animate-spin mx-auto" />
+      </div>
+    </div>
+  )
+})
 
 // Helper function to clean up Leaflet maps
 const cleanupLeafletMaps = () => {
   if (typeof window === 'undefined') return;
   
-  // Remove all leaflet containers
   document.querySelectorAll('.leaflet-container').forEach(container => {
-    container.remove();
-  });
-  
-  // Remove leaflet panes
-  document.querySelectorAll('.leaflet-pane').forEach(pane => {
-    pane.remove();
-  });
-  
-  // Remove leaflet controls
-  document.querySelectorAll('.leaflet-control').forEach(control => {
-    control.remove();
+    try {
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+    } catch (e) {
+      // Ignore
+    }
   });
 };
 
@@ -83,6 +107,7 @@ const DEFAULT_FILTERS: MapFilters = {
   showOnlineOnly: false
 }
 
+// REMOVED forwardRef - MapSection doesn't need to forward ref anymore
 export default function MapSection({ 
   userLocation, 
   isMobile = false,
@@ -102,11 +127,10 @@ export default function MapSection({
   const [onlineStatus, setOnlineStatus] = useState(true)
   const [detectingLocation, setDetectingLocation] = useState(false)
   const [shouldRenderMap, setShouldRenderMap] = useState(false)
-  const [mapVersion, setMapVersion] = useState(0)
   
   const mapRef = useRef<any>(null)
   const lastUpdateRef = useRef<number>(0)
-  const UPDATE_THROTTLE_MS = 30000 // 30 seconds
+  const UPDATE_THROTTLE_MS = 30000
 
   // Check if client-side and clean up existing maps
   useEffect(() => {
@@ -116,7 +140,7 @@ export default function MapSection({
     // Clean up any existing maps
     cleanupLeafletMaps()
     
-    // Delay map rendering to prevent initialization conflicts
+    // Delay map rendering
     const timer = setTimeout(() => {
       setShouldRenderMap(true)
     }, 150)
@@ -140,7 +164,6 @@ export default function MapSection({
       if (mapRef.current && typeof mapRef.current.remove === 'function') {
         try {
           mapRef.current.remove()
-          console.log('🗺️ Map instance removed on unmount')
         } catch (error) {
           console.log('Map cleanup error:', error)
         }
@@ -174,18 +197,11 @@ export default function MapSection({
     setLoadingProviders(true)
     
     try {
-      console.log('📍 Loading map providers...')
-      
       // Get providers from database
       const mapProviders = await getMapProviders(
         userLocation.state && userLocation.lga 
           ? { lat: userLocation.coordinates?.latitude || 9.0765, lng: userLocation.coordinates?.longitude || 7.3986 }
           : undefined
-      )
-      
-      console.log(`✅ Loaded ${mapProviders.length} providers for map`)
-      console.log('📊 Providers with coordinates:', 
-        mapProviders.filter(p => p.latitude && p.longitude).length
       )
       
       setProviders(mapProviders)
@@ -199,11 +215,10 @@ export default function MapSection({
         : undefined
       
       const initialMarkers = providersToMarkers(mapProviders, userLoc)
-      console.log(`📍 Created ${initialMarkers.length} markers`)
       setMarkers(initialMarkers)
       
     } catch (error) {
-      console.error('❌ Error loading map data:', error)
+      console.error('Error loading map data:', error)
     } finally {
       setLoadingProviders(false)
       setLoading(false)
@@ -249,7 +264,7 @@ export default function MapSection({
       filtered = filtered.filter(p => p.rating >= filters.minRating)
     }
     
-    // Filter by distance (if user location available)
+    // Filter by distance
     if (userLocation.coordinates && filters.maxDistance < 1000) {
       filtered = filterProvidersByDistance(
         filtered,
@@ -285,14 +300,12 @@ export default function MapSection({
     setIsFullscreen(!isFullscreen)
     
     if (!isFullscreen) {
-      // Enter fullscreen
       document.body.style.overflow = 'hidden'
     } else {
-      // Exit fullscreen
       document.body.style.overflow = 'auto'
     }
     
-    // Force map to re-render after fullscreen change
+    // Force map to re-render
     setTimeout(() => {
       if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
         mapRef.current.invalidateSize()
@@ -305,7 +318,6 @@ export default function MapSection({
     setIsFullscreen(false)
     document.body.style.overflow = 'auto'
     
-    // Force map resize
     setTimeout(() => {
       if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
         mapRef.current.invalidateSize()
@@ -313,7 +325,7 @@ export default function MapSection({
     }, 100)
   }
 
-  // Locate user on map - FIXED VERSION
+  // Locate user on map
   const handleLocateUser = async () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser')
@@ -333,7 +345,7 @@ export default function MapSection({
       
       const { latitude, longitude } = position.coords
       
-      // Save to localStorage (this will update the parent component on next load)
+      // Save to localStorage
       const newLocation = {
         coordinates: { latitude, longitude },
         detected: true,
@@ -350,7 +362,6 @@ export default function MapSection({
         }
       }
       
-      // Show success message
       alert('📍 Location detected! Map centered on your position.')
       
     } catch (error: any) {
@@ -369,13 +380,12 @@ export default function MapSection({
     router.push(`/providers/${providerId}`)
   }
 
-  // Calculate map center and zoom - FIXED TYPE ISSUE
+  // Calculate map center and zoom
   const getMapCenter = (): [number, number] => {
     if (userLocation.coordinates) {
       return [userLocation.coordinates.latitude, userLocation.coordinates.longitude]
     }
     
-    // Default to Abuja, Nigeria
     return [NIGERIA_DEFAULT_CENTER.lat, NIGERIA_DEFAULT_CENTER.lng]
   }
 
@@ -384,22 +394,11 @@ export default function MapSection({
            (isMobile ? 10 : 7)
   }
 
-  // Get bounds for all markers
-  const getMapBounds = () => {
-    if (markers.length > 0) {
-      return calculateMapBounds(markers)
-    }
-    return [
-      [NIGERIA_BOUNDS.south, NIGERIA_BOUNDS.west],
-      [NIGERIA_BOUNDS.north, NIGERIA_BOUNDS.east]
-    ]
-  }
-
   // Refresh map data
   const handleRefresh = () => {
     const now = Date.now()
     if (now - lastUpdateRef.current < UPDATE_THROTTLE_MS) {
-      return // Throttle updates
+      return
     }
     
     lastUpdateRef.current = now
@@ -414,7 +413,6 @@ export default function MapSection({
           setTimeout(() => {
             try {
               mapRef.current.invalidateSize()
-              console.log('🗺️ Map size invalidated after data load')
             } catch (error) {
               console.log('Map resize error:', error)
             }
@@ -424,7 +422,6 @@ export default function MapSection({
       
       resizeMap()
       
-      // Also resize on window resize
       const handleResize = () => {
         resizeMap()
       }
@@ -447,74 +444,74 @@ export default function MapSection({
   // Render offline state
   if (!onlineStatus) {
     return (
-      <div className={`bg-gray-50 rounded-2xl border border-gray-200 p-8 text-center ${className}`} style={{ height: isFullscreen ? '100vh' : '500px' }}>
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-6">
-          <WifiOff className="h-8 w-8 text-gray-400" />
+      <div className={`bg-gray-50 rounded-2xl border border-gray-200 p-6 text-center ${className}`} style={{ height: isFullscreen ? '100vh' : '500px' }}>
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
+          <WifiOff className="h-6 w-6 text-gray-400" />
         </div>
-        <h3 className="text-lg font-semibold mb-2 text-gray-900">Offline Mode</h3>
-        <p className="text-gray-600 mb-4">Map requires internet connection to load providers.</p>
+        <h3 className="text-base font-semibold mb-2 text-gray-900">Offline Mode</h3>
+        <p className="text-sm text-gray-600 mb-4">Map requires internet connection.</p>
         <button
           onClick={() => window.location.reload()}
-          className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-green-700 font-medium"
+          className="inline-flex items-center px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-green-700 text-sm font-medium"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-3 w-3 mr-1.5" />
           Retry Connection
         </button>
       </div>
     )
   }
 
-  // Render mobile preview (non-fullscreen)
+  // Render mobile preview (non-fullscreen) - OPTIMIZED FOR IPHONE 12
   if (isMobile && !isFullscreen) {
     return (
-      <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden ${className}`}>
-        {/* Map Preview Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+      <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`} style={{ height: 'auto' }}> {/* CHANGED: Added height: auto */}
+        {/* Map Preview Header - COMPACT */}
+        <div className="p-3 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center">
-              <MapPin className="h-5 w-5 text-primary mr-2" />
-              <h3 className="font-semibold text-gray-900">Nigerian Service Map</h3>
+              <MapPin className="h-4 w-4 text-primary mr-1.5" />
+              <h3 className="text-sm font-semibold text-gray-900">Service Map</h3>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
                 {nearbyCount} nearby
               </span>
               <button
                 onClick={toggleFullscreen}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Open fullscreen map"
               >
-                <Maximize2 className="h-5 w-5 text-gray-600" />
+                <Maximize2 className="h-3.5 w-3.5 text-gray-600" />
               </button>
             </div>
           </div>
           
-          {/* Quick Stats */}
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="text-center p-2 bg-green-50 rounded-lg">
-              <div className="text-sm font-semibold text-green-700">{verifiedCount}</div>
-              <div className="text-xs text-green-600">Verified</div>
+          {/* Quick Stats - EXTRA COMPACT */}
+          <div className="flex justify-between items-center px-1">
+            <div className="text-center">
+              <div className="text-xs font-semibold text-green-700">{verifiedCount}</div>
+              <div className="text-[10px] text-green-600">Verified</div>
             </div>
-            <div className="text-center p-2 bg-blue-50 rounded-lg">
-              <div className="text-sm font-semibold text-blue-700">{onlineCount}</div>
-              <div className="text-xs text-blue-600">Online</div>
+            <div className="text-center">
+              <div className="text-xs font-semibold text-blue-700">{onlineCount}</div>
+              <div className="text-[10px] text-blue-600">Online</div>
             </div>
-            <div className="text-center p-2 bg-purple-50 rounded-lg">
-              <div className="text-sm font-semibold text-purple-700">{providers.length}</div>
-              <div className="text-xs text-purple-600">Total</div>
+            <div className="text-center">
+              <div className="text-xs font-semibold text-purple-700">{providers.length}</div>
+              <div className="text-[10px] text-purple-600">Total</div>
             </div>
           </div>
         </div>
         
-        {/* Mini Map Preview */}
+        {/* Mini Map Preview - FIXED HEIGHT FOR SMALL SCREENS */}
         <div 
           className="mobile-map-preview cursor-pointer relative"
           onClick={toggleFullscreen}
-          style={{ height: '250px' }}
+          style={{ height: '220px', minHeight: '220px' }}  // Increased for better visibility
         >
           {loadingProviders ? (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
+              <Loader2 className="h-6 w-6 text-primary animate-spin" />
             </div>
           ) : (
             <>
@@ -524,7 +521,7 @@ export default function MapSection({
                   center={getMapCenter()}
                   zoom={10}
                   className="h-full w-full"
-                  innerRef={mapRef}
+                  ref={mapRef}
                 >
                   {/* User Location */}
                   {userLocation.coordinates && (
@@ -534,8 +531,8 @@ export default function MapSection({
                     />
                   )}
                   
-                  {/* Sample markers (show only a few for preview) */}
-                  {markers.slice(0, 5).map(marker => (
+                  {/* Sample markers */}
+                  {markers.slice(0, 4).map(marker => (
                     <ProviderMarker
                       key={marker.id}
                       marker={marker}
@@ -549,15 +546,15 @@ export default function MapSection({
                 </MapContainer>
               </div>
               
-              {/* Overlay with CTA */}
+              {/* Overlay with CTA - COMPACT */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent flex items-end">
-                <div className="p-4 text-white w-full">
+                <div className="p-2 text-white w-full">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Tap to explore full map</p>
-                      <p className="text-xs opacity-90">{nearbyCount} providers near you</p>
+                      <p className="text-xs font-medium">Tap to explore</p>
+                      <p className="text-[10px] opacity-90">{nearbyCount} providers</p>
                     </div>
-                    <div className="bg-white text-gray-900 px-3 py-1 rounded-full text-sm font-medium">
+                    <div className="bg-white text-gray-900 px-2 py-0.5 rounded-full text-xs font-medium">
                       View Map
                     </div>
                   </div>
@@ -567,34 +564,34 @@ export default function MapSection({
           )}
         </div>
         
-        {/* Quick Actions */}
-        <div className="p-4 border-t border-gray-200">
+        {/* Quick Actions - EXTRA COMPACT */}
+        <div className="p-2 border-t border-gray-200">
           <div className="flex justify-between">
             <button
               onClick={() => setShowFilterModal(true)}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-900"
+              className="flex items-center text-[10px] text-gray-600 hover:text-gray-900 px-1.5 py-0.5"
             >
-              <Filter className="h-4 w-4 mr-1" />
+              <Filter className="h-2.5 w-2.5 mr-1" />
               Filter
             </button>
             <button
               onClick={handleLocateUser}
               disabled={detectingLocation}
-              className="flex items-center text-sm text-primary hover:text-green-700"
+              className="flex items-center text-[10px] text-primary hover:text-green-700 px-1.5 py-0.5"
             >
               {detectingLocation ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
               ) : (
-                <Navigation className="h-4 w-4 mr-1" />
+                <Navigation className="h-2.5 w-2.5 mr-1" />
               )}
               {detectingLocation ? 'Locating...' : 'Find Me'}
             </button>
             <button
               onClick={handleRefresh}
               disabled={loadingProviders}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-900"
+              className="flex items-center text-[10px] text-gray-600 hover:text-gray-900 px-1.5 py-0.5"
             >
-              <RefreshCw className={`h-4 w-4 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-2.5 w-2.5 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
@@ -615,40 +612,44 @@ export default function MapSection({
       />
       
       {/* Fullscreen Map */}
-      <div className={`${isFullscreen ? 'mobile-fullscreen-map' : `desktop-map ${className}`}`}>
-        {/* Mobile Fullscreen Header */}
+      <div className={`${isFullscreen ? 'mobile-fullscreen-map' : `desktop-map ${className}`}`} style={{ 
+        position: 'relative', 
+        zIndex: isFullscreen ? 9999 : 1,
+        height: isFullscreen ? '100vh' : '500px' // ADDED: Fixed height for desktop
+      }}>
+        {/* Mobile Fullscreen Header - COMPACT */}
         {isFullscreen && (
-          <div className="mobile-map-header">
+          <div className="mobile-map-header px-3 py-2">
             <div className="flex items-center">
               <button
                 onClick={handleCloseFullscreen}
-                className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 mr-2 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Back to homepage"
               >
-                <ChevronLeft className="h-5 w-5 text-gray-700" />
+                <ChevronLeft className="h-4 w-4 text-gray-700" />
               </button>
               <div>
-                <h2 className="font-bold text-gray-900">Nigerian Service Map</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-sm font-bold text-gray-900">Service Map</h2>
+                <p className="text-xs text-gray-600">
                   {markers.length} providers • {userLocation.state || 'Nigeria'}
                 </p>
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowFilterModal(true)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Filter providers"
               >
-                <Filter className="h-5 w-5 text-gray-700" />
+                <Filter className="h-4 w-4 text-gray-700" />
               </button>
               <button
                 onClick={handleCloseFullscreen}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Close map"
               >
-                <X className="h-5 w-5 text-gray-700" />
+                <X className="h-4 w-4 text-gray-700" />
               </button>
             </div>
           </div>
@@ -657,10 +658,9 @@ export default function MapSection({
         {/* Map Container */}
         <div className={isFullscreen ? 'mobile-map-content' : 'h-full'}>
           <MapContainer
-            key={`map-container-${mapVersion}-${isFullscreen ? 'fullscreen' : 'normal'}`}
             center={getMapCenter()}
             zoom={getMapZoom()}
-            innerRef={mapRef}
+            ref={mapRef}
             isFullscreen={isFullscreen}
             className={isFullscreen ? 'h-full' : 'h-full'}
           >
@@ -694,79 +694,44 @@ export default function MapSection({
           </MapContainer>
         </div>
         
-        {/* Desktop Map Stats Footer */}
+        {/* Desktop Map Stats Footer - BETTER POSITION */}
         {!isFullscreen && !isMobile && (
-          <div className="absolute bottom-4 left-4 right-4 z-[1000]">
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000]">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 border border-gray-200 shadow-lg min-w-[280px]">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3">
                   <div className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    <span className="text-sm font-medium">{verifiedCount} verified</span>
+                    <CheckCircle className="h-3.5 w-3.5 text-green-600 mr-1.5" />
+                    <span className="text-xs font-medium">{verifiedCount} verified</span>
                   </div>
                   <div className="flex items-center">
-                    <User className="h-4 w-4 text-blue-600 mr-2" />
-                    <span className="text-sm font-medium">{onlineCount} online</span>
+                    <User className="h-3.5 w-3.5 text-blue-600 mr-1.5" />
+                    <span className="text-xs font-medium">{onlineCount} online</span>
                   </div>
                   <div className="flex items-center">
-                    <MapPin className="h-4 w-4 text-primary mr-2" />
-                    <span className="text-sm font-medium">{markers.length} nearby</span>
+                    <MapPin className="h-3.5 w-3.5 text-primary mr-1.5" />
+                    <span className="text-xs font-medium">{markers.length} nearby</span>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setShowFilterModal(true)}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center"
-                  >
-                    <Filter className="h-4 w-4 mr-1" />
-                    Filter
-                  </button>
-                  <button
-                    onClick={handleRefresh}
-                    disabled={loadingProviders}
-                    className="px-3 py-1.5 bg-primary hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center"
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
                 </div>
               </div>
               
-              {/* Current Filters Display */}
-              {(mapFilters.serviceType || mapFilters.verificationStatus !== 'all' || mapFilters.minRating > 0) && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <div className="flex items-center flex-wrap gap-2">
-                    <span className="text-xs text-gray-500">Active filters:</span>
-                    {mapFilters.serviceType && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                        {mapFilters.serviceType}
-                      </span>
-                    )}
-                    {mapFilters.verificationStatus !== 'all' && (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        {mapFilters.verificationStatus}
-                      </span>
-                    )}
-                    {mapFilters.minRating > 0 && (
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                        {mapFilters.minRating}+ stars
-                      </span>
-                    )}
-                    {mapFilters.showOnlineOnly && (
-                      <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                        Online only
-                      </span>
-                    )}
-                    <button
-                      onClick={() => handleApplyFilters(DEFAULT_FILTERS)}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowFilterModal(true)}
+                  className="flex-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium flex items-center justify-center"
+                >
+                  <Filter className="h-3.5 w-3.5 mr-1" />
+                  Filter
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  disabled={loadingProviders}
+                  className="flex-1 px-2.5 py-1.5 bg-primary hover:bg-green-700 text-white rounded-lg text-xs font-medium flex items-center justify-center"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
         )}

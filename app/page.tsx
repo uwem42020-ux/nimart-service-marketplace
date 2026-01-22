@@ -1,4 +1,4 @@
-// app/page.tsx - CORRECTED VERSION WITH PROPER FLOW
+// app/page.tsx - COMPLETE FIXED VERSION
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -98,7 +98,7 @@ export default function Home() {
     { key: 'profile', icon: UserCircle, label: 'Profile', path: '/profile' }
   ]
 
-  // Popular services with Lucide icons (no custom icons needed)
+  // Popular services with Lucide icons
   const popularServices = [
     { name: 'Mechanics', icon: Car, color: 'bg-red-100 text-red-600' },
     { name: 'Electricians', icon: Zap, color: 'bg-yellow-100 text-yellow-600' },
@@ -356,7 +356,7 @@ export default function Home() {
     return iconMap[iconName] || <Briefcase className="h-4 w-4" />
   }
 
-  // FIXED: Load providers - Show only confirmed OTP providers (not pending_email)
+  // Load providers - Show only confirmed OTP providers
   const loadFeaturedProviders = async () => {
     try {
       setLoadingProviders(true)
@@ -405,7 +405,7 @@ export default function Home() {
           is_online: provider.is_online || false
         }))
         
-        // FILTER: Only show providers who confirmed OTP (NOT pending_email)
+        // Only show providers who confirmed OTP
         const confirmedProviders = typedProviders.filter(p => 
           p.verification_status !== 'pending_email' && 
           p.verification_status !== 'demo'
@@ -427,7 +427,7 @@ export default function Home() {
     }
   }
 
-  // FIXED: Direct provider loading - Show only confirmed OTP providers
+  // Direct provider loading - Show only confirmed OTP providers
   const loadProvidersDirectly = async () => {
     try {
       console.log('📋 Loading providers directly from database...')
@@ -436,8 +436,6 @@ export default function Home() {
         .from('providers')
         .select(`*, states (name), lgas (name)`)
         .eq('is_active', true)
-        // Show only providers who confirmed OTP: unverified, pending, or verified
-        // DO NOT show: pending_email (didn't confirm OTP) or demo
         .in('verification_status', ['unverified', 'pending', 'verified'])
         .order('rating', { ascending: false })
         .limit(20)
@@ -473,16 +471,11 @@ export default function Home() {
         }))
         
         console.log(`✅ Loaded ${typedProviders.length} confirmed providers`)
-        console.log('Provider status breakdown:', typedProviders.map(p => ({
-          name: p.business_name,
-          status: p.verification_status,
-          is_verified: p.is_verified
-        })))
         
         setFeaturedProviders(typedProviders)
         setFilteredProviders(typedProviders)
       } else {
-        console.log('⚠️ No confirmed providers found (all are pending_email or demo)')
+        console.log('⚠️ No confirmed providers found')
         setFeaturedProviders([])
         setFilteredProviders([])
       }
@@ -619,7 +612,7 @@ export default function Home() {
           .from('providers')
           .select(`*, states (name), lgas (name)`)
           .eq('is_active', true)
-          .in('verification_status', ['unverified', 'pending', 'verified']) // Only confirmed
+          .in('verification_status', ['unverified', 'pending', 'verified'])
           .or(`business_name.ilike.%${query}%,service_type.ilike.%${query}%,bio.ilike.%${query}%`)
           .limit(50)
         
@@ -1011,7 +1004,7 @@ export default function Home() {
               )}
             </form>
             
-            {/* POPULAR SERVICES - USING LUCIDE ICONS */}
+            {/* POPULAR SERVICES */}
             <div className="mt-6 sm:mt-8">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-gray-500">Popular Services:</span>
@@ -1140,45 +1133,11 @@ export default function Home() {
         </div>
       )}
 
-      {/* INTERACTIVE MAP SECTION - SEPARATE FROM LOCATION SELECTOR */}
+      {/* SIMPLIFIED MAP SECTION */}
       <section className="py-10 sm:py-14 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 sm:mb-10">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3">
-              Explore Service Providers Across Nigeria
-            </h2>
-            <p className="text-gray-600">
-              Browse our nationwide network of verified professionals. Click on map markers to view provider details.
-            </p>
-          </div>
-          
-          {/* Homepage Map Component - Shows all providers across Nigeria */}
-          {/* FIX: Pass userLocation prop to HomepageMap component */}
+          {/* Homepage Map Component */}
           <HomepageMap userLocation={userLocation} />
-          
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center mb-2">
-                <div className="w-6 h-6 rounded-full bg-green-500 border-2 border-white mr-2"></div>
-                <span className="text-sm font-medium">Verified Provider</span>
-              </div>
-              <p className="text-xs text-gray-600">Professionals who have completed verification</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center mb-2">
-                <div className="w-6 h-6 rounded-full bg-yellow-500 border-2 border-white mr-2"></div>
-                <span className="text-sm font-medium">Unverified Provider</span>
-              </div>
-              <p className="text-xs text-gray-600">Providers awaiting verification</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center mb-2">
-                <div className="w-6 h-6 rounded-full bg-blue-500 border-2 border-white mr-2"></div>
-                <span className="text-sm font-medium">Major Cities</span>
-              </div>
-              <p className="text-xs text-gray-600">Key service hubs across Nigeria</p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1442,14 +1401,13 @@ export default function Home() {
               
               <div className="lg:hidden h-4"></div>
               
-              {/* Sorting Controls - These work with the location filtering */}
+              {/* Sorting Controls */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
                 {SORT_OPTIONS.map((option) => (
                   <button
                     key={option.key}
                     onClick={() => {
                       setSortBy(option.key)
-                      // Update sorting immediately
                       updateFilteredProviders()
                     }}
                     className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${sortBy === option.key
