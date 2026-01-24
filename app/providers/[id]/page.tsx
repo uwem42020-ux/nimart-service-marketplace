@@ -1,4 +1,4 @@
-// app/providers/[id]/page.tsx - CORRECTED VERSION
+// app/providers/[id]/page.tsx - COMPLETE FIXED VERSION WITH BOTH FEATURES
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -12,16 +12,39 @@ import {
   Eye, EyeOff, Lock, Verified, ChevronLeft,
   ChevronRight, Image as ImageIcon, Send,
   ThumbsUp, Edit, Camera, Share2, Bookmark,
-  Heart, Filter, X, Loader2, AlertCircle
+  Heart, Filter, X, Loader2, AlertCircle,
+  Briefcase, DollarSign, Settings, Globe,
+  ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react'
 import ReviewsList from '@/components/ReviewsList'
 import { generateProviderSEO } from '@/lib/seo'
+import type { FastProvider } from '@/lib/types'
+
+// Interface for similar providers
+interface SimilarProvider {
+  id: string;
+  business_name: string;
+  service_type: string;
+  rating: number;
+  total_reviews: number;
+  profile_picture_url: string | null;
+  state_id: string;
+  lga_id: string;
+  years_experience: number;
+  is_verified: boolean;
+  verification_status: string;
+  city: string;
+  response_rate: number;
+  is_online: boolean;
+  states?: { name: string }[];
+  lgas?: { name: string }[];
+}
 
 export default function ProviderDetailPage() {
   const params = useParams()
   const router = useRouter()
   const providerId = params.id as string
-  const [provider, setProvider] = useState<any>(null)
+  const [provider, setProvider] = useState<FastProvider | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'reviews' | 'services'>('overview')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -41,6 +64,8 @@ export default function ProviderDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [stateName, setStateName] = useState<string>('')
   const [lgaName, setLgaName] = useState<string>('')
+  const [similarProviders, setSimilarProviders] = useState<SimilarProvider[]>([])
+  const [loadingSimilar, setLoadingSimilar] = useState(false)
 
   const imageRef = useRef<HTMLDivElement>(null)
 
@@ -57,7 +82,6 @@ export default function ProviderDetailPage() {
       setIsAuthenticated(!!session?.user)
       
       if (session?.user) {
-        // Load user profile for review submission
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
@@ -95,29 +119,106 @@ export default function ProviderDetailPage() {
       setProvider(data)
       
       // Extract state and LGA names
-      setStateName(data.states?.name || '')
-      setLgaName(data.lgas?.name || '')
+      setStateName(data.states?.[0]?.name || '')
+      setLgaName(data.lgas?.[0]?.name || '')
       
       // Simulate gallery images
       const images = []
       if (data.profile_picture_url) images.push(data.profile_picture_url)
-      if (data.photo_url) images.push(data.photo_url)
       // Add placeholder gallery images
       for (let i = 0; i < 3; i++) {
         images.push(`https://images.unsplash.com/photo-${158000+i}?auto=format&fit=crop&w=800&q=80`)
       }
       setGalleryImages(images)
       
-      console.log('✅ Provider loaded:', {
-        id: data.id,
-        business_name: data.business_name,
-        state: data.states?.name,
-        lga: data.lgas?.name
-      })
+      // Load similar providers
+      loadSimilarProviders(data)
+      
     } catch (error) {
       console.error('Error loading provider:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load similar providers based on service type and location
+  const loadSimilarProviders = async (currentProvider: FastProvider) => {
+    try {
+      setLoadingSimilar(true)
+      
+      let query = supabase
+        .from('providers')
+        .select(`
+          id,
+          business_name,
+          service_type,
+          rating,
+          total_reviews,
+          profile_picture_url,
+          state_id,
+          lga_id,
+          years_experience,
+          is_verified,
+          verification_status,
+          city,
+          response_rate,
+          is_online,
+          states (name),
+          lgas (name)
+        `)
+        .eq('is_active', true)
+        .neq('id', currentProvider.id) // Exclude current provider
+        .limit(8) // Limit to 8 similar providers
+
+      // Try to find providers with same service type first
+      if (currentProvider.service_type) {
+        query = query.eq('service_type', currentProvider.service_type)
+      }
+      
+      const { data, error } = await query
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        setSimilarProviders(data as SimilarProvider[])
+      } else {
+        // Fallback: Find providers in same state
+        const fallbackQuery = supabase
+          .from('providers')
+          .select(`
+            id,
+            business_name,
+            service_type,
+            rating,
+            total_reviews,
+            profile_picture_url,
+            state_id,
+            lga_id,
+            years_experience,
+            is_verified,
+            verification_status,
+            city,
+            response_rate,
+            is_online,
+            states (name),
+            lgas (name)
+          `)
+          .eq('is_active', true)
+          .eq('state_id', currentProvider.state_id)
+          .neq('id', currentProvider.id)
+          .limit(8)
+
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery
+
+        if (!fallbackError && fallbackData) {
+          setSimilarProviders(fallbackData as SimilarProvider[])
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading similar providers:', error)
+    } finally {
+      setLoadingSimilar(false)
     }
   }
 
@@ -147,20 +248,17 @@ export default function ProviderDetailPage() {
         return
       }
 
-      // Get current user session
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) {
         router.push('/login')
         return
       }
 
-      // Check if trying to message yourself
       if (session.user.id === provider.user_id) {
         alert('You cannot message yourself.')
         return
       }
 
-      // Save provider info to localStorage
       const providerInfo = {
         userId: provider.user_id,
         displayName: provider.business_name,
@@ -170,8 +268,6 @@ export default function ProviderDetailPage() {
       }
 
       localStorage.setItem('selectedProvider', JSON.stringify(providerInfo))
-
-      // Navigate to messages page
       router.push('/messages')
       
     } catch (error) {
@@ -233,7 +329,6 @@ export default function ProviderDetailPage() {
         .eq('user_id', session.user.id)
         .single()
 
-      // Insert review
       const { error } = await supabase
         .from('reviews')
         .insert({
@@ -242,24 +337,21 @@ export default function ProviderDetailPage() {
           customer_name: profile?.display_name || session.user.email?.split('@')[0] || 'Anonymous',
           rating: newReview.rating,
           comment: newReview.comment,
-          service_type: provider.service_type,
+          service_type: provider?.service_type,
           status: 'approved'
         })
 
       if (error) throw error
 
-      // Update provider rating
       const { error: updateError } = await supabase.rpc('update_provider_rating', {
         provider_id_param: providerId
       })
 
       if (updateError) console.error('Rating update error:', updateError)
 
-      // Show success
       setReviewSuccess(true)
       setNewReview({ rating: 5, comment: '' })
       
-      // Reload provider data
       setTimeout(() => {
         loadProvider()
         setReviewSuccess(false)
@@ -275,14 +367,13 @@ export default function ProviderDetailPage() {
 
   const toggleFavorite = () => {
     setIsFavorite(!isFavorite)
-    // In production: Save to user's favorites in database
   }
 
   const shareProfile = () => {
     if (navigator.share) {
       navigator.share({
-        title: `${provider.business_name} - Service Provider`,
-        text: `Check out ${provider.business_name} on Nimart`,
+        title: `${provider?.business_name} - Service Provider`,
+        text: `Check out ${provider?.business_name} on Nimart`,
         url: window.location.href,
       })
     } else {
@@ -301,6 +392,136 @@ export default function ProviderDetailPage() {
     } else {
       return 'Location not set'
     }
+  }
+
+  // Render profile image
+  const renderProfileImage = (size: 'small' | 'medium' | 'large' = 'medium') => {
+    if (!provider) return null
+    
+    const imageUrl = provider.profile_picture_url
+    const initials = provider.business_name?.charAt(0) || 'P'
+    
+    const sizeClasses = {
+      small: 'w-16 h-16',
+      medium: 'w-24 h-24',
+      large: 'w-40 h-40'
+    }
+    
+    return (
+      <div className={`relative ${sizeClasses[size]} rounded-2xl overflow-hidden border-4 border-white shadow-2xl`}>
+        {imageUrl ? (
+          <div 
+            className="w-full h-full bg-cover bg-center"
+            style={{ backgroundImage: `url('${imageUrl}')` }}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary to-green-600 flex items-center justify-center text-white font-bold text-2xl">
+            {initials}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Render similar provider card
+  const renderSimilarProviderCard = (provider: SimilarProvider) => {
+    const providerState = provider.states?.[0]?.name || ''
+    const providerLGA = provider.lgas?.[0]?.name || ''
+    
+    return (
+      <Link
+        href={`/providers/${provider.id}`}
+        key={provider.id}
+        className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+      >
+        <div className="aspect-video relative overflow-hidden">
+          {provider.profile_picture_url ? (
+            <div 
+              className="w-full h-full bg-cover bg-center hover:scale-105 transition-transform duration-300"
+              style={{ backgroundImage: `url('${provider.profile_picture_url}')` }}
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-green-600/20 flex items-center justify-center">
+              <Briefcase className="h-12 w-12 text-primary/40" />
+            </div>
+          )}
+          
+          {provider.is_verified && provider.verification_status === 'verified' && (
+            <div className="absolute top-2 right-2">
+              <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                <Verified className="h-3 w-3" />
+                Verified
+              </div>
+            </div>
+          )}
+          
+          {provider.is_online && (
+            <div className="absolute top-2 left-2">
+              <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse mr-1"></div>
+                Online
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <h4 className="font-bold text-gray-900 text-sm line-clamp-1">
+                {provider.business_name}
+              </h4>
+              <p className="text-xs text-primary font-medium mt-1">
+                {provider.service_type}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center mb-3">
+            <div className="flex items-center">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={`h-3 w-3 ${
+                    star <= Math.floor(provider.rating || 0)
+                      ? 'text-yellow-500 fill-yellow-500'
+                      : 'text-gray-300'
+                  }`}
+                  fill="currentColor"
+                />
+              ))}
+            </div>
+            <span className="ml-1 text-xs font-medium text-gray-900">
+              {provider.rating?.toFixed(1) || 'New'}
+            </span>
+            <span className="mx-1 text-gray-300">•</span>
+            <span className="text-xs text-gray-600">
+              ({provider.total_reviews || 0})
+            </span>
+          </div>
+          
+          <div className="flex items-center text-xs text-gray-600 mb-2">
+            <MapPin className="h-3 w-3 mr-1" />
+            <span className="truncate">
+              {providerLGA ? `${providerLGA}` : providerState}
+            </span>
+          </div>
+          
+          <div className="flex items-center text-xs text-gray-600">
+            <Clock className="h-3 w-3 mr-1" />
+            <span>{provider.years_experience || 0} yrs exp</span>
+            <span className="mx-1 text-gray-300">•</span>
+            <span>{provider.response_rate || 0}% response</span>
+          </div>
+          
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <button className="w-full py-2 text-xs bg-primary text-white rounded-lg hover:bg-green-700 font-medium transition-colors">
+              View Profile
+            </button>
+          </div>
+        </div>
+      </Link>
+    )
   }
 
   if (loading) {
@@ -339,7 +560,6 @@ export default function ProviderDetailPage() {
 
   return (
     <>
-      {/* Structured Data */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -347,7 +567,6 @@ export default function ProviderDetailPage() {
         }}
       />
 
-      {/* Login Modal */}
       {loginModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 animate-scale-in">
@@ -392,23 +611,18 @@ export default function ProviderDetailPage() {
       )}
 
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        {/* Hero Header with Full-width Image on Mobile */}
         <div className="relative">
-          {/* Background Image for Mobile (Full Width) */}
           <div className="lg:hidden relative h-64 w-full">
             {provider.profile_picture_url ? (
-              <img
-                src={provider.profile_picture_url}
-                alt={provider.business_name}
-                className="w-full h-full object-cover"
-                loading="eager"
+              <div 
+                className="w-full h-full bg-cover bg-center"
+                style={{ backgroundImage: `url('${provider.profile_picture_url}')` }}
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-primary/20 to-green-600/20"></div>
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
             
-            {/* Back Button */}
             <button
               onClick={() => router.back()}
               className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg"
@@ -416,7 +630,6 @@ export default function ProviderDetailPage() {
               <ChevronLeft className="h-5 w-5 text-gray-900" />
             </button>
             
-            {/* Action Buttons */}
             <div className="absolute top-4 right-4 flex gap-2">
               <button
                 onClick={shareProfile}
@@ -435,7 +648,6 @@ export default function ProviderDetailPage() {
             </div>
           </div>
 
-          {/* Desktop Header */}
           <div className="hidden lg:block bg-white border-b">
             <div className="max-w-7xl mx-auto px-8 py-4">
               <div className="flex items-center justify-between">
@@ -475,30 +687,14 @@ export default function ProviderDetailPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-            {/* Left Column - Main Info */}
             <div className="lg:col-span-2">
-              {/* Provider Header - Modern Design */}
+              {/* MAIN PROFILE CONTENT */}
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8 mb-6">
                 <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-                  {/* Profile Image - Desktop */}
                   <div className="hidden md:block flex-shrink-0">
                     <div className="relative">
-                      <div className="w-40 h-40 rounded-2xl overflow-hidden border-4 border-white shadow-2xl">
-                        {provider.profile_picture_url ? (
-                          <img
-                            src={provider.profile_picture_url}
-                            alt={provider.business_name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-primary to-green-600 flex items-center justify-center text-white text-4xl font-bold">
-                            {provider.business_name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
+                      {renderProfileImage('large')}
                       
-                      {/* Verification Badge */}
                       {isProviderVerified() && (
                         <div className="absolute -bottom-2 -right-2">
                           <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
@@ -509,7 +705,6 @@ export default function ProviderDetailPage() {
                       )}
                     </div>
                     
-                    {/* Stats Summary */}
                     <div className="mt-6 grid grid-cols-2 gap-3">
                       <div className="text-center p-3 bg-gray-50 rounded-xl">
                         <div className="text-2xl font-bold text-primary">{provider.years_experience || 0}</div>
@@ -522,26 +717,11 @@ export default function ProviderDetailPage() {
                     </div>
                   </div>
 
-                  {/* Provider Info */}
                   <div className="flex-1">
-                    {/* Mobile Profile Info */}
                     <div className="md:hidden mb-6">
                       <div className="flex items-start gap-4">
                         <div className="relative">
-                          <div className="w-20 h-20 rounded-xl overflow-hidden border-4 border-white shadow-lg">
-                            {provider.profile_picture_url ? (
-                              <img
-                                src={provider.profile_picture_url}
-                                alt={provider.business_name}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-primary to-green-600 flex items-center justify-center text-white text-2xl font-bold">
-                                {provider.business_name.charAt(0)}
-                              </div>
-                            )}
-                          </div>
+                          {renderProfileImage('medium')}
                           {isProviderVerified() && (
                             <div className="absolute -bottom-1 -right-1">
                               <Verified className="h-5 w-5 text-green-500 bg-white rounded-full p-1" />
@@ -565,7 +745,6 @@ export default function ProviderDetailPage() {
                       </div>
                     </div>
 
-                    {/* Desktop Provider Info */}
                     <div className="hidden md:block">
                       <div className="mb-4">
                         <h1 className="text-3xl font-bold text-gray-900 mb-3">
@@ -606,7 +785,6 @@ export default function ProviderDetailPage() {
                       </div>
                     </div>
 
-                    {/* Rating - Both Mobile & Desktop */}
                     <div className="mb-6">
                       <div className="flex items-center gap-4 mb-4">
                         <div className="flex items-center">
@@ -644,7 +822,6 @@ export default function ProviderDetailPage() {
                       </div>
                     </div>
 
-                    {/* Bio */}
                     {provider.bio && (
                       <div className="mb-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-3">About</h3>
@@ -654,7 +831,6 @@ export default function ProviderDetailPage() {
                       </div>
                     )}
 
-                    {/* Gallery (Mobile Only) */}
                     {galleryImages.length > 0 && (
                       <div className="md:hidden mb-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-3">Gallery</h3>
@@ -664,10 +840,9 @@ export default function ProviderDetailPage() {
                               key={index}
                               className="flex-shrink-0 w-32 h-32 rounded-xl overflow-hidden border-2 border-white shadow-md"
                             >
-                              <img
-                                src={img}
-                                alt={`${provider.business_name} gallery ${index + 1}`}
-                                className="w-full h-full object-cover"
+                              <div 
+                                className="w-full h-full bg-cover bg-center"
+                                style={{ backgroundImage: `url('${img}')` }}
                               />
                             </div>
                           ))}
@@ -678,7 +853,7 @@ export default function ProviderDetailPage() {
                 </div>
               </div>
 
-              {/* Tabs - Modern Design */}
+              {/* TABS SECTION */}
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-6 overflow-hidden">
                 <div className="border-b border-gray-100">
                   <div className="flex overflow-x-auto scrollbar-hide">
@@ -727,7 +902,6 @@ export default function ProviderDetailPage() {
                 <div className="p-6 md:p-8">
                   {activeTab === 'overview' ? (
                     <div>
-                      {/* Details Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                         <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
                           <div className="flex items-center mb-2">
@@ -772,7 +946,6 @@ export default function ProviderDetailPage() {
                         </div>
                       </div>
 
-                      {/* Location Details */}
                       <div className="mb-8">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Area</h3>
                         <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
@@ -800,7 +973,6 @@ export default function ProviderDetailPage() {
                         </div>
                       </div>
 
-                      {/* Gallery (Desktop) */}
                       {galleryImages.length > 0 && (
                         <div className="hidden md:block">
                           <h3 className="text-lg font-semibold text-gray-900 mb-4">Gallery</h3>
@@ -811,10 +983,9 @@ export default function ProviderDetailPage() {
                                 className="aspect-square rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                                 onClick={() => setSelectedImageIndex(index)}
                               >
-                                <img
-                                  src={img}
-                                  alt={`${provider.business_name} gallery ${index + 1}`}
-                                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                <div 
+                                  className="w-full h-full bg-cover bg-center hover:scale-105 transition-transform duration-300"
+                                  style={{ backgroundImage: `url('${img}')` }}
                                 />
                               </div>
                             ))}
@@ -838,6 +1009,17 @@ export default function ProviderDetailPage() {
                           </div>
                         )}
                         
+                        {provider.hourly_rate && (
+                          <div className="p-4 rounded-xl bg-green-50 border border-green-100">
+                            <div className="font-medium text-gray-900 mb-2">Pricing</div>
+                            <div className="flex items-center">
+                              <DollarSign className="h-4 w-4 text-green-600 mr-2" />
+                              <span className="text-gray-700">Hourly Rate:</span>
+                              <span className="ml-2 font-semibold text-green-700">₦{provider.hourly_rate.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
                           <div className="font-medium text-gray-900 mb-2">Booking Information</div>
                           <div className="text-gray-600">
@@ -848,7 +1030,6 @@ export default function ProviderDetailPage() {
                     </div>
                   ) : (
                     <div>
-                      {/* Review Submission Form */}
                       {isAuthenticated && (
                         <div className="mb-8">
                           <h3 className="text-lg font-semibold text-gray-900 mb-4">Write a Review</h3>
@@ -924,7 +1105,6 @@ export default function ProviderDetailPage() {
                         </div>
                       )}
                       
-                      {/* Reviews List */}
                       <div>
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-lg font-semibold text-gray-900">Customer Reviews</h3>
@@ -938,12 +1118,54 @@ export default function ProviderDetailPage() {
                   )}
                 </div>
               </div>
+
+              {/* PROVIDERS YOU MAY NEED SECTION - ADDED AT THE BOTTOM */}
+              {(similarProviders.length > 0 || loadingSimilar) && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mt-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <Sparkles className="h-5 w-5 text-yellow-500 mr-3" />
+                      <h3 className="text-xl font-bold text-gray-900">Providers You May Need</h3>
+                    </div>
+                    <Link
+                      href="/marketplace"
+                      className="text-primary hover:text-green-700 text-sm font-medium flex items-center"
+                    >
+                      View All <ChevronRight className="h-4 w-4 ml-1" />
+                    </Link>
+                  </div>
+                  
+                  {loadingSimilar ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+                      <p className="mt-4 text-gray-600">Finding similar providers...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 mb-6">
+                        Other {provider.service_type} professionals in {stateName} you might be interested in:
+                      </p>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {similarProviders.slice(0, 4).map(renderSimilarProviderCard)}
+                      </div>
+                      
+                      {similarProviders.length > 4 && (
+                        <div className="mt-6 pt-6 border-t border-gray-100">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {similarProviders.slice(4, 8).map(renderSimilarProviderCard)}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Right Column - Actions & Contact */}
             <div className="lg:col-span-1">
               <div className="sticky top-4 space-y-6">
-                {/* Contact Card */}
+                {/* Contact & Booking Card with restricted phone/email access */}
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact & Booking</h3>
                   
@@ -974,18 +1196,17 @@ export default function ProviderDetailPage() {
                     </button>
                   </div>
 
-                  {/* Protected Contact Information */}
                   <div className="pt-6 border-t border-gray-100">
                     <h4 className="font-semibold text-gray-900 mb-4">Contact Information</h4>
                     
-                    {/* Phone */}
+                    {/* Phone Number - Only visible to authenticated customers */}
                     <div className="mb-4">
                       <div className="flex items-center justify-between text-gray-600 mb-2">
                         <div className="flex items-center">
                           <Phone className="h-4 w-4 mr-2 text-gray-400" />
                           <span className="font-medium">Phone:</span>
                         </div>
-                        {isAuthenticated ? (
+                        {isAuthenticated && userProfile?.user_type === 'customer' ? (
                           <div className="flex items-center">
                             {showPhone ? (
                               <>
@@ -1019,20 +1240,20 @@ export default function ProviderDetailPage() {
                             className="text-primary hover:text-green-700 flex items-center font-medium"
                           >
                             <Lock className="h-4 w-4 mr-1" />
-                            Sign in to view
+                            {isAuthenticated ? 'Not authorized' : 'Sign in to view'}
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Email */}
+                    {/* Email - Only visible to authenticated customers */}
                     <div className="mb-6">
                       <div className="flex items-center justify-between text-gray-600 mb-2">
                         <div className="flex items-center">
                           <Mail className="h-4 w-4 mr-2 text-gray-400" />
                           <span className="font-medium">Email:</span>
                         </div>
-                        {isAuthenticated ? (
+                        {isAuthenticated && userProfile?.user_type === 'customer' ? (
                           <div className="flex items-center">
                             {showEmail ? (
                               <>
@@ -1066,26 +1287,53 @@ export default function ProviderDetailPage() {
                             className="text-primary hover:text-green-700 flex items-center font-medium"
                           >
                             <Lock className="h-4 w-4 mr-1" />
-                            Sign in to view
+                            {isAuthenticated ? 'Not authorized' : 'Sign in to view'}
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Login Reminder */}
+                    {/* Info for unauthenticated users */}
                     {!isAuthenticated && (
                       <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                         <div className="flex items-start">
                           <AlertCircle className="h-5 w-5 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm text-yellow-800 font-medium">
-                              Sign in to view contact details
+                              Sign in as a customer to view contact details
+                            </p>
+                            <p className="text-xs text-yellow-700 mt-1">
+                              Providers' contact information is only visible to registered customers
                             </p>
                             <Link
-                              href={`/login?redirect=/providers/${providerId}`}
-                              className="text-sm text-primary hover:text-green-700 font-medium mt-1 inline-block"
+                              href={`/register?redirect=/providers/${providerId}&user_type=customer`}
+                              className="text-sm text-primary hover:text-green-700 font-medium mt-2 inline-block"
                             >
-                              Sign in now →
+                              Sign up as customer →
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info for authenticated non-customers */}
+                    {isAuthenticated && userProfile?.user_type !== 'customer' && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="flex items-start">
+                          <Shield className="h-5 w-5 text-blue-600 mr-3 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm text-blue-800 font-medium">
+                              Customer access required
+                            </p>
+                            <p className="text-xs text-blue-700 mt-1">
+                              Provider contact information is only available to customers. 
+                              Switch to a customer account to view contact details.
+                            </p>
+                            <Link
+                              href={`/register?redirect=/providers/${providerId}&user_type=customer`}
+                              className="text-sm text-primary hover:text-green-700 font-medium mt-2 inline-block"
+                            >
+                              Create customer account →
                             </Link>
                           </div>
                         </div>
@@ -1094,7 +1342,7 @@ export default function ProviderDetailPage() {
                   </div>
                 </div>
 
-                {/* Verification & Stats Card */}
+                {/* Provider Details Card */}
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Provider Details</h4>
                   
@@ -1130,6 +1378,15 @@ export default function ProviderDetailPage() {
                         {provider.total_bookings || 0}
                       </span>
                     </div>
+
+                    {provider.hourly_rate && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Hourly Rate</span>
+                        <span className="font-semibold text-gray-900">
+                          ₦{provider.hourly_rate.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                     
                     {stateName && (
                       <div className="pt-4 border-t border-gray-100">
@@ -1146,7 +1403,7 @@ export default function ProviderDetailPage() {
                   </div>
                 </div>
 
-                {/* Safety Tips */}
+                {/* Safety Tips Card */}
                 <div className="bg-blue-50 rounded-2xl border border-blue-100 p-6">
                   <h4 className="font-semibold text-blue-900 mb-3">Safety Tips</h4>
                   <ul className="space-y-2 text-sm text-blue-800">

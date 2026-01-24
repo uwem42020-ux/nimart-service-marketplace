@@ -2,9 +2,9 @@
 
 import dynamic from 'next/dynamic'
 import { MapContainerProps as LeafletMapContainerProps } from 'react-leaflet'
-import { forwardRef, ForwardedRef, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-// Dynamically import MapContainer to avoid SSR issues
+// Dynamically import the actual Leaflet MapContainer
 const LazyMapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
   { 
@@ -39,18 +39,21 @@ interface MapContainerProps extends Omit<LeafletMapContainerProps, 'ref'> {
   children: React.ReactNode
   className?: string
   isFullscreen?: boolean
+  mapRef?: React.Ref<any> // Optional ref parameter
 }
 
-// FIXED: Proper forwardRef implementation
-const MapContainer = forwardRef(function MapContainerComponent({
+// SIMPLIFIED: Remove forwardRef, use props for ref
+const MapContainer = ({
   children,
   className = '',
   isFullscreen = false,
   center = [9.0765, 7.3986], // Abuja, Nigeria as default
   zoom = 6,
+  mapRef, // Accept ref as a prop instead
   ...props
-}: MapContainerProps, ref: ForwardedRef<any>) {
+}: MapContainerProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
+  const internalMapRef = useRef<any>(null) // Internal ref for the actual map
   const [mapKey, setMapKey] = useState(0)
   const [isMounted, setIsMounted] = useState(false)
   
@@ -134,7 +137,17 @@ const MapContainer = forwardRef(function MapContainerComponent({
         touchZoom={true}
         doubleClickZoom={true}
         dragging={true}
-        ref={ref} // FIXED: Use the forwarded ref directly
+        ref={(node) => {
+          // Handle both internal ref and passed ref
+          internalMapRef.current = node;
+          if (mapRef) {
+            if (typeof mapRef === 'function') {
+              mapRef(node);
+            } else {
+              (mapRef as React.MutableRefObject<any>).current = node;
+            }
+          }
+        }}
         {...props}
       >
         <LazyTileLayer
@@ -148,7 +161,7 @@ const MapContainer = forwardRef(function MapContainerComponent({
       </LazyMapContainer>
     </div>
   )
-})
+}
 
 MapContainer.displayName = 'MapContainer'
 

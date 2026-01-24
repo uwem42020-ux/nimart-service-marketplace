@@ -1,17 +1,30 @@
-// lib/email-service.ts - COMPLETE FILE
+// lib/email-service.ts - COMPLETE FIXED VERSION
 import { Resend } from 'resend';
 
-// Use environment variable (will work on Netlify)
-const resendApiKey = process.env.RESEND_API_KEY || 're_RwnyTBi5_2AxiRMNSLjXMsDi7q56axmQh';
-const resend = new Resend(resendApiKey);
+// Check for environment variable
+const resendApiKey = process.env.RESEND_API_KEY;
+
+if (!resendApiKey) {
+  console.error('❌ RESEND_API_KEY is not configured in environment variables');
+  // Don't throw error - allow fallback to Supabase OTP
+}
+
+// Initialize Resend only if API key exists
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 export async function sendNimartOtpEmail(email: string, otp: string, userName?: string) {
   try {
-    console.log('📧 Sending OTP via Resend to:', email);
+    console.log('📧 Attempting to send OTP via Resend to:', email);
     
+    if (!resend) {
+      console.warn('⚠️ Resend not configured, using fallback method');
+      return { success: false, message: 'Email service not configured' };
+    }
+
     const { data, error } = await resend.emails.send({
       from: 'Nimart <no-reply@nimart.ng>',
       to: [email],
+      replyTo: 'support@nimart.ng',
       subject: `Your Nimart Verification Code: ${otp}`,
       html: `<!DOCTYPE html>
 <html>
@@ -66,10 +79,6 @@ export async function sendNimartOtpEmail(email: string, otp: string, userName?: 
                     <span style="color: #008751; margin-right: 3px;">📞</span>
                     <a href="tel:+2348038887589" style="color: #008751; text-decoration: none;">+234 803 888 7589</a>
                 </div>
-                <div style="margin-bottom: 6px;">
-                    <span style="color: #008751; margin-right: 3px;">💬</span>
-                    <a href="https://www.nimart.ng/chat" style="color: #008751; text-decoration: none;">Live Chat</a>
-                </div>
                 <div style="color: #aaa; margin-top: 10px; font-size: 10px; border-top: 1px solid #eee; padding-top: 8px;">
                     © ${new Date().getFullYear()} Nimart. All rights reserved.
                 </div>
@@ -78,7 +87,18 @@ export async function sendNimartOtpEmail(email: string, otp: string, userName?: 
     </div>
 </body>
 </html>`,
-      text: `Your Nimart Verification Code: ${otp}\n\nEnter this 8-digit code on the verification page. This code expires in 10 minutes.\n\n🔒 Security Notice: Never share this code with anyone.\n\nNimart\nBanex junction Wuse, Abuja\ninfo@nimart.ng`,
+      text: `Your Nimart Verification Code: ${otp}
+
+Enter this 8-digit code on the verification page: ${otp}
+
+This code expires in 10 minutes.
+
+🔒 Security Notice: Never share this code with anyone. Nimart will never ask for your password or verification code via email or phone.
+
+Nimart
+Banex junction Wuse, Abuja
+info@nimart.ng | +234 803 888 7589
+© ${new Date().getFullYear()} Nimart. All rights reserved.`,
       headers: {
         'X-Entity-Ref-ID': `nimart-otp-${Date.now()}`,
         'List-Unsubscribe': '<https://nimart.ng/unsubscribe>',
@@ -92,14 +112,40 @@ export async function sendNimartOtpEmail(email: string, otp: string, userName?: 
     });
 
     if (error) {
-      console.error('Resend error:', error);
-      throw error;
+      console.error('❌ Resend error:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        fallback: true 
+      };
     }
 
     console.log('✅ OTP email sent via Resend, Message ID:', data?.id);
-    return { success: true, messageId: data?.id };
+    return { 
+      success: true, 
+      messageId: data?.id,
+      fallback: false 
+    };
+
   } catch (error: any) {
-    console.error('Email sending error:', error);
-    throw error;
+    console.error('❌ Email sending error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      fallback: true 
+    };
   }
+}
+
+// Fallback email function that logs OTP to console for development
+export async function sendNimartOtpFallback(email: string, otp: string) {
+  console.log('📧 [FALLBACK] OTP for', email, ':', otp);
+  console.log('📧 [FALLBACK] OTP would be sent to:', email);
+  console.log('📧 [FALLBACK] For production, configure RESEND_API_KEY environment variable');
+  
+  return { 
+    success: true, 
+    fallback: true,
+    message: 'OTP logged to console (development mode)' 
+  };
 }

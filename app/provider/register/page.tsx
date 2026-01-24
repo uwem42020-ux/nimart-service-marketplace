@@ -1,4 +1,4 @@
-// app/provider/register/page.tsx - FIXED VERSION
+// app/provider/register/page.tsx - COMPLETE FIXED VERSION
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -69,17 +69,18 @@ export default function ProviderRegistration() {
   const [errors, setErrors] = useState<any>({})
   const [successMessage, setSuccessMessage] = useState('')
 
-  // Load service categories from database
+  // Load ALL service categories from database
   const loadServiceCategories = async () => {
     try {
       setLoadingCategories(true)
-      console.log('📋 Loading service categories from database...')
+      console.log('📋 Loading ALL service categories from database...')
       
       const { data, error } = await supabase
         .from('service_categories')
         .select('id, name, icon, description, sort_order')
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
+        .limit(100) // Load all categories
 
       if (error) {
         console.error('Error loading categories:', error)
@@ -112,6 +113,10 @@ export default function ProviderRegistration() {
       { id: '6', name: 'Tailors', icon: 'scissors', description: 'Fashion design & clothing', sort_order: 6 },
       { id: '7', name: 'Cleaners', icon: 'sparkles', description: 'Home & office cleaning', sort_order: 7 },
       { id: '8', name: 'Chefs', icon: 'chef-hat', description: 'Private cooking & catering', sort_order: 8 },
+      { id: '9', name: 'Technicians', icon: 'wrench', description: 'AC, TV & appliance repairs', sort_order: 9 },
+      { id: '10', name: 'Lawyers', icon: 'scale', description: 'Legal services & documentation', sort_order: 10 },
+      { id: '11', name: 'Drivers', icon: 'steering-wheel', description: 'Personal & corporate drivers', sort_order: 11 },
+      { id: '12', name: 'Videographers', icon: 'video', description: 'Video coverage & editing', sort_order: 12 },
     ]
     
     return fallback.map(cat => ({
@@ -322,62 +327,115 @@ export default function ProviderRegistration() {
     }
   }
 
-  // NEW FUNCTION: Assign coordinates to provider
+  // FIXED: assignProviderCoordinates function - Uses actual state/LGA
   async function assignProviderCoordinates(providerId: string): Promise<boolean> {
     try {
-      setUploadProgress(75)
-      console.log('📍 Assigning coordinates to provider...')
+      console.log('📍 Assigning coordinates based on provider location...');
       
-      // Call the database function to assign coordinates
-      const { data, error } = await supabase
-        .rpc('assign_provider_coordinates', {
-          provider_id: providerId
-        })
+      // Get provider with their state and LGA
+      const { data: provider, error } = await supabase
+        .from('providers')
+        .select(`
+          id,
+          business_name,
+          state_id,
+          lga_id,
+          states (name),
+          lgas (name)
+        `)
+        .eq('id', providerId)
+        .single();
 
-      if (error) {
-        console.error('Error assigning coordinates:', error)
-        
-        // Manual fallback: assign default coordinates
-        const { error: manualError } = await supabase
-          .from('providers')
-          .update({
-            latitude: 9.0765 + (Math.random() * 0.03 - 0.015),
-            longitude: 7.3986 + (Math.random() * 0.03 - 0.015),
-            map_visibility: true,
-            last_location_update: new Date().toISOString()
-          })
-          .eq('id', providerId)
+      if (error) throw error;
 
-        if (manualError) {
-          console.error('Manual coordinate assignment failed:', manualError)
-          return false
+      // Get coordinates based on state/LGA
+      let latitude = 9.0765; // Default Abuja
+      let longitude = 7.3986;
+      
+      // Try to get LGA coordinates first
+      const lgaName = provider.lgas?.[0]?.name;
+      if (lgaName) {
+        const { data: lgaCoords } = await supabase
+          .from('nigerian_lga_coordinates')
+          .select('latitude, longitude')
+          .eq('lga_name', lgaName)
+          .single();
+
+        if (lgaCoords) {
+          latitude = lgaCoords.latitude + (Math.random() * 0.01 - 0.005);
+          longitude = lgaCoords.longitude + (Math.random() * 0.01 - 0.005);
         }
-        
-        return true
+      }
+      
+      // Fallback to state coordinates
+      const stateName = provider.states?.[0]?.name;
+      if (latitude === 9.0765 && stateName) {
+        const { data: stateCoords } = await supabase
+          .from('nigerian_states_coordinates')
+          .select('latitude, longitude')
+          .eq('state_name', stateName)
+          .single();
+
+        if (stateCoords) {
+          latitude = stateCoords.latitude + (Math.random() * 0.02 - 0.01);
+          longitude = stateCoords.longitude + (Math.random() * 0.02 - 0.01);
+        }
       }
 
-      console.log('✅ Coordinates assigned successfully')
-      return data === true
+      // Update provider with coordinates
+      const { error: updateError } = await supabase
+        .from('providers')
+        .update({
+          latitude: latitude,
+          longitude: longitude,
+          map_visibility: true,
+          last_location_update: new Date().toISOString()
+        })
+        .eq('id', providerId);
+
+      if (updateError) throw updateError;
+
+      console.log(`✅ Coordinates assigned: ${latitude}, ${longitude}`);
+      return true;
       
     } catch (error: any) {
-      console.error('Exception assigning coordinates:', error)
+      console.error('Coordinate assignment error:', error);
       
-      // Final fallback
+      // Final fallback: use state-based defaults
       try {
+        const { data: provider } = await supabase
+          .from('providers')
+          .select('state_id, states!inner(name)')
+          .eq('id', providerId)
+          .single();
+
+        let lat = 9.0765;
+        let lng = 7.3986;
+        
+        // Simple state-based defaults
+        const stateName = provider?.states?.[0]?.name?.toLowerCase();
+        if (stateName?.includes('lagos')) {
+          lat = 6.5244; lng = 3.3792;
+        } else if (stateName?.includes('rivers')) {
+          lat = 4.8156; lng = 7.0498;
+        } else if (stateName?.includes('kano')) {
+          lat = 12.0022; lng = 8.5919;
+        }
+
         await supabase
           .from('providers')
           .update({
-            latitude: 9.0765,
-            longitude: 7.3986,
+            latitude: lat + (Math.random() * 0.02 - 0.01),
+            longitude: lng + (Math.random() * 0.02 - 0.01),
             map_visibility: true,
             last_location_update: new Date().toISOString()
           })
-          .eq('id', providerId)
-        
-        return true
+          .eq('id', providerId);
+          
+        return true;
       } catch (fallbackError) {
-        console.error('All coordinate assignment failed:', fallbackError)
-        return false
+        console.error('All coordinate assignment failed:', fallbackError);
+        return false;
       }
     }
   }
@@ -411,6 +469,11 @@ export default function ProviderRegistration() {
       else if (!/^[0-9]{11}$/.test(formData.phone.replace(/\D/g, ''))) newErrors.phone = 'Valid Nigerian phone number required (11 digits)'
       
       if (!formData.years_experience) newErrors.years_experience = 'Years of experience is required'
+      
+      // CRITICAL FIX: Profile picture is NOW REQUIRED
+      if (!profileImage) {
+        newErrors.profileImage = 'Profile picture is required. Please upload a clear photo of yourself or your business logo.'
+      }
     }
 
     if (stepNumber === 3) {
@@ -453,7 +516,7 @@ export default function ProviderRegistration() {
     setUploadProgress(0)
 
     try {
-      // Step 1: Upload profile image
+      // Step 1: Upload profile image (REQUIRED)
       setUploadProgress(10)
       let profilePictureUrl = ''
       
@@ -461,11 +524,9 @@ export default function ProviderRegistration() {
         const uploadedUrl = await uploadProfileImage()
         if (uploadedUrl) {
           profilePictureUrl = uploadedUrl
+        } else {
+          throw new Error('Failed to upload profile picture. Please try again.')
         }
-      }
-      
-      if (!profilePictureUrl) {
-        profilePictureUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.business_name)}&background=008751&color=fff&size=256&bold=true&font-size=0.5`
       }
       
       setUploadProgress(30)
@@ -512,10 +573,10 @@ export default function ProviderRegistration() {
         lga_id: formData.lga_id,
         address: formData.address,
         profile_picture_url: profilePictureUrl,
-        verification_status: 'pending_email',
+        verification_status: 'pending_email', // Start as pending_email
         rating: 0,
         total_reviews: 0,
-        is_verified: false,
+        is_verified: false, // NOT verified yet
         verification_step: 'email_pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -541,7 +602,7 @@ export default function ProviderRegistration() {
 
       setUploadProgress(65)
 
-      // STEP 4: ASSIGN COORDINATES TO PROVIDER FOR MAP
+      // STEP 4: ASSIGN COORDINATES TO PROVIDER FOR MAP BASED ON STATE/LGA
       const coordinatesAssigned = await assignProviderCoordinates(providerDataResult.id)
       
       if (!coordinatesAssigned) {
@@ -579,19 +640,20 @@ ${formData.email}
 • Phone: ${formData.phone}
 • Experience: ${formData.years_experience} years
 • Map Location: ✅ Assigned (will appear on map after email verification)
-• Profile Picture: ✅ ${profileImage ? 'Uploaded' : 'Generated'}
+• Profile Picture: ✅ Uploaded
 
 🔒 **NEXT STEPS:**
 1. Check your email (and spam folder) for the 8-digit code
 2. Enter the code on the verification page
-3. Once verified, you can login to your dashboard
-4. Your profile will appear on the marketplace immediately
+3. Once verified, you will appear on the marketplace as "Unverified"
+4. Upload your verification documents in your dashboard
+5. After admin approval, you'll get the "Verified" badge
 
 ⏳ You will be redirected to verification in 5 seconds...`)
 
       // Auto-redirect to verification page
       setTimeout(() => {
-        router.push(`/verify?email=${encodeURIComponent(formData.email)}&from_registration=true`)
+        router.push(`/verify?email=${encodeURIComponent(formData.email)}&from_registration=true&user_type=provider`)
       }, 5000)
 
     } catch (error: any) {
@@ -724,7 +786,7 @@ ${formData.email}
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
                     <button
-                      onClick={() => router.push(`/verify?email=${encodeURIComponent(formData.email)}&from_registration=true`)}
+                      onClick={() => router.push(`/verify?email=${encodeURIComponent(formData.email)}&from_registration=true&user_type=provider`)}
                       className="px-4 py-2 md:px-6 md:py-2 bg-primary text-white rounded-lg hover:bg-green-700 font-medium text-sm md:text-base transition-colors"
                     >
                       Go to Verification Now
@@ -868,12 +930,13 @@ ${formData.email}
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Business Details</h2>
                   <div className="space-y-4 md:space-y-6">
-                    {/* Profile Picture Upload */}
+                    {/* Profile Picture Upload - NOW REQUIRED */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         <Camera className="h-4 w-4 inline mr-2" />
-                        Profile Picture (Optional)
+                        Profile Picture <span className="text-red-500">*</span>
                       </label>
+                      <p className="text-xs text-gray-500 mb-3">Required for verification and customer trust</p>
                       <div className="mt-1 flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6">
                         <div className="relative">
                           {profilePreview ? (
@@ -896,10 +959,13 @@ ${formData.email}
                               </button>
                             </div>
                           ) : (
-                            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gray-100 border-4 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors">
+                            <div 
+                              className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gray-100 border-4 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                              onClick={() => fileInputRef.current?.click()}
+                            >
                               <Upload className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
                               <span className="mt-1 md:mt-2 text-xs md:text-sm text-gray-500">Upload Photo</span>
-                              <span className="text-xs text-gray-400">Optional</span>
+                              <span className="text-xs text-red-500 font-medium">Required</span>
                             </div>
                           )}
                         </div>
@@ -911,6 +977,7 @@ ${formData.email}
                             accept="image/jpeg,image/png,image/webp"
                             className="hidden"
                             id="profile-picture"
+                            required
                           />
                           <div className="space-y-2 md:space-y-3">
                             <button
@@ -966,7 +1033,7 @@ ${formData.email}
                       {errors.business_name && <p className="mt-1 md:mt-2 text-sm text-red-600">{errors.business_name}</p>}
                     </div>
 
-                    {/* Service Type Selection - Dynamic from Database */}
+                    {/* Service Type Selection - Dynamic from Database - ALL 58 CATEGORIES */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         <Briefcase className="h-4 w-4 inline mr-2" />
@@ -987,40 +1054,20 @@ ${formData.email}
                             className={`w-full px-3 py-2 md:px-4 md:py-3 border ${errors.service_type ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors`}
                           >
                             <option value="">Select your service type</option>
-                            {visibleCategories.map((category) => (
+                            {serviceCategories.map((category) => (
                               <option key={category.id} value={category.name}>
                                 {category.name} {category.description ? `- ${category.description}` : ''}
                               </option>
                             ))}
                           </select>
                           
-                          {/* Show More/Less Toggle for Categories */}
-                          {serviceCategories.length > 12 && (
-                            <button
-                              type="button"
-                              onClick={() => setShowAllCategories(!showAllCategories)}
-                              className="mt-2 flex items-center text-sm text-primary hover:text-green-700"
-                            >
-                              {showAllCategories ? (
-                                <>
-                                  <ChevronUp className="h-4 w-4 mr-1" />
-                                  Show Less Categories ({serviceCategories.length} total)
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="h-4 w-4 mr-1" />
-                                  Show All {serviceCategories.length} Categories
-                                </>
-                              )}
-                            </button>
-                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {serviceCategories.length} professional service categories available
+                          </p>
                         </>
                       )}
                       
                       {errors.service_type && <p className="mt-1 md:mt-2 text-sm text-red-600">{errors.service_type}</p>}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Choose from {serviceCategories.length} professional service categories
-                      </p>
                     </div>
 
                     <div>
@@ -1197,7 +1244,7 @@ ${formData.email}
                           <div>
                             <p className="text-xs md:text-sm text-gray-500">Profile Picture</p>
                             <p className="font-medium text-gray-900 text-sm md:text-base">
-                              {profileImage ? '✅ Uploaded' : '✅ Auto-generated'}
+                              {profileImage ? '✅ Uploaded (Required)' : '❌ Missing (Required)'}
                             </p>
                           </div>
                           <div>
@@ -1209,7 +1256,13 @@ ${formData.email}
                           <div>
                             <p className="text-xs md:text-sm text-gray-500">Map Location</p>
                             <p className="font-medium text-gray-900 text-sm md:text-base">
-                              ✅ Will appear on map
+                              ✅ Will appear on map after OTP verification
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs md:text-sm text-gray-500">Verification Status</p>
+                            <p className="font-medium text-gray-900 text-sm md:text-base">
+                              ⏳ Pending OTP Verification
                             </p>
                           </div>
                         </div>
@@ -1223,12 +1276,20 @@ ${formData.email}
                       </h3>
                       <p className="text-green-700 text-sm md:text-base mb-3 md:mb-4">
                         After registration, you'll receive an 8-digit OTP code via email. 
-                        Verify your email to activate your account and appear on the marketplace immediately.
+                        Verify your email to activate your account and appear on the marketplace immediately as "Unverified".
                       </p>
                       <div className="bg-blue-50 p-3 rounded-lg">
                         <p className="text-sm font-medium text-blue-800 mb-1">📍 Map Location Assigned</p>
                         <p className="text-xs text-blue-700">
                           Your business will appear on the Nimart map at: {getSelectedLGAName()}, {getSelectedStateName()}
+                        </p>
+                      </div>
+                      <div className="bg-yellow-50 p-3 rounded-lg mt-3">
+                        <p className="text-sm font-medium text-yellow-800 mb-1">📋 Verification Process</p>
+                        <p className="text-xs text-yellow-700">
+                          1. Verify email with OTP → Appear as "Unverified"<br />
+                          2. Upload verification documents in dashboard<br />
+                          3. Admin reviews documents → "Verified" badge
                         </p>
                       </div>
                     </div>

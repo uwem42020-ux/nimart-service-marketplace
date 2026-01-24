@@ -1,4 +1,4 @@
-// lib/types.ts - COMPLETE VERSION WITH ALL TYPES
+// lib/types.ts - FIXED VERSION (just add the 3 missing fields)
 export interface FastProvider {
   id: string;
   business_name: string;
@@ -21,8 +21,23 @@ export interface FastProvider {
   city: string;
   response_rate: number | null;
   is_online: boolean;
+  
+  // ADD THESE TWO FIELDS:
+  latitude?: number | null;
+  longitude?: number | null;
+  
+  // ADD THESE 3 CRITICAL FIELDS THAT ARE MISSING:
+  user_id?: string;
+  email?: string;
+  hourly_rate?: number;
+  
+  // Optional: You might also want these commonly used fields
+  address?: string;
+  total_earnings?: number;
+  is_active?: boolean;
 }
 
+// The rest of your types remain EXACTLY the same...
 export interface ServiceCategory {
   id: string;
   name: string;

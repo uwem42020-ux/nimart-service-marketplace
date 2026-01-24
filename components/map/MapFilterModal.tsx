@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Filter as FilterIcon, CheckCircle, Clock, Star, MapPin } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Filter as FilterIcon, CheckCircle, Clock, Star, MapPin, Check } from 'lucide-react'
 
 interface MapFilterModalProps {
   isOpen: boolean
@@ -54,6 +54,39 @@ export default function MapFilterModal({
 }: MapFilterModalProps) {
   const [filters, setFilters] = useState<MapFilters>(currentFilters)
   const [selectedServiceType, setSelectedServiceType] = useState(currentFilters.serviceType)
+  const [isMobile, setIsMobile] = useState(false)
+  
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  
+  // Reset filters when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFilters(currentFilters)
+      setSelectedServiceType(currentFilters.serviceType)
+    }
+  }, [isOpen, currentFilters])
+  
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'auto'
+    }
+    
+    return () => {
+      document.body.style.overflow = 'auto'
+    }
+  }, [isOpen])
   
   if (!isOpen) return null
   
@@ -89,15 +122,25 @@ export default function MapFilterModal({
     setFilters(prev => ({ ...prev, showOnlineOnly: !prev.showOnlineOnly }))
   }
   
+  // Close modal when clicking outside
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+  
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+    <div 
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50"
+      onClick={handleBackdropClick}
+    >
+      <div className={`bg-white rounded-2xl w-full ${isMobile ? 'max-h-[85vh]' : 'max-w-md max-h-[90vh]'} overflow-hidden shadow-2xl`}>
+        {/* Header - WITH CLOSE BUTTON */}
+        <div className="p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <FilterIcon className="h-6 w-6 text-primary mr-3" />
-              <h2 className="text-xl font-bold text-gray-900">Map Filters</h2>
+              <FilterIcon className="h-5 w-5 sm:h-6 sm:w-6 text-primary mr-3" />
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Map Filters</h2>
             </div>
             <button
               onClick={onClose}
@@ -107,11 +150,11 @@ export default function MapFilterModal({
               <X className="h-5 w-5 text-gray-500" />
             </button>
           </div>
-          <p className="text-gray-600 mt-2">Filter providers on the map</p>
+          <p className="text-gray-600 mt-1 text-sm">Filter providers on the map</p>
         </div>
         
-        {/* Filters Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        {/* Filters Content - SCROLLABLE */}
+        <div className={`p-4 sm:p-6 overflow-y-auto ${isMobile ? 'max-h-[60vh]' : 'max-h-[55vh]'}`}>
           {/* Service Type */}
           <div className="mb-6">
             <h3 className="font-semibold text-gray-900 mb-3">Service Type</h3>
@@ -120,11 +163,14 @@ export default function MapFilterModal({
                 <button
                   key={service}
                   onClick={() => handleServiceTypeSelect(service)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedServiceType === service
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center ${selectedServiceType === service
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
+                  {selectedServiceType === service && (
+                    <Check className="h-4 w-4 mr-1" />
+                  )}
                   {service}
                 </button>
               ))}
@@ -219,7 +265,7 @@ export default function MapFilterModal({
           
           {/* Online Only Toggle */}
           <div className="mb-6">
-            <label className="flex items-center cursor-pointer">
+            <label className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
               <div className="relative">
                 <input
                   type="checkbox"
@@ -236,8 +282,8 @@ export default function MapFilterModal({
           </div>
         </div>
         
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
+        {/* Footer - STICKY BOTTOM FOR MOBILE */}
+        <div className="p-4 sm:p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
           <div className="flex gap-3">
             <button
               onClick={handleResetFilters}

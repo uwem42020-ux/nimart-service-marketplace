@@ -1,4 +1,4 @@
-/* app/globals.css - COMPLETE OPTIMIZED VERSION WITH ALL FIXES */
+/* app/globals.css - COMPLETE OPTIMIZED VERSION WITH ALL FIXES AND PERFORMANCE OPTIMIZATIONS */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -105,10 +105,21 @@ body {
   .skeleton {
     @apply animate-pulse bg-gray-200 rounded;
   }
+  
+  /* Fast skeleton animation for performance */
+  .skeleton-fast {
+    @apply animate-pulse-fast bg-gray-200 rounded;
+  }
 }
 
 /* ESSENTIAL animations only */
 @keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Fast pulse animation for performance */
+@keyframes pulse-fast {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
@@ -150,6 +161,11 @@ body {
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Fast pulse animation class */
+.animate-pulse-fast {
+  animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .animate-in {
@@ -410,6 +426,27 @@ main {
   .z-map-fullscreen {
     z-index: 9999 !important;
   }
+  
+  /* Performance optimizations */
+  .contain-layout {
+    contain: layout style paint;
+  }
+  
+  .optimized-transition {
+    transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+  }
+  
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+  
+  .content-visibility-auto {
+    content-visibility: auto;
+  }
+  
+  .will-change-transform {
+    will-change: transform;
+  }
 }
 
 /* iOS input zoom prevention */
@@ -632,5 +669,260 @@ main {
   }
 }
 
-/* REMOVED: All unnecessary animations, complex keyframes, duplicate utilities, heavy filters */
-/* END OF CSS*/
+/* ==================== CRITICAL PERFORMANCE OPTIMIZATIONS ==================== */
+
+/* Optimize all images for performance */
+img {
+  content-visibility: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent layout shift for images */
+img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+img[loading="lazy"].loaded {
+  opacity: 1;
+}
+
+/* Optimize image loading */
+.lazy-image {
+  background-color: #f3f4f6;
+  background-image: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Optimize animations for Core Web Vitals */
+@media (prefers-reduced-motion: no-preference) {
+  .optimized-fade-in {
+    animation: optimized-fade-in 0.3s ease-out;
+  }
+  
+  @keyframes optimized-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Optimize scroll performance */
+.optimized-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Optimize touch interactions */
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Optimize font rendering */
+.optimized-text {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Optimize button states */
+.optimized-button {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimize for mobile performance */
+@media (max-width: 768px) {
+  .mobile-optimized {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  /* Reduce animations on mobile */
+  .animate-on-mobile {
+    animation-duration: 0.2s !important;
+  }
+}
+
+/* Optimize for LCP (Largest Contentful Paint) */
+.lcp-optimize {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 5000px;
+}
+
+/* Optimize for CLS (Cumulative Layout Shift) */
+.prevent-cls {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+/* Optimize skeleton loading */
+.skeleton-optimized {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Optimize image aspect ratios */
+.aspect-ratio-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%; /* 1:1 Aspect Ratio */
+}
+
+.aspect-ratio-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Optimize for reduced data usage */
+@media (prefers-reduced-data: reduce) {
+  .no-data-image {
+    display: none !important;
+  }
+  
+  .data-optimized {
+    background-image: none !important;
+  }
+}
+
+/* Optimize for print */
+@media print {
+  .no-print-optimized {
+    display: none !important;
+  }
+  
+  .print-optimized {
+    break-inside: avoid;
+  }
+}
+
+/* Optimize for high DPI screens */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .high-dpi-optimized {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Optimize for slow connections */
+@media (prefers-reduced-data: reduce) {
+  .connection-optimized {
+    animation: none !important;
+    transition: none !important;
+    background-image: none !important;
+  }
+}
+
+/* Optimize for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .motion-optimized {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Optimize grid layout performance */
+.grid-optimized {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Optimize shadow performance */
+.shadow-optimized {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s ease;
+}
+
+.shadow-optimized:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Optimize border rendering */
+.border-optimized {
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Optimize for memory usage */
+.memory-optimized {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* ==================== PERFORMANCE MONITORING ==================== */
+/* Add these classes for debugging performance if needed */
+
+.performance-debug {
+  outline: 1px solid red;
+}
+
+.layout-shift-warning {
+  outline: 2px dashed orange;
+}
+
+.lcp-element {
+  outline: 3px solid blue;
+}
+
+.fid-element {
+  outline: 2px solid green;
+}
+
+.cls-element {
+  outline: 2px solid red;
+}
+
+/* END OF CSS */
+
+/* Hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

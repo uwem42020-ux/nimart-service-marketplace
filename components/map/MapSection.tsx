@@ -9,7 +9,7 @@ import {
   Maximize2, Minimize2, X, Filter, 
   ChevronLeft, User, CheckCircle, Clock,
   Loader2, AlertCircle, WifiOff, RefreshCw,
-  Star
+  Star, Compass
 } from 'lucide-react'
 import { UserLocation } from '@/lib/types'
 import { 
@@ -26,7 +26,7 @@ import {
 } from '@/lib/map-utils'
 import { getMapProviders, getMapSettings } from '@/lib/map-services'
 
-// FIXED: All dynamic imports with proper loading states
+// Dynamic imports with proper loading states
 const MapContainer = dynamic(() => import('./MapContainer'), { 
   ssr: false,
   loading: () => (
@@ -107,7 +107,6 @@ const DEFAULT_FILTERS: MapFilters = {
   showOnlineOnly: false
 }
 
-// REMOVED forwardRef - MapSection doesn't need to forward ref anymore
 export default function MapSection({ 
   userLocation, 
   isMobile = false,
@@ -300,23 +299,44 @@ export default function MapSection({
     setIsFullscreen(!isFullscreen)
     
     if (!isFullscreen) {
+      // Enter fullscreen
       document.body.style.overflow = 'hidden'
+      document.documentElement.style.overflow = 'hidden'
+      
+      // Force a small delay to ensure DOM updates
+      setTimeout(() => {
+        if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
+          mapRef.current.invalidateSize()
+          
+          // Center map on user location if available
+          if (userLocation.coordinates) {
+            setTimeout(() => {
+              mapRef.current.setView([
+                userLocation.coordinates!.latitude, 
+                userLocation.coordinates!.longitude
+              ], 13)
+            }, 100)
+          }
+        }
+      }, 50)
     } else {
+      // Exit fullscreen
       document.body.style.overflow = 'auto'
+      document.documentElement.style.overflow = 'auto'
+      
+      setTimeout(() => {
+        if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
+          mapRef.current.invalidateSize()
+        }
+      }, 100)
     }
-    
-    // Force map to re-render
-    setTimeout(() => {
-      if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
-        mapRef.current.invalidateSize()
-      }
-    }, 100)
   }
 
   // Handle closing fullscreen
   const handleCloseFullscreen = () => {
     setIsFullscreen(false)
     document.body.style.overflow = 'auto'
+    document.documentElement.style.overflow = 'auto'
     
     setTimeout(() => {
       if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
@@ -328,7 +348,14 @@ export default function MapSection({
   // Locate user on map
   const handleLocateUser = async () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser')
+      if (typeof window !== 'undefined' && (window as any).Nimart?.showToast) {
+        (window as any).Nimart.showToast({
+          title: 'Geolocation Error',
+          message: 'Your browser does not support location services',
+          type: 'error',
+          duration: 4000
+        })
+      }
       return
     }
     
@@ -362,11 +389,26 @@ export default function MapSection({
         }
       }
       
-      alert('📍 Location detected! Map centered on your position.')
+      // Show success message
+      if (typeof window !== 'undefined' && (window as any).Nimart?.showToast) {
+        (window as any).Nimart.showToast({
+          title: 'Location Found!',
+          message: 'Map centered on your location',
+          type: 'success',
+          duration: 3000
+        })
+      }
       
     } catch (error: any) {
       console.error('Location error:', error)
-      alert('Unable to get your location. Please ensure location services are enabled.')
+      if (typeof window !== 'undefined' && (window as any).Nimart?.showToast) {
+        (window as any).Nimart.showToast({
+          title: 'Location Error',
+          message: 'Could not get your location. Please check permissions.',
+          type: 'error',
+          duration: 4000
+        })
+      }
     } finally {
       setDetectingLocation(false)
     }
@@ -403,6 +445,16 @@ export default function MapSection({
     
     lastUpdateRef.current = now
     loadMapData()
+    
+    // Show refresh message
+    if (typeof window !== 'undefined' && (window as any).Nimart?.showToast) {
+      (window as any).Nimart.showToast({
+        title: 'Refreshing Map',
+        message: 'Loading latest providers...',
+        type: 'info',
+        duration: 2000
+      })
+    }
   }
 
   // Force map resize after data loads
@@ -461,142 +513,160 @@ export default function MapSection({
     )
   }
 
-  // Render mobile preview (non-fullscreen) - OPTIMIZED FOR IPHONE 12
+  // Render mobile preview (non-fullscreen)
   if (isMobile && !isFullscreen) {
     return (
-      <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`} style={{ height: 'auto' }}> {/* CHANGED: Added height: auto */}
-        {/* Map Preview Header - COMPACT */}
-        <div className="p-3 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center">
-              <MapPin className="h-4 w-4 text-primary mr-1.5" />
-              <h3 className="text-sm font-semibold text-gray-900">Service Map</h3>
+      <>
+        {/* Filter Modal */}
+        {showFilterModal && (
+          <MapFilterModal
+            isOpen={showFilterModal}
+            onClose={() => {
+              setShowFilterModal(false)
+              document.body.style.overflow = 'auto'
+            }}
+            onApplyFilters={handleApplyFilters}
+            currentFilters={mapFilters}
+          />
+        )}
+        
+        <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`} style={{ height: 'auto' }}>
+          {/* Map Preview Header */}
+          <div className="p-3 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center">
+                <MapPin className="h-4 w-4 text-primary mr-1.5" />
+                <h3 className="text-sm font-semibold text-gray-900">Service Map</h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                  {nearbyCount} nearby
+                </span>
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 bg-primary hover:bg-green-700 text-white rounded-lg transition-colors"
+                  aria-label="Open fullscreen map"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                {nearbyCount} nearby
-              </span>
-              <button
-                onClick={toggleFullscreen}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Open fullscreen map"
-              >
-                <Maximize2 className="h-3.5 w-3.5 text-gray-600" />
-              </button>
+            
+            {/* Quick Stats */}
+            <div className="flex justify-between items-center px-1 pt-1">
+              <div className="text-center">
+                <div className="text-xs font-semibold text-green-700">{verifiedCount}</div>
+                <div className="text-[10px] text-green-600">Verified</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-blue-700">{onlineCount}</div>
+                <div className="text-[10px] text-blue-600">Online</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-purple-700">{providers.length}</div>
+                <div className="text-[10px] text-purple-600">Total</div>
+              </div>
             </div>
           </div>
           
-          {/* Quick Stats - EXTRA COMPACT */}
-          <div className="flex justify-between items-center px-1">
-            <div className="text-center">
-              <div className="text-xs font-semibold text-green-700">{verifiedCount}</div>
-              <div className="text-[10px] text-green-600">Verified</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs font-semibold text-blue-700">{onlineCount}</div>
-              <div className="text-[10px] text-blue-600">Online</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs font-semibold text-purple-700">{providers.length}</div>
-              <div className="text-[10px] text-purple-600">Total</div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Mini Map Preview - FIXED HEIGHT FOR SMALL SCREENS */}
-        <div 
-          className="mobile-map-preview cursor-pointer relative"
-          onClick={toggleFullscreen}
-          style={{ height: '220px', minHeight: '220px' }}  // Increased for better visibility
-        >
-          {loadingProviders ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-              <Loader2 className="h-6 w-6 text-primary animate-spin" />
-            </div>
-          ) : (
-            <>
-              {/* Map Container */}
-              <div className="absolute inset-0">
-                <MapContainer
-                  center={getMapCenter()}
-                  zoom={10}
-                  className="h-full w-full"
-                  ref={mapRef}
-                >
-                  {/* User Location */}
-                  {userLocation.coordinates && (
-                    <UserLocationMarker
-                      position={[userLocation.coordinates.latitude, userLocation.coordinates.longitude]}
-                      isPulsing={true}
-                    />
-                  )}
-                  
-                  {/* Sample markers */}
-                  {markers.slice(0, 4).map(marker => (
-                    <ProviderMarker
-                      key={marker.id}
-                      marker={marker}
-                      onClick={handleProviderClick}
-                    />
-                  ))}
-                  
-                  <MapControls
-                    userLocation={userLocation.coordinates ? [userLocation.coordinates.latitude, userLocation.coordinates.longitude] : null}
-                  />
-                </MapContainer>
+          {/* Mini Map Preview */}
+          <div 
+            className="mobile-map-preview cursor-pointer relative bg-white"
+            onClick={toggleFullscreen}
+            style={{ height: '240px', minHeight: '240px' }}
+          >
+            {loadingProviders ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
               </div>
-              
-              {/* Overlay with CTA - COMPACT */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent flex items-end">
-                <div className="p-2 text-white w-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium">Tap to explore</p>
-                      <p className="text-[10px] opacity-90">{nearbyCount} providers</p>
-                    </div>
-                    <div className="bg-white text-gray-900 px-2 py-0.5 rounded-full text-xs font-medium">
-                      View Map
+            ) : (
+              <>
+                {/* Map Container */}
+                <div className="absolute inset-0">
+                  <MapContainer
+                    center={getMapCenter()}
+                    zoom={10}
+                    className="h-full w-full"
+                    mapRef={mapRef}
+                  >
+                    {/* User Location */}
+                    {userLocation.coordinates && (
+                      <UserLocationMarker
+                        position={[userLocation.coordinates.latitude, userLocation.coordinates.longitude]}
+                        isPulsing={true}
+                      />
+                    )}
+                    
+                    {/* Sample markers */}
+                    {markers.slice(0, 6).map(marker => (
+                      <ProviderMarker
+                        key={marker.id}
+                        marker={marker}
+                        onClick={handleProviderClick}
+                      />
+                    ))}
+                    
+                    <MapControls
+                      userLocation={userLocation.coordinates ? [userLocation.coordinates.latitude, userLocation.coordinates.longitude] : null}
+                    />
+                  </MapContainer>
+                </div>
+                
+                {/* Overlay with CTA */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent flex items-end">
+                  <div className="p-3 text-white w-full">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium">Tap to open full map</p>
+                        <p className="text-[10px] opacity-90">{nearbyCount} providers available</p>
+                      </div>
+                      <div className="bg-white text-primary px-3 py-1 rounded-full text-xs font-medium shadow-sm">
+                        Explore Map
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        {/* Quick Actions - EXTRA COMPACT */}
-        <div className="p-2 border-t border-gray-200">
-          <div className="flex justify-between">
-            <button
-              onClick={() => setShowFilterModal(true)}
-              className="flex items-center text-[10px] text-gray-600 hover:text-gray-900 px-1.5 py-0.5"
-            >
-              <Filter className="h-2.5 w-2.5 mr-1" />
-              Filter
-            </button>
-            <button
-              onClick={handleLocateUser}
-              disabled={detectingLocation}
-              className="flex items-center text-[10px] text-primary hover:text-green-700 px-1.5 py-0.5"
-            >
-              {detectingLocation ? (
-                <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
-              ) : (
-                <Navigation className="h-2.5 w-2.5 mr-1" />
-              )}
-              {detectingLocation ? 'Locating...' : 'Find Me'}
-            </button>
-            <button
-              onClick={handleRefresh}
-              disabled={loadingProviders}
-              className="flex items-center text-[10px] text-gray-600 hover:text-gray-900 px-1.5 py-0.5"
-            >
-              <RefreshCw className={`h-2.5 w-2.5 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+              </>
+            )}
+          </div>
+          
+          {/* Quick Actions */}
+          <div className="p-2 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-between">
+              <button
+                onClick={() => {
+                  setShowFilterModal(true)
+                  document.body.style.overflow = 'hidden'
+                }}
+                className="flex items-center text-xs text-gray-700 hover:text-primary px-2 py-1.5 rounded-lg hover:bg-white"
+              >
+                <Filter className="h-3 w-3 mr-1" />
+                Filter
+              </button>
+              <button
+                onClick={handleLocateUser}
+                disabled={detectingLocation}
+                className="flex items-center text-xs text-primary hover:text-green-700 px-2 py-1.5 rounded-lg hover:bg-white"
+              >
+                {detectingLocation ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <Navigation className="h-3 w-3 mr-1" />
+                )}
+                {detectingLocation ? 'Locating...' : 'Find Me'}
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={loadingProviders}
+                className="flex items-center text-xs text-gray-700 hover:text-primary px-2 py-1.5 rounded-lg hover:bg-white"
+              >
+                <RefreshCw className={`h-3 w-3 mr-1 ${loadingProviders ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -604,63 +674,92 @@ export default function MapSection({
   return (
     <>
       {/* Filter Modal */}
-      <MapFilterModal
-        isOpen={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
-        onApplyFilters={handleApplyFilters}
-        currentFilters={mapFilters}
-      />
+      {showFilterModal && (
+        <MapFilterModal
+          isOpen={showFilterModal}
+          onClose={() => {
+            setShowFilterModal(false)
+            document.body.style.overflow = 'auto'
+          }}
+          onApplyFilters={handleApplyFilters}
+          currentFilters={mapFilters}
+        />
+      )}
       
       {/* Fullscreen Map */}
       <div className={`${isFullscreen ? 'mobile-fullscreen-map' : `desktop-map ${className}`}`} style={{ 
         position: 'relative', 
         zIndex: isFullscreen ? 9999 : 1,
-        height: isFullscreen ? '100vh' : '500px' // ADDED: Fixed height for desktop
+        height: isFullscreen ? '100vh' : '500px',
+        backgroundColor: 'white'
       }}>
-        {/* Mobile Fullscreen Header - COMPACT */}
+        {/* Mobile Fullscreen Header */}
         {isFullscreen && (
-          <div className="mobile-map-header px-3 py-2">
-            <div className="flex items-center">
-              <button
-                onClick={handleCloseFullscreen}
-                className="p-1.5 mr-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Back to homepage"
-              >
-                <ChevronLeft className="h-4 w-4 text-gray-700" />
-              </button>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Service Map</h2>
-                <p className="text-xs text-gray-600">
-                  {markers.length} providers • {userLocation.state || 'Nigeria'}
-                </p>
+          <div className="mobile-map-header px-3 py-2 bg-white border-b border-gray-200 shadow-sm" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10000
+          }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <button
+                  onClick={handleCloseFullscreen}
+                  className="p-2 mr-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Back to homepage"
+                >
+                  <ChevronLeft className="h-5 w-5 text-gray-700" />
+                </button>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Service Map</h2>
+                  <p className="text-xs text-gray-600">
+                    {markers.length} providers • {userLocation.state || 'Nigeria'}
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setShowFilterModal(true)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Filter providers"
-              >
-                <Filter className="h-4 w-4 text-gray-700" />
-              </button>
-              <button
-                onClick={handleCloseFullscreen}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Close map"
-              >
-                <X className="h-4 w-4 text-gray-700" />
-              </button>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowFilterModal(true)
+                    document.body.style.overflow = 'hidden'
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Filter providers"
+                >
+                  <Filter className="h-5 w-5 text-gray-700" />
+                </button>
+                <button
+                  onClick={handleLocateUser}
+                  disabled={detectingLocation}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Find my location"
+                >
+                  {detectingLocation ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : (
+                    <Navigation className="h-5 w-5 text-primary" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
         
         {/* Map Container */}
-        <div className={isFullscreen ? 'mobile-map-content' : 'h-full'}>
+        <div className={isFullscreen ? 'mobile-map-content' : 'h-full'} style={{
+          position: isFullscreen ? 'absolute' : 'relative',
+          top: isFullscreen ? '60px' : '0',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'white'
+        }}>
           <MapContainer
             center={getMapCenter()}
             zoom={getMapZoom()}
-            ref={mapRef}
+            mapRef={mapRef}
             isFullscreen={isFullscreen}
             className={isFullscreen ? 'h-full' : 'h-full'}
           >
@@ -688,13 +787,16 @@ export default function MapSection({
               onToggleFullscreen={isMobile ? toggleFullscreen : undefined}
               isFullscreen={isFullscreen}
               onCloseFullscreen={isFullscreen ? handleCloseFullscreen : undefined}
-              onFilterClick={() => setShowFilterModal(true)}
+              onFilterClick={() => {
+                setShowFilterModal(true)
+                document.body.style.overflow = 'hidden'
+              }}
               userLocation={userLocation.coordinates ? [userLocation.coordinates.latitude, userLocation.coordinates.longitude] : null}
             />
           </MapContainer>
         </div>
         
-        {/* Desktop Map Stats Footer - BETTER POSITION */}
+        {/* Desktop Map Stats Footer */}
         {!isFullscreen && !isMobile && (
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000]">
             <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 border border-gray-200 shadow-lg min-w-[280px]">
@@ -717,7 +819,10 @@ export default function MapSection({
               
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setShowFilterModal(true)}
+                  onClick={() => {
+                    setShowFilterModal(true)
+                    document.body.style.overflow = 'hidden'
+                  }}
                   className="flex-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium flex items-center justify-center"
                 >
                   <Filter className="h-3.5 w-3.5 mr-1" />

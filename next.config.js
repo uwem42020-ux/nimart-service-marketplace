@@ -2,28 +2,49 @@
 const nextConfig = {
   images: {
     remotePatterns: [
+      // Supabase storage
       {
         protocol: 'https',
         hostname: 'jauxqeahsxxlcabjxdvb.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      // All Supabase subdomains
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/**',
+      },
+      // ui-avatars.com for SVG avatars
       {
         protocol: 'https',
         hostname: 'ui-avatars.com',
+        pathname: '/api/**',
       },
+      // Google
       {
         protocol: 'https',
         hostname: '**.googleusercontent.com',
+        pathname: '/**',
       },
+      // GitHub
       {
         protocol: 'https',
         hostname: '**.githubusercontent.com',
+        pathname: '/**',
+      },
+      // Unsplash
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: '**.unsplash.com',
+        pathname: '/**',
       },
     ],
+    dangerouslyAllowSVG: true,
   },
   
   // Security headers
@@ -59,7 +80,7 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()'
-          }
+          },
         ],
       },
     ]
@@ -70,12 +91,12 @@ const nextConfig = {
   swcMinify: true,
   reactStrictMode: true,
   
-  // Build optimizations
+  // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   
-  // Error handling during build
+  // TypeScript and ESLint configuration
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -83,22 +104,12 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   
-  // For Supabase realtime
+  // Experimental features
   experimental: {
     missingSuspenseWithCSRBailout: false,
   },
   
-  // Add rewrites if needed for API routes
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: '/api/:path*',
-      },
-    ]
-  },
-  
-  // Add redirects if needed
+  // Redirects
   async redirects() {
     return [
       {
@@ -113,6 +124,12 @@ const nextConfig = {
       },
     ]
   },
+  
+  // Production source maps
+  productionBrowserSourceMaps: false,
+  
+  // REMOVED: Webpack configuration that was causing issues
+  // Next.js 14 handles CSS imports automatically
 }
 
 module.exports = nextConfig
