@@ -1,4 +1,4 @@
-// app/page.tsx - FULL UPDATED VERSION WITH REQUESTED CHANGES
+// app/page.tsx - RESTRUCTURED VERSION WITH BETTER FLOW
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -26,7 +26,7 @@ import {
   X, Menu, ChevronLeft, ChevronRight as RightIcon,
   Navigation, Compass, Target, CheckCircle2, Loader2,
   MessageCircle, Bell, UserCircle, ChevronUp, ChevronDown as DownIcon,
-  CalendarDays, Twitter, Plus
+  CalendarDays, Twitter, Plus, Map as MapIcon
 } from 'lucide-react'
 
 // Import utilities
@@ -41,7 +41,7 @@ export default function Home() {
   const [loadingProviders, setLoadingProviders] = useState(true)
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
-  const [categoriesVisible, setCategoriesVisible] = useState(8) // Show 8 initially
+  const [categoriesVisible, setCategoriesVisible] = useState(8)
   const [loadingMoreCategories, setLoadingMoreCategories] = useState(false)
   const [gridView, setGridView] = useState<'basic' | 'detailed'>('basic')
   
@@ -64,6 +64,9 @@ export default function Home() {
   const [currentLocationText, setCurrentLocationText] = useState('Location not set')
   const [locationIconActive, setLocationIconActive] = useState(false)
 
+  // Map visibility state
+  const [showMap, setShowMap] = useState(false)
+
   // Search results state
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [searchResults, setSearchResults] = useState<FastProvider[]>([])
@@ -77,33 +80,18 @@ export default function Home() {
   // Mobile navigation state
   const [activeNav, setActiveNav] = useState<'home' | 'bookings' | 'messages' | 'notifications' | 'profile'>('home')
   
-  // Scroll for popular services
-  const popularServicesRef = useRef<HTMLDivElement>(null)
-  const [scrollPosition, setScrollPosition] = useState(0)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  // Mobile navigation items
-  const mobileNavItems = [
-    { key: 'home', icon: HomeIcon, label: 'Home', path: '/' },
-    { key: 'bookings', icon: CalendarDays, label: 'Bookings', path: '/bookings' },
-    { key: 'messages', icon: MessageCircle, label: 'Messages', path: '/messages' },
-    { key: 'notifications', icon: Bell, label: 'Alerts', path: '/notifications' },
-    { key: 'profile', icon: UserCircle, label: 'Profile', path: '/profile' }
-  ]
-
-  // Popular services - UPDATED: No circles, bigger icons
+  // Popular services - WITH SVG FILES
   const popularServices = [
-    { name: 'Mechanics', icon: Car, color: 'text-primary' },
-    { name: 'Electricians', icon: Zap, color: 'text-primary' },
-    { name: 'Plumbers', icon: Droplets, color: 'text-primary' },
-    { name: 'Carpenters', icon: Hammer, color: 'text-primary' },
-    { name: 'Painters', icon: Palette, color: 'text-primary' },
-    { name: 'Tailors', icon: Scissors, color: 'text-primary' },
-    { name: 'Cleaners', icon: Sparkles, color: 'text-primary' },
-    { name: 'Chefs', icon: ChefHat, color: 'text-primary' },
-    { name: 'Lawyers', icon: Scale, color: 'text-primary' },
-    { name: 'Technicians', icon: Wrench, color: 'text-primary' },
+    { name: 'Mechanics', icon: '/icons/mechanic.svg' },
+    { name: 'Electricians', icon: '/icons/electrician.svg' },
+    { name: 'Plumbers', icon: '/icons/plumber.svg' },
+    { name: 'Carpenters', icon: '/icons/carpenter.svg' },
+    { name: 'Painters', icon: '/icons/painter.svg' },
+    { name: 'Tailors', icon: '/icons/tailor.svg' },
+    { name: 'Cleaners', icon: '/icons/cleaner.svg' },
+    { name: 'Chefs', icon: '/icons/chef.svg' },
+    { name: 'Lawyers', icon: '/icons/lawyer.svg' },
+    { name: 'Technicians', icon: '/icons/technician.svg' },
   ]
 
   // Animation for location icon
@@ -142,30 +130,6 @@ export default function Home() {
     else if (pathname.includes('/notifications')) setActiveNav('notifications')
     else if (pathname.includes('/profile')) setActiveNav('profile')
   }, [pathname])
-
-  // Check scroll position for popular services
-  useEffect(() => {
-    const checkScroll = () => {
-      if (popularServicesRef.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = popularServicesRef.current
-        setScrollPosition(scrollLeft)
-        setCanScrollLeft(scrollLeft > 0)
-        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
-      }
-    }
-
-    const element = popularServicesRef.current
-    if (element) {
-      element.addEventListener('scroll', checkScroll)
-      checkScroll() // Initial check
-    }
-
-    return () => {
-      if (element) {
-        element.removeEventListener('scroll', checkScroll)
-      }
-    }
-  }, [])
 
   // Color mapping for categories
   const getCategoryColors = (index: number) => {
@@ -849,28 +813,18 @@ export default function Home() {
     loadFeaturedProviders()
   }
 
-  // Handle provider profile click
+  // Handle provider profile click - PUBLIC ACCESS
   const handleProviderProfileClick = async (providerId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (session?.user) {
-        router.push(`/providers/${providerId}`)
-      } else {
-        router.push(`/login?redirect=/providers/${providerId}`)
-      }
-    } catch (error) {
-      console.error('Auth check error:', error)
-      router.push(`/login?redirect=/providers/${providerId}`)
-    }
+    // PROVIDER PROFILES ARE PUBLIC - NO AUTH CHECK REQUIRED
+    router.push(`/providers/${providerId}`)
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
+      {/* 🚀 Hero Section */}
       <div className="relative overflow-hidden bg-white border-b border-gray-200">
         <div className="absolute inset-0 overflow-hidden opacity-10">
           <div className="absolute -top-20 -left-20 w-80 h-80 bg-primary/10 rounded-full"></div>
@@ -946,69 +900,76 @@ export default function Home() {
               )}
             </form>
             
-            {/* POPULAR SERVICES - UPDATED AS REQUESTED */}
+            {/* Popular Services */}
             <div className="mt-6 sm:mt-8">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-gray-500">Popular Services:</span>
               </div>
               
-              {/* DESKTOP: ICON GRID - NO CIRCLES, BIGGER ICONS */}
+              {/* DESKTOP: ICON GRID */}
               <div className="hidden lg:block">
                 <div className="grid grid-cols-5 gap-3">
-                  {popularServices.map((service) => {
-                    const Icon = service.icon
-                    return (
-                      <button
-                        key={service.name}
-                        onClick={() => {
-                          setSearchQuery(service.name)
-                          performSearch(service.name)
-                        }}
-                        className="flex flex-col items-center p-4 rounded-xl bg-white border border-gray-200 transition-all duration-300"
-                      >
-                        {/* Bigger icon, no circle background */}
-                        <Icon className={`h-8 w-8 ${service.color} mb-2`} />
-                        <span className="text-sm font-medium text-gray-700 text-center">{service.name}</span>
-                      </button>
-                    )
-                  })}
+                  {popularServices.map((service) => (
+                    <button
+                      key={service.name}
+                      onClick={() => {
+                        setSearchQuery(service.name)
+                        performSearch(service.name)
+                      }}
+                      className="flex flex-col items-center p-4 rounded-xl bg-primary/5 outline outline-1 outline-gray-200 hover:bg-primary/10 transition-colors duration-300"
+                    >
+                      <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                        <img
+                          src={service.icon}
+                          alt={service.name}
+                          className="w-10 h-10 object-contain"
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700 text-center">
+                        {service.name}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
               
-              {/* MOBILE: HORIZONTAL SCROLLABLE - WITH + BUTTON AT BEGINNING */}
+              {/* MOBILE: HORIZONTAL SCROLLABLE */}
               <div className="lg:hidden relative">
                 <div 
-                  ref={popularServicesRef}
                   className="flex overflow-x-auto scrollbar-hide space-x-3 pb-4 -mx-2 px-2"
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                   {/* + Button for provider registration at beginning */}
                   <Link
                     href="/links/become-a-provider"
-                    className="flex-shrink-0 w-1/4 min-w-[80px] flex flex-col items-center p-3 rounded-lg bg-primary border border-primary active:scale-95 transition-transform duration-200"
+                    className="flex-shrink-0 w-1/4 min-w-[80px] flex flex-col items-center p-3 rounded-lg bg-primary border border-primary active:scale-95 transition-transform duration-200 outline outline-1 outline-primary/50"
                   >
                     <Plus className="h-7 w-7 text-white mb-1" />
                     <span className="text-xs font-medium text-white text-center leading-tight">Become a Provider</span>
                   </Link>
                   
-                  {/* Regular service buttons */}
-                  {popularServices.map((service) => {
-                    const Icon = service.icon
-                    return (
-                      <button
-                        key={service.name}
-                        onClick={() => {
-                          setSearchQuery(service.name)
-                          performSearch(service.name)
-                        }}
-                        className="flex-shrink-0 w-1/4 min-w-[80px] flex flex-col items-center p-3 rounded-lg bg-white border border-gray-200 active:scale-95 transition-transform duration-200"
-                      >
-                        {/* Bigger icon, no circle background */}
-                        <Icon className={`h-7 w-7 ${service.color} mb-1`} />
-                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">{service.name}</span>
-                      </button>
-                    )
-                  })}
+                  {/* Regular service buttons with SVG files */}
+                  {popularServices.map((service) => (
+                    <button
+                      key={service.name}
+                      onClick={() => {
+                        setSearchQuery(service.name)
+                        performSearch(service.name)
+                      }}
+                      className="flex-shrink-0 w-1/4 min-w-[80px] flex flex-col items-center p-3 rounded-lg bg-primary/5 outline outline-1 outline-gray-200 active:scale-95 transition-transform duration-200"
+                    >
+                      <div className="w-10 h-10 mb-1 flex items-center justify-center">
+                        <img
+                          src={service.icon}
+                          alt={service.name}
+                          className="w-9 h-9 object-contain"
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-gray-700 text-center leading-tight">
+                        {service.name}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1089,233 +1050,19 @@ export default function Home() {
         </div>
       )}
 
-      {/* SIMPLIFIED MAP SECTION */}
-      <section className="py-10 sm:py-14 bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <HomepageMap userLocation={userLocation} />
-        </div>
-      </section>
-
-      {/* LOCATION DETECTION SECTION */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Mobile toggle button */}
-          <div className="sm:hidden py-4">
-            <button
-              onClick={() => setShowLocationSection(!showLocationSection)}
-              className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-50 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <div className="relative mr-3">
-                  <MapPin className={`h-6 w-6 ${locationIconActive ? 'text-primary' : 'text-gray-500'} transition-colors duration-300`} />
-                  {detectingLocation && (
-                    <div className="absolute -inset-1">
-                      <div className="absolute inset-0 border-2 border-primary/30 rounded-full animate-ping"></div>
-                    </div>
-                  )}
-                </div>
-                <div className="text-left">
-                  <span className="font-medium block">Find Local Services</span>
-                  <span className="text-sm text-gray-500">{currentLocationText}</span>
-                </div>
-              </div>
-              <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${showLocationSection ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-          
-          {/* Location section */}
-          <div className={`${showLocationSection ? 'block' : 'hidden'} sm:block py-8 sm:py-10`}>
-            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 border border-blue-100 shadow-lg">
-              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center mb-4">
-                    <div className="relative mr-3">
-                      <MapPin className={`h-6 w-6 ${locationIconActive ? 'text-primary animate-pulse' : 'text-primary'} transition-all duration-500`} />
-                      {detectingLocation && (
-                        <div className="absolute -inset-2">
-                          <div className="absolute inset-0 border-2 border-primary/20 rounded-full animate-ping"></div>
-                          <div className="absolute inset-1 border-2 border-primary/10 rounded-full animate-ping animation-delay-300"></div>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">
-                        Find Services in Your Area
-                      </h3>
-                      <p className="text-sm mt-1 text-gray-600">
-                        {userLocation.detected && userLocation.state 
-                          ? `📍 Services near ${userLocation.lga ? userLocation.lga + ', ' : ''}${userLocation.state}`
-                          : 'Set your location to find the closest professionals'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Current Location Display */}
-                  <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <MapPin className="h-5 w-5 text-primary mr-2" />
-                        <span className="font-medium text-gray-700">
-                          Your Location:
-                        </span>
-                      </div>
-                      <span className="font-bold text-sm sm:text-base text-gray-900">
-                        {currentLocationText}
-                      </span>
-                    </div>
-                    
-                    {/* Show detected State and LGA */}
-                    {userLocation.state && (
-                      <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="p-2 rounded-lg bg-gray-50">
-                          <div className="text-xs text-gray-500">State</div>
-                          <div className="font-medium">{userLocation.state}</div>
-                        </div>
-                        {userLocation.lga && (
-                          <div className="p-2 rounded-lg bg-gray-50">
-                            <div className="text-xs text-gray-500">LGA</div>
-                            <div className="font-medium">{userLocation.lga}</div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
-                  {/* Auto-detect Button */}
-                  <div className="relative">
-                    <button
-                      onClick={detectUserLocation}
-                      disabled={detectingLocation}
-                      className={`relative px-6 py-3 rounded-xl font-semibold flex items-center justify-center transition-all duration-300 overflow-hidden min-w-[160px] ${detectingLocation
-                        ? 'bg-primary/90 cursor-wait shadow-lg'
-                        : 'bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary shadow-lg hover:shadow-xl'
-                      }`}
-                    >
-                      {detectingLocation && (
-                        <div className="absolute inset-0">
-                          <div className="absolute inset-0 bg-gradient-to-r from-primary via-blue-500 to-primary animate-gradient-x"></div>
-                        </div>
-                      )}
-                      
-                      <div className="relative flex items-center z-10">
-                        {detectingLocation ? (
-                          <>
-                            <div className="relative mr-3">
-                              <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            </div>
-                            <span className="text-white font-semibold">Detecting...</span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="relative mr-3">
-                              <Navigation className="h-5 w-5 text-white" />
-                            </div>
-                            <span className="text-white font-semibold">Auto-detect</span>
-                          </>
-                        )}
-                      </div>
-                    </button>
-                  </div>
-                  
-                  <div className="hidden sm:block text-sm text-gray-500 text-center">OR</div>
-                  
-                  {/* State/LGA Selection */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <div className="relative flex-1">
-                      <Compass className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                      <select
-                        value={selectedState}
-                        onChange={(e) => {
-                          setSelectedState(e.target.value)
-                          setSelectedLGA('')
-                          setTimeout(() => updateFilteredProviders(), 100)
-                        }}
-                        className="pl-10 pr-4 py-3 rounded-xl border w-full appearance-none bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      >
-                        <option value="">Select State</option>
-                        {states.map((state) => (
-                          <option key={state.id} value={state.id}>
-                            {state.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="relative flex-1">
-                      <Map className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                      <select
-                        value={selectedLGA}
-                        onChange={(e) => {
-                          setSelectedLGA(e.target.value)
-                          setTimeout(() => updateFilteredProviders(), 100)
-                        }}
-                        disabled={!selectedState}
-                        className={`pl-10 pr-4 py-3 rounded-xl border w-full appearance-none bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${!selectedState ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <option value="">Select LGA</option>
-                        {getLGAsForState(selectedState).map((lga) => (
-                          <option key={lga.id} value={lga.id}>
-                            {lga.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <button
-                      onClick={handleLocationSelect}
-                      disabled={!selectedState}
-                      className={`px-6 py-3 rounded-xl font-semibold transition-all bg-gray-800 hover:bg-gray-900 text-white ${!selectedState ? 'opacity-50 cursor-not-allowed' : 'shadow-md hover:shadow-lg'}`}
-                    >
-                      Set Location
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Location-based provider count */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      {selectedState || selectedLGA 
-                        ? `Providers in ${selectedLGA ? lgas.find(l => l.id === selectedLGA)?.name + ', ' : ''}${states.find(s => s.id === selectedState)?.name || ''}`
-                        : userLocation.state
-                        ? `Providers near ${userLocation.lga ? userLocation.lga + ', ' : ''}${userLocation.state}`
-                        : 'All available providers'
-                      }
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-primary">
-                      {filteredProviders.length} provider{filteredProviders.length !== 1 ? 's' : ''}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {selectedState || selectedLGA || userLocation.state ? 'Filtered by location' : 'Showing all providers'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* FEATURED PROVIDERS SECTION */}
-      <section className="py-10 sm:py-14 bg-gray-50">
+      {/* 🎯 FEATURED PROVIDERS SECTION (MOVED UP) */}
+      <section className="py-10 sm:py-14 bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 sm:mb-10">
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                Service Providers
+                Top Service Providers
               </h2>
               <p className="mt-2 text-sm sm:text-base text-gray-600 hidden lg:block">
-                {filteredProviders.length} provider{filteredProviders.length !== 1 ? 's' : ''} available
-                {selectedState || selectedLGA || userLocation.state ? ' in your area' : ''}
+                Trusted professionals ready to help you
               </p>
               <p className="mt-2 text-sm sm:text-base text-gray-600 lg:hidden">
-                Available providers{selectedState || selectedLGA || userLocation.state ? ' in your area' : ''}
+                Trusted professionals available
               </p>
             </div>
             
@@ -1492,8 +1239,164 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Service Categories Section - UPDATED AS REQUESTED */}
-      <section className="py-10 sm:py-14 bg-white border-t border-gray-200">
+      {/* 📍 COMPACT LOCATION SECTION */}
+      <div className="bg-white border-y border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Mobile toggle button */}
+          <div className="sm:hidden py-4">
+            <button
+              onClick={() => setShowLocationSection(!showLocationSection)}
+              className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-50 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <div className="relative mr-3">
+                  <MapPin className={`h-6 w-6 ${locationIconActive ? 'text-primary' : 'text-gray-500'} transition-colors duration-300`} />
+                  {detectingLocation && (
+                    <div className="absolute -inset-1">
+                      <div className="absolute inset-0 border-2 border-primary/30 rounded-full animate-ping"></div>
+                    </div>
+                  )}
+                </div>
+                <div className="text-left">
+                  <span className="font-medium block">Find Local Services</span>
+                  <span className="text-sm text-gray-500">{currentLocationText}</span>
+                </div>
+              </div>
+              <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${showLocationSection ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+          
+          {/* Location section */}
+          <div className={`${showLocationSection ? 'block' : 'hidden'} sm:block py-6`}>
+            <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-gray-50 to-blue-50 border border-blue-100">
+              <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+                <div className="flex items-center">
+                  <div className="relative mr-3">
+                    <MapPin className={`h-5 w-5 ${locationIconActive ? 'text-primary animate-pulse' : 'text-primary'} transition-all duration-500`} />
+                    {detectingLocation && (
+                      <div className="absolute -inset-1">
+                        <div className="absolute inset-0 border-2 border-primary/20 rounded-full animate-ping"></div>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">
+                      Find Services in Your Area
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      {userLocation.detected && userLocation.state 
+                        ? `📍 Services near ${userLocation.lga ? userLocation.lga + ', ' : ''}${userLocation.state}`
+                        : 'Set your location to find the closest professionals'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                  {/* Auto-detect Button */}
+                  <button
+                    onClick={detectUserLocation}
+                    disabled={detectingLocation}
+                    className={`px-4 py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-all ${detectingLocation
+                      ? 'bg-primary/90 cursor-wait'
+                      : 'bg-primary hover:bg-green-700 text-white'
+                    }`}
+                  >
+                    {detectingLocation ? (
+                      <>
+                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Detecting...
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="h-4 w-4 mr-2" />
+                        Use My Location
+                      </>
+                    )}
+                  </button>
+                  
+                  <div className="hidden sm:block text-sm text-gray-500">or</div>
+                  
+                  {/* Manual Location Selection */}
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <select
+                      value={selectedState}
+                      onChange={(e) => {
+                        setSelectedState(e.target.value)
+                        setSelectedLGA('')
+                        setTimeout(() => updateFilteredProviders(), 100)
+                      }}
+                      className="px-3 py-2.5 rounded-lg border text-sm bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="">Select State</option>
+                      {states.map((state) => (
+                        <option key={state.id} value={state.id}>
+                          {state.name}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    <select
+                      value={selectedLGA}
+                      onChange={(e) => {
+                        setSelectedLGA(e.target.value)
+                        setTimeout(() => updateFilteredProviders(), 100)
+                      }}
+                      disabled={!selectedState}
+                      className={`px-3 py-2.5 rounded-lg border text-sm bg-white border-gray-300 text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${!selectedState ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <option value="">Select LGA</option>
+                      {getLGAsForState(selectedState).map((lga) => (
+                        <option key={lga.id} value={lga.id}>
+                          {lga.name}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    <button
+                      onClick={handleLocationSelect}
+                      disabled={!selectedState}
+                      className={`px-4 py-2.5 rounded-lg font-medium text-sm transition-all bg-gray-800 hover:bg-gray-900 text-white ${!selectedState ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 🗺️ MAP TOGGLE SECTION */}
+      <div className="py-6 sm:py-8 bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-primary to-green-600 text-white rounded-xl hover:from-green-700 hover:to-primary font-semibold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all"
+            >
+              <MapIcon className="h-5 w-5 sm:h-6 sm:w-6 mr-3" />
+              {showMap ? 'Hide Service Map' : 'View Services on Map'}
+              <ChevronDown className={`h-5 w-5 sm:h-6 sm:w-6 ml-3 transition-transform duration-300 ${showMap ? 'rotate-180' : ''}`} />
+            </button>
+            <p className="mt-3 text-sm text-gray-600">
+              {showMap ? 'Visualize service providers across Nigeria' : 'Click to explore services on an interactive map'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* MAP VISUALIZATION SECTION (Conditional) */}
+      {showMap && (
+        <section className="py-8 sm:py-10 bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <HomepageMap userLocation={userLocation} />
+          </div>
+        </section>
+      )}
+
+      {/* 📊 SERVICE CATEGORIES SECTION */}
+      <section className="py-10 sm:py-14 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8 sm:mb-12">
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4 text-gray-900">
@@ -1599,7 +1502,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* 💡 CTA Section */}
       <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-primary via-green-600 to-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
@@ -1628,10 +1531,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* DESKTOP FOOTER - UPDATED: Added padding, removed duplicate legal links, fixed logo */}
+      {/* 👣 DESKTOP FOOTER */}
       <footer className="hidden lg:block bg-gray-50 text-gray-800 pt-12 sm:pt-16 pb-8 sm:pb-12">
-        <div className="max-w-7xl mx-auto px-8 sm:px-10 lg:px-12"> {/* Increased padding */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12">
+        <div className="max-w-7xl mx-auto px-10 lg:px-14">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-10">
             {/* Brand Column */}
             <div className="col-span-2 lg:col-span-1">
               <div className="mb-6">
@@ -1640,12 +1543,12 @@ export default function Home() {
                     src="/logo.png"
                     alt="Nimart Logo - Nigeria's #1 Service Marketplace"
                     fill
-                    className="object-contain filter grayscale brightness-100" /* Fixed: removed opacity, added brightness */
+                    className="object-contain filter grayscale brightness-100"
                     sizes="160px"
                     priority
                   />
                 </div>
-                <p className="text-gray-600 text-sm mb-8 leading-relaxed pr-4"> {/* Added right padding */}
+                <p className="text-gray-600 text-sm mb-8 leading-relaxed">
                   Nigeria's premier service marketplace connecting customers with trusted professionals across all 36 states.
                 </p>
               </div>
@@ -1703,7 +1606,7 @@ export default function Home() {
             </div>
 
             {/* For Customers */}
-            <div>
+            <div className="ml-0">
               <h3 className="text-lg font-bold mb-6 text-gray-900 pb-3 border-b border-gray-200">For Customers</h3>
               <ul className="space-y-4">
                 <li>
@@ -1730,7 +1633,7 @@ export default function Home() {
             </div>
 
             {/* For Providers */}
-            <div>
+            <div className="ml-0">
               <h3 className="text-lg font-bold mb-6 text-gray-900 pb-3 border-b border-gray-200">For Providers</h3>
               <ul className="space-y-4">
                 <li>
@@ -1757,7 +1660,7 @@ export default function Home() {
             </div>
 
             {/* Company */}
-            <div className="col-span-2 lg:col-span-1">
+            <div className="col-span-2 lg:col-span-1 ml-0">
               <h3 className="text-lg font-bold mb-6 text-gray-900 pb-3 border-b border-gray-200">Company</h3>
               <ul className="space-y-4">
                 <li>
@@ -1794,33 +1697,93 @@ export default function Home() {
                   Nigeria's #1 Service Marketplace
                 </p>
               </div>
-              {/* REMOVED: Duplicate legal links */}
             </div>
           </div>
         </div>
       </footer>
 
-      {/* MOBILE FOOTER - UPDATED: Added padding, removed duplicate legal links */}
-      <div className="lg:hidden bg-white border-t border-gray-200 py-8 px-6"> {/* Increased padding */}
+      {/* 👣 MOBILE FOOTER */}
+      <div className="lg:hidden bg-white border-t border-gray-200 py-8 px-6">
         <div className="max-w-7xl mx-auto">
-          {/* Logo and Description */}
-          <div className="text-center mb-8">
-            <div className="relative h-10 w-32 mx-auto mb-4">
-              <Image
-                src="/logo.png"
-                alt="Nimart"
-                fill
-                className="object-contain filter grayscale brightness-100" /* Fixed logo */
-                priority
-              />
+          {/* Logo and Description in 2 columns */}
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            {/* Logo Column */}
+            <div className="flex flex-col justify-center">
+              <div className="relative h-10 w-28">
+                <Image
+                  src="/logo.png"
+                  alt="Nimart"
+                  fill
+                  className="object-contain filter grayscale brightness-100"
+                  priority
+                />
+              </div>
             </div>
-            <p className="text-sm text-gray-600 px-4"> {/* Added horizontal padding */}
-              Nigeria's premier service marketplace connecting customers with trusted professionals across all 36 states.
-            </p>
+            
+            {/* Description Column */}
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-gray-600 leading-tight">
+                Nigeria's premier service marketplace connecting customers with trusted professionals across all 36 states.
+              </p>
+            </div>
           </div>
 
-          {/* 2 Column Grid for Mobile Footer */}
-          <div className="grid grid-cols-2 gap-8 mb-8"> {/* Increased gap */}
+          {/* Email and Icons in 2 columns below */}
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            {/* Email Column */}
+            <div className="flex flex-col justify-center">
+              <a 
+                href="mailto:info@nimart.ng" 
+                className="flex items-center text-sm text-gray-600 hover:text-primary"
+              >
+                <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">info@nimart.ng</span>
+              </a>
+            </div>
+            
+            {/* Social Icons Column */}
+            <div className="flex items-center justify-end space-x-3">
+              <a
+                href="https://web.facebook.com/profile.php?id=61551209078955"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                aria-label="Follow Nimart on Facebook"
+              >
+                <Facebook className="h-4 w-4 text-gray-600 group-hover:text-white" />
+              </a>
+              <a
+                href="https://www.instagram.com/nimartng/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                aria-label="Follow Nimart on Instagram"
+              >
+                <Instagram className="h-4 w-4 text-gray-600 group-hover:text-white" />
+              </a>
+              <a
+                href="https://www.youtube.com/channel/UCqt-rVe6MZphQQuR76kbUaw"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                aria-label="Subscribe to Nimart on YouTube"
+              >
+                <Youtube className="h-4 w-4 text-gray-600 group-hover:text-white" />
+              </a>
+              <a
+                href="https://x.com/nimartng"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                aria-label="Follow Nimart on Twitter/X"
+              >
+                <Twitter className="h-4 w-4 text-gray-600 group-hover:text-white" />
+              </a>
+            </div>
+          </div>
+
+          {/* 2 Column Grid for Mobile Footer Links */}
+          <div className="grid grid-cols-2 gap-8 mb-8">
             {/* Column 1: For Customers */}
             <div>
               <h4 className="font-bold text-gray-900 mb-4 text-sm">For Customers</h4>
@@ -1876,10 +1839,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Company Links */}
+          {/* Company Links - Now in 2 columns */}
           <div className="mb-8">
             <h4 className="font-bold text-gray-900 mb-4 text-sm">Company</h4>
-            <div className="grid grid-cols-2 gap-8"> {/* Increased gap */}
+            <div className="grid grid-cols-2 gap-8">
               <ul className="space-y-3">
                 <li>
                   <Link href="/links/about" className="text-xs text-gray-600 hover:text-primary">
@@ -1905,57 +1868,6 @@ export default function Home() {
                 </li>
               </ul>
             </div>
-          </div>
-
-          {/* Social Icons and Contact */}
-          <div className="mb-8">
-            <div className="flex items-center justify-center space-x-4 mb-4">
-              <a
-                href="https://web.facebook.com/profile.php?id=61551209078955"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110 group"
-                aria-label="Follow Nimart on Facebook"
-              >
-                <Facebook className="h-5 w-5 text-gray-600 group-hover:text-white" />
-              </a>
-              <a
-                href="https://www.instagram.com/nimartng/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110 group"
-                aria-label="Follow Nimart on Instagram"
-              >
-                <Instagram className="h-5 w-5 text-gray-600 group-hover:text-white" />
-              </a>
-              <a
-                href="https://www.youtube.com/channel/UCqt-rVe6MZphQQuR76kbUaw"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110 group"
-                aria-label="Subscribe to Nimart on YouTube"
-              >
-                <Youtube className="h-5 w-5 text-gray-600 group-hover:text-white" />
-              </a>
-              <a
-                href="https://x.com/nimartng"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-primary flex items-center justify-center transition-all duration-300 hover:scale-110 group"
-                aria-label="Follow Nimart on Twitter/X"
-              >
-                <Twitter className="h-5 w-5 text-gray-600 group-hover:text-white" />
-              </a>
-            </div>
-
-            {/* Contact */}
-            <a 
-              href="mailto:info@nimart.ng" 
-              className="flex items-center justify-center text-sm text-gray-600 hover:text-primary mb-4"
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              info@nimart.ng
-            </a>
           </div>
 
           {/* Copyright */}

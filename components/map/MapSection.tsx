@@ -88,6 +88,7 @@ const cleanupLeafletMaps = () => {
 interface MapSectionProps {
   userLocation: UserLocation
   isMobile?: boolean
+  isExpanded?: boolean // ADDED THIS PROP
   className?: string
 }
 
@@ -110,6 +111,7 @@ const DEFAULT_FILTERS: MapFilters = {
 export default function MapSection({ 
   userLocation, 
   isMobile = false,
+  isExpanded = false, // ADDED DEFAULT VALUE
   className = ''
 }: MapSectionProps) {
   const router = useRouter()
@@ -172,6 +174,17 @@ export default function MapSection({
       cleanupLeafletMaps()
     }
   }, [])
+
+  // Handle isExpanded prop changes
+  useEffect(() => {
+    if (isExpanded && !isFullscreen) {
+      // If isExpanded prop is true but isFullscreen state is false, update it
+      setIsFullscreen(true)
+    } else if (!isExpanded && isFullscreen) {
+      // If isExpanded prop is false but isFullscreen state is true, update it
+      setIsFullscreen(false)
+    }
+  }, [isExpanded, isFullscreen])
 
   // Initialize map settings
   useEffect(() => {
@@ -296,9 +309,10 @@ export default function MapSection({
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
+    const newFullscreenState = !isFullscreen
+    setIsFullscreen(newFullscreenState)
     
-    if (!isFullscreen) {
+    if (newFullscreenState) {
       // Enter fullscreen
       document.body.style.overflow = 'hidden'
       document.documentElement.style.overflow = 'hidden'
@@ -488,6 +502,17 @@ export default function MapSection({
   const nearbyCount = filteredProviders.length
   const onlineCount = providers.filter(p => p.is_online).length
 
+  // Get map height based on isExpanded prop
+  const getMapHeight = () => {
+    if (isExpanded || isFullscreen) {
+      return '100vh'
+    }
+    if (isMobile && !isExpanded) {
+      return '240px'
+    }
+    return '500px'
+  }
+
   // Render loading state
   if (!isClient || loading || !shouldRenderMap) {
     return <MapSkeleton isMobile={isMobile} />
@@ -496,7 +521,7 @@ export default function MapSection({
   // Render offline state
   if (!onlineStatus) {
     return (
-      <div className={`bg-gray-50 rounded-2xl border border-gray-200 p-6 text-center ${className}`} style={{ height: isFullscreen ? '100vh' : '500px' }}>
+      <div className={`bg-gray-50 rounded-2xl border border-gray-200 p-6 text-center ${className}`} style={{ height: getMapHeight() }}>
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
           <WifiOff className="h-6 w-6 text-gray-400" />
         </div>
@@ -513,8 +538,8 @@ export default function MapSection({
     )
   }
 
-  // Render mobile preview (non-fullscreen)
-  if (isMobile && !isFullscreen) {
+  // Render mobile preview (non-expanded, non-fullscreen)
+  if (isMobile && !isExpanded && !isFullscreen) {
     return (
       <>
         {/* Filter Modal */}
@@ -670,7 +695,7 @@ export default function MapSection({
     )
   }
 
-  // Render full map (desktop or mobile fullscreen)
+  // Render full map (desktop or expanded/fullscreen mobile)
   return (
     <>
       {/* Filter Modal */}
@@ -686,15 +711,15 @@ export default function MapSection({
         />
       )}
       
-      {/* Fullscreen Map */}
-      <div className={`${isFullscreen ? 'mobile-fullscreen-map' : `desktop-map ${className}`}`} style={{ 
+      {/* Fullscreen/Expanded Map */}
+      <div className={`${(isExpanded || isFullscreen) ? 'mobile-fullscreen-map' : `desktop-map ${className}`}`} style={{ 
         position: 'relative', 
-        zIndex: isFullscreen ? 9999 : 1,
-        height: isFullscreen ? '100vh' : '500px',
+        zIndex: (isExpanded || isFullscreen) ? 9999 : 1,
+        height: getMapHeight(),
         backgroundColor: 'white'
       }}>
-        {/* Mobile Fullscreen Header */}
-        {isFullscreen && (
+        {/* Mobile Fullscreen Header - Only show if expanded/fullscreen AND mobile */}
+        {(isExpanded || isFullscreen) && isMobile && (
           <div className="mobile-map-header px-3 py-2 bg-white border-b border-gray-200 shadow-sm" style={{
             position: 'absolute',
             top: 0,
@@ -748,9 +773,9 @@ export default function MapSection({
         )}
         
         {/* Map Container */}
-        <div className={isFullscreen ? 'mobile-map-content' : 'h-full'} style={{
-          position: isFullscreen ? 'absolute' : 'relative',
-          top: isFullscreen ? '60px' : '0',
+        <div className={(isExpanded || isFullscreen) ? 'mobile-map-content' : 'h-full'} style={{
+          position: (isExpanded || isFullscreen) ? 'absolute' : 'relative',
+          top: (isExpanded || isFullscreen) && isMobile ? '60px' : '0',
           left: 0,
           right: 0,
           bottom: 0,
@@ -760,8 +785,8 @@ export default function MapSection({
             center={getMapCenter()}
             zoom={getMapZoom()}
             mapRef={mapRef}
-            isFullscreen={isFullscreen}
-            className={isFullscreen ? 'h-full' : 'h-full'}
+            isFullscreen={isExpanded || isFullscreen}
+            className={(isExpanded || isFullscreen) ? 'h-full' : 'h-full'}
           >
             {/* Provider Markers */}
             {markers.map(marker => (
@@ -785,8 +810,8 @@ export default function MapSection({
             <MapControls
               onLocateUser={handleLocateUser}
               onToggleFullscreen={isMobile ? toggleFullscreen : undefined}
-              isFullscreen={isFullscreen}
-              onCloseFullscreen={isFullscreen ? handleCloseFullscreen : undefined}
+              isFullscreen={isExpanded || isFullscreen}
+              onCloseFullscreen={(isExpanded || isFullscreen) ? handleCloseFullscreen : undefined}
               onFilterClick={() => {
                 setShowFilterModal(true)
                 document.body.style.overflow = 'hidden'
@@ -796,8 +821,8 @@ export default function MapSection({
           </MapContainer>
         </div>
         
-        {/* Desktop Map Stats Footer */}
-        {!isFullscreen && !isMobile && (
+        {/* Desktop Map Stats Footer - Only show if not expanded and not mobile */}
+        {!isExpanded && !isFullscreen && !isMobile && (
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000]">
             <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 border border-gray-200 shadow-lg min-w-[280px]">
               <div className="flex items-center justify-between mb-2">

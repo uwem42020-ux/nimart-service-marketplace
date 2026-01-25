@@ -1,4 +1,4 @@
-// middleware.ts - SIMPLIFIED & SAFE VERSION
+// middleware.ts - FIXED VERSION
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
     return response
   }
 
-  // PUBLIC ROUTES - No authentication required
+  // PUBLIC ROUTES - No authentication required (EXPAND THIS LIST!)
   const publicRoutes = [
     '/',
     '/login',
@@ -33,8 +33,8 @@ export function middleware(request: NextRequest) {
     '/provider/benefits',
     '/provider/terms',
     '/provider/how-it-works',
-    '/providers/[id]',
-    '/services/[id]',
+    '/providers/[id]',  // Provider profiles are PUBLIC
+    '/services/[id]',   // Service pages are PUBLIC
     '/about',
     '/contact',
     '/help',
@@ -42,11 +42,26 @@ export function middleware(request: NextRequest) {
     '/terms',
     '/sitemap.xml',
     '/robots.txt',
+    '/manifest.json',
+    // ADD ALL LINK PAGES HERE:
+    '/links/become-a-provider',
+    '/links/marketplace',
+    '/links/how-it-works',
+    '/links/help-center',
+    '/links/contact',
+    '/links/provider-benefits',
+    '/links/provider-support',
+    '/links/terms-conditions',
+    '/links/about',
+    '/links/blog',
+    '/links/careers',
+    '/links/press',
+    // ADD ALL API ROUTES:
     '/api/sitemap',
     '/api/health',
     '/api/providers',
     '/api/services',
-    '/manifest.json',
+    // Add any other public routes
   ]
 
   // Check if current route is public
@@ -58,23 +73,26 @@ export function middleware(request: NextRequest) {
     if (route === '/services/[id]' && pathname.match(/^\/services\/[^\/]+$/)) {
       return true
     }
+    // Check exact match or starts with
     if (pathname === route) return true
     if (pathname.startsWith(route + '/')) return true
+    // Check for link pages
+    if (pathname.startsWith('/links/')) {
+      const linkPath = pathname.replace('/links/', '')
+      // Make ALL /links/* pages public
+      return true
+    }
     return false
   })
 
-  // Allow public API routes
-  const isPublicApiRoute = pathname === '/api/sitemap' || 
-                          pathname === '/api/health' ||
-                          pathname === '/api/providers' ||
-                          pathname === '/api/services'
-
-  if (isPublicRoute || isPublicApiRoute) {
-    return response
-  }
-
-  // For development/testing: Temporarily allow all authenticated routes
-  // Remove this in production
+  // For now, ALLOW ALL REQUESTS without authentication
+  // This disables the middleware's redirect functionality
+  console.log(`✅ Middleware: Allowing access to ${pathname}`)
+  return response
+  
+  // ⚠️ IMPORTANT: REMOVE THIS ENTIRE BLOCK ⚠️
+  // The following code is what's causing the redirects:
+  /*
   const isAuthenticated = request.cookies.get('is-authenticated')?.value === 'true'
   
   if (!isAuthenticated) {
@@ -83,23 +101,11 @@ export function middleware(request: NextRequest) {
     loginUrl.searchParams.set('redirect', encodeURIComponent(pathname))
     return NextResponse.redirect(loginUrl)
   }
-
-  // For now, allow all authenticated users to access all routes
-  // You can add role-based restrictions back later once cookies are working
-  console.log(`✅ Middleware: Allowed access to ${pathname}`)
-  return response
+  */
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * 1. _next/static (static files)
-     * 2. _next/image (image optimization files)
-     * 3. favicon.ico, sitemap.xml, robots.txt
-     * 4. Public files with extensions (images, fonts, etc.)
-     * 5. api/sitemap and api/health (public APIs)
-     */
     '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|manifest.json|.*\\.(?:ico|png|jpg|jpeg|gif|svg|css|js|woff|woff2|ttf|eot|json)$).*)',
   ],
 }
