@@ -1,9 +1,11 @@
+// src/pages/provider/Portfolio.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Upload, X, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OptimizedImage } from '../../components/common/OptimizedImage';
+import imageCompression from 'browser-image-compression';
 
 interface PortfolioImage {
   id: string;
@@ -36,32 +38,47 @@ export default function Portfolio() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    
+    // Compression options
+    const options = {
+      maxSizeMB: 0.5,           // 500KB max per image
+      maxWidthOrHeight: 1200,   // Resize to max 1200px
+      useWebWorker: true,
+    };
+
     const uploadPromises = Array.from(files).map(async (file) => {
-      const fileExt = file.name.split('.').pop();
-      // ✅ Include user ID as folder to satisfy RLS policy
-      const fileName = `${user!.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('portfolio')
-        .upload(fileName, file);
+      try {
+        // Compress image before upload
+        const compressedFile = await imageCompression(file, options);
+        
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user!.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('portfolio')
+          .upload(fileName, compressedFile);
 
-      if (uploadError) throw uploadError;
+        if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('portfolio')
-        .getPublicUrl(fileName);
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('portfolio')
+          .getPublicUrl(fileName);
 
-      // Save to database
-      const { error: dbError } = await supabase
-        .from('portfolio_images')
-        .insert({
-          provider_id: user!.id,
-          image_url: urlData.publicUrl,
-        });
+        // Save to database
+        const { error: dbError } = await supabase
+          .from('portfolio_images')
+          .insert({
+            provider_id: user!.id,
+            image_url: urlData.publicUrl,
+          });
 
-      if (dbError) throw dbError;
+        if (dbError) throw dbError;
+      } catch (error) {
+        console.error('Upload failed for file:', file.name, error);
+        throw error;
+      }
     });
 
     try {
@@ -72,8 +89,7 @@ export default function Portfolio() {
       toast.error('Upload failed: ' + error.message);
     } finally {
       setUploading(false);
-      // Clear input
-      event.target.value = '';
+      event.target.value = ''; // Clear input
     }
   }
 
@@ -134,7 +150,7 @@ export default function Portfolio() {
 
       {uploading && (
         <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-md">
-          Uploading images...
+          Compressing and uploading images...
         </div>
       )}
 
@@ -157,7 +173,8 @@ export default function Portfolio() {
                 <OptimizedImage
                   src={image.image_url}
                   alt={image.title || 'Portfolio image'}
-                  className="aspect-square w-full object-cover"
+                  className="aspect-square w-full"
+                  width={300}
                 />
                 <button
                   onClick={() => deleteImage(image.id, image.image_url)}

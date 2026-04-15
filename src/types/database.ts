@@ -239,6 +239,8 @@ export interface Database {
           is_read: boolean
           read_at: string | null
           created_at: string
+          attachment_url: string | null
+          attachment_type: string | null
         }
         Insert: {
           id?: string
@@ -249,6 +251,8 @@ export interface Database {
           is_read?: boolean
           read_at?: string | null
           created_at?: string
+          attachment_url?: string | null
+          attachment_type?: string | null
         }
         Update: {
           id?: string
@@ -259,6 +263,8 @@ export interface Database {
           is_read?: boolean
           read_at?: string | null
           created_at?: string
+          attachment_url?: string | null
+          attachment_type?: string | null
         }
       }
       notifications: {
@@ -371,6 +377,23 @@ export interface Database {
           created_at?: string
         }
       }
+      categories: {
+        Row: {
+          id: number
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          name: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          name?: string
+          created_at?: string
+        }
+      }
     }
     Views: {}
     Functions: {}
@@ -392,12 +415,6 @@ export type Notification = Tables<'notifications'>
 export type PortfolioImage = Tables<'portfolio_images'>
 export type LGACenter = Tables<'lga_centers'>
 export type Subcategory = Tables<'subcategories'>
+export type Category = Tables<'categories'>
 
-// Extended types with joins
-export type ProviderWithProfile = Provider & {
-  profile: Profile
-  average_rating?: number
-  review_count?: number
-  distance?: number
-  portfolio_images?: PortfolioImage[]
-}
+export type TablesUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
