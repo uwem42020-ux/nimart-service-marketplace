@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+// src/pages/auth/SignUp.tsx
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -9,6 +10,7 @@ type Step = 'email' | 'otp' | 'profile';
 
 export default function SignUp() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { refreshProfile } = useAuth();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -16,6 +18,16 @@ export default function SignUp() {
   const [role, setRole] = useState<'customer' | 'provider'>('customer');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Pre-select role from URL parameter (e.g., ?role=provider)
+  useEffect(() => {
+    const roleParam = searchParams.get('role');
+    if (roleParam === 'provider') {
+      setRole('provider');
+    } else if (roleParam === 'customer') {
+      setRole('customer');
+    }
+  }, [searchParams]);
 
   const sendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,11 +143,14 @@ export default function SignUp() {
 
   return (
     <div className="relative min-h-screen">
+      {/* Full‑screen background image */}
       <div
         className="fixed inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: 'url("/loginbg.jpg")' }}
       />
       <div className="fixed inset-0 bg-black/40" />
+
+      {/* Back Arrow */}
       <Link
         to="/"
         className="fixed top-6 left-6 z-20 p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition"
@@ -282,36 +297,43 @@ export default function SignUp() {
                   </div>
                 </div>
 
+                {/* 🔥 PROMINENT ROLE SELECTION CARDS */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    I want to...
+                  <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
+                    What brings you to Nimart?
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => setRole('customer')}
-                      className={`p-4 border-2 rounded-xl flex flex-col items-center transition-all ${
+                      className={`p-5 border-2 rounded-2xl flex flex-col items-center transition-all ${
                         role === 'customer'
-                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-sm'
+                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-md scale-[1.02]'
                           : 'border-gray-200 bg-white/50 backdrop-blur-sm hover:border-gray-300'
                       }`}
                     >
-                      <User className="h-6 w-6 mb-1" />
-                      <span className="font-medium">Hire Services</span>
-                      <span className="text-xs text-gray-500">Customer</span>
+                      <User className="h-10 w-10 mb-3" />
+                      <span className="font-semibold text-lg">I need a service</span>
+                      <span className="text-sm text-gray-500 mt-1">I'm a customer</span>
+                      <p className="text-xs text-gray-400 mt-2 text-center">
+                        Find and book trusted professionals
+                      </p>
                     </button>
                     <button
                       type="button"
                       onClick={() => setRole('provider')}
-                      className={`p-4 border-2 rounded-xl flex flex-col items-center transition-all ${
+                      className={`p-5 border-2 rounded-2xl flex flex-col items-center transition-all ${
                         role === 'provider'
-                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-sm'
+                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-md scale-[1.02]'
                           : 'border-gray-200 bg-white/50 backdrop-blur-sm hover:border-gray-300'
                       }`}
                     >
-                      <Briefcase className="h-6 w-6 mb-1" />
-                      <span className="font-medium">Offer Services</span>
-                      <span className="text-xs text-gray-500">Provider</span>
+                      <Briefcase className="h-10 w-10 mb-3" />
+                      <span className="font-semibold text-lg">I offer services</span>
+                      <span className="text-sm text-gray-500 mt-1">I'm a provider</span>
+                      <p className="text-xs text-gray-400 mt-2 text-center">
+                        Get hired and grow your business
+                      </p>
                     </button>
                   </div>
                 </div>
