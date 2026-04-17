@@ -8,11 +8,21 @@ import { calculateDistance } from '../../lib/distance';
 import { LocationDropdown } from '../../components/common/LocationDropdown';
 import { MapPin, ChevronDown, Search } from 'lucide-react';
 import { useState } from 'react';
-import type { ProviderWithProfile } from '../../types/database';
 import { TIERS } from '../../data/categories';
 import { CategoryButtons } from '../../components/common/CategoryButtons';
 import { useLocationStore } from '../../stores/locationStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import type { Database } from '../../types/database';
+
+type ProviderRow = Database['public']['Tables']['providers']['Row'];
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type PortfolioImageRow = Database['public']['Tables']['portfolio_images']['Row'];
+
+export interface ProviderWithProfile extends ProviderRow {
+  profile: ProfileRow;
+  portfolio_images: PortfolioImageRow[];
+  distance?: number;
+}
 
 export default function Home() {
   const { profile } = useAuth();
@@ -22,18 +32,14 @@ export default function Home() {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationLabel, setLocationLabel] = useState('All Nigeria');
 
-  // Request geolocation for all users
   useGeolocation();
   const { lat: globalLat, lng: globalLng } = useLocationStore();
-
-  // Prefer logged-in profile location, fallback to browser geolocation
-  const userLat = profile?.lat || globalLat;
-  const userLng = profile?.lng || globalLng;
+  const userLat = profile?.lat ?? globalLat ?? undefined;
+  const userLng = profile?.lng ?? globalLng ?? undefined;
 
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
-      // 1. Build the providers query
       let providerQuery = supabase
         .from('providers')
         .select(`
@@ -52,7 +58,6 @@ export default function Home() {
         .order('boost_until', { ascending: false, nullsFirst: false })
         .limit(20);
 
-      // Apply location filters
       if (lgaFilter) {
         const { data: profilesInLga } = await supabase
           .from('profiles')
@@ -61,7 +66,7 @@ export default function Home() {
         if (profilesInLga && profilesInLga.length > 0) {
           providerQuery = providerQuery.in('id', profilesInLga.map(p => p.id));
         } else {
-          return [];
+          return [] as ProviderWithProfile[];
         }
       } else if (stateFilter) {
         const { data: lgasInState } = await supabase
@@ -77,35 +82,31 @@ export default function Home() {
           if (profilesInState && profilesInState.length > 0) {
             providerQuery = providerQuery.in('id', profilesInState.map(p => p.id));
           } else {
-            return [];
+            return [] as ProviderWithProfile[];
           }
         } else {
-          return [];
+          return [] as ProviderWithProfile[];
         }
       }
 
       const { data: providers, error } = await providerQuery;
       if (error) throw error;
-      if (!providers || providers.length === 0) return [];
+      if (!providers || providers.length === 0) return [] as ProviderWithProfile[];
 
-      // 2. Get profiles for these providers
       const providerIds = providers.map(p => p.id);
       const { data: profiles } = await supabase
         .from('profiles')
         .select('*')
         .in('id', providerIds);
-
-      // 3. Get portfolio images
       const { data: portfolioImages } = await supabase
         .from('portfolio_images')
         .select('*')
         .in('provider_id', providerIds);
 
-      // 4. Combine data
-      const combined = providers.map(provider => {
-        const providerProfile = profiles?.find(p => p.id === provider.id) || null;
-        const images = portfolioImages?.filter(img => img.provider_id === provider.id) || [];
-        const distance = (userLat && userLng && providerProfile?.lat && providerProfile?.lng)
+      const combined: ProviderWithProfile[] = providers.map(provider => {
+        const providerProfile = profiles?.find(p => p.id === provider.id) ?? ({} as ProfileRow);
+        const images = portfolioImages?.filter(img => img.provider_id === provider.id) ?? [];
+        const distance = (userLat && userLng && providerProfile.lat && providerProfile.lng)
           ? calculateDistance(userLat, userLng, providerProfile.lat, providerProfile.lng)
           : undefined;
 
@@ -114,14 +115,12 @@ export default function Home() {
           profile: providerProfile,
           portfolio_images: images,
           distance,
-        } as ProviderWithProfile;
+        };
       });
 
-      // Sort by distance if user location available
       if (userLat && userLng) {
-        combined.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+        combined.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
       }
-
       return combined;
     },
     enabled: true,
@@ -149,7 +148,6 @@ export default function Home() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Hero Section with Search + Location */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
         <h1 className="text-2xl md:text-4xl font-bold mb-3">
           Find Trusted Service Providers in Nigeria
@@ -195,13 +193,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Categories as Buttons (Jiji style) */}
       <section className="mb-10">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Browse by Category</h2>
         <CategoryButtons tiers={TIERS} />
       </section>
 
-      {/* Featured Providers */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
@@ -229,7 +225,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {featuredProviders?.map((provider: ProviderWithProfile) => (
+                {featuredProviders?.map((provider) => (
                   <ProviderCard key={provider.id} provider={provider} />
                 ))}
               </div>

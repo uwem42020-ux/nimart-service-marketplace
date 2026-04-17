@@ -13,6 +13,21 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { OptimizedImage } from '../../components/common/OptimizedImage';
 import { cn } from '../../lib/utils';
+import type { Database } from '../../types/database';
+
+type ProviderRow = Database['public']['Tables']['providers']['Row'];
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type PortfolioImageRow = Database['public']['Tables']['portfolio_images']['Row'];
+type ReviewRow = Database['public']['Tables']['reviews']['Row'] & {
+  reviewer: { full_name: string | null; avatar_url: string | null } | null;
+};
+
+interface FullProvider extends ProviderRow {
+  profile: ProfileRow | null;
+  portfolio_images: PortfolioImageRow[];
+  reviews: ReviewRow[];
+  distance?: number;
+}
 
 export default function ProviderProfile() {
   const { id } = useParams();
@@ -69,15 +84,15 @@ export default function ProviderProfile() {
         .eq('provider_id', id)
         .order('created_at', { ascending: false });
 
-      const fullProvider = {
+      const fullProvider: FullProvider = {
         ...providerData,
-        profile: profileData,
-        portfolio_images: portfolioImages || [],
-        reviews: reviews || [],
+        profile: profileData ?? null,
+        portfolio_images: portfolioImages ?? [],
+        reviews: (reviews as ReviewRow[]) ?? [],
       };
 
       if (profile?.lat && profile?.lng && profileData?.lat && profileData?.lng) {
-        (fullProvider as any).distance = calculateDistance(
+        fullProvider.distance = calculateDistance(
           profile.lat,
           profile.lng,
           profileData.lat,
@@ -90,7 +105,7 @@ export default function ProviderProfile() {
     enabled: !!id,
   });
 
-  async function submitReview() {
+  const submitReview = async () => {
     if (!user) {
       toast.error('Please sign in to leave a review');
       return;
@@ -101,7 +116,7 @@ export default function ProviderProfile() {
         .from('reviews')
         .select('id')
         .eq('reviewer_id', user.id)
-        .eq('provider_id', id)
+        .eq('provider_id', id!)
         .maybeSingle();
 
       if (existingReview) {
@@ -110,12 +125,14 @@ export default function ProviderProfile() {
         return;
       }
 
-      const { error } = await supabase.from('reviews').insert({
-        reviewer_id: user.id,
-        provider_id: id,
-        rating: reviewRating,
-        content: reviewContent || null,
-      });
+      const { error } = await supabase
+        .from('reviews')
+        .insert([{
+          reviewer_id: user.id,
+          provider_id: id!,
+          rating: reviewRating,
+          content: reviewContent || null,
+        }]);
 
       if (error) throw error;
       toast.success('Review submitted! Thank you.');
@@ -126,7 +143,7 @@ export default function ProviderProfile() {
     } finally {
       setSubmittingReview(false);
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -147,8 +164,8 @@ export default function ProviderProfile() {
     );
   }
 
-  const avgRating = provider.reviews?.length
-    ? provider.reviews.reduce((acc: number, r: any) => acc + r.rating, 0) / provider.reviews.length
+  const avgRating = provider.reviews.length
+    ? provider.reviews.reduce((acc, r) => acc + r.rating, 0) / provider.reviews.length
     : 0;
 
   const statusColors = {
@@ -170,11 +187,12 @@ export default function ProviderProfile() {
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
         <div className="p-6 border-b">
           <div className="flex flex-col md:flex-row gap-6">
-            <div className="relative">
+            {/* Avatar with Status Dot - FIXED */}
+            <div className="relative flex-shrink-0">
               {provider.profile?.avatar_url ? (
                 <OptimizedImage
                   src={provider.profile.avatar_url}
-                  alt={provider.business_name || provider.profile.full_name}
+                  alt={provider.business_name || provider.profile.full_name || ''}
                   className="w-32 h-32 rounded-full object-cover"
                 />
               ) : (
@@ -210,9 +228,9 @@ export default function ProviderProfile() {
                   <MapPin className="h-4 w-4 mr-1" />
                   <span>
                     {provider.profile?.lga_name || 'Location not set'}
-                    {(provider as any).distance && (
+                    {provider.distance && (
                       <span className="ml-1 text-gray-500">
-                        ({formatDistance((provider as any).distance)})
+                        ({formatDistance(provider.distance)})
                       </span>
                     )}
                   </span>
@@ -220,7 +238,7 @@ export default function ProviderProfile() {
                 <div className="flex items-center">
                   <Star className="h-4 w-4 text-yellow-400 mr-1" />
                   <span className="font-medium">{avgRating.toFixed(1)}</span>
-                  <span className="text-gray-500 ml-1">({provider.reviews?.length || 0} reviews)</span>
+                  <span className="text-gray-500 ml-1">({provider.reviews.length} reviews)</span>
                 </div>
               </div>
             </div>
@@ -233,7 +251,6 @@ export default function ProviderProfile() {
                 <Calendar className="h-5 w-5" />
                 Book Now
               </button>
-              
               <ChatWidget
                 recipientId={id!}
                 recipientName={provider.business_name || provider.profile?.full_name || 'Provider'}
@@ -242,7 +259,7 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {provider.portfolio_images?.length > 0 && (
+        {provider.portfolio_images.length > 0 && (
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold mb-4">Portfolio</h2>
             <PortfolioGallery images={provider.portfolio_images} />
@@ -251,7 +268,7 @@ export default function ProviderProfile() {
 
         <div className="p-6">
           <h2 className="text-xl font-semibold mb-4">Reviews</h2>
-          <ReviewsList reviews={provider.reviews || []} />
+          <ReviewsList reviews={provider.reviews} />
         </div>
       </div>
 
@@ -262,7 +279,6 @@ export default function ProviderProfile() {
         providerName={provider.business_name || provider.profile?.full_name || 'Provider'}
       />
 
-      {/* Review Modal */}
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">

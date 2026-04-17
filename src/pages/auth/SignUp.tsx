@@ -1,4 +1,3 @@
-// src/pages/auth/SignUp.tsx
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -64,7 +63,6 @@ export default function SignUp() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Check if profile already exists AND has a role (i.e. the user completed signup before)
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('role')
@@ -78,7 +76,6 @@ export default function SignUp() {
         return;
       }
 
-      // Update profile with chosen role and name
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -90,19 +87,19 @@ export default function SignUp() {
 
       if (profileError) throw profileError;
 
-      // Refresh the profile in AuthContext so header/dashboard reflect the correct role
       await refreshProfile();
 
       if (role === 'provider') {
         const { error: providerError } = await supabase
           .from('providers')
-          .insert({
+          .insert([{
             id: user.id,
             selected_tier_slug: 'automotive',
             selected_category_slug: 'vehicle-mechanics',
             is_available: true,
             status: 'available',
-          });
+          }]);
+
         if (providerError) throw providerError;
 
         toast.success('Account created! Please complete your business profile.');
@@ -134,16 +131,11 @@ export default function SignUp() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Full‑screen background image */}
       <div
         className="fixed inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: 'url("/loginbg.jpg")' }}
       />
-
-      {/* Dark overlay */}
       <div className="fixed inset-0 bg-black/40" />
-
-      {/* Back Arrow */}
       <Link
         to="/"
         className="fixed top-6 left-6 z-20 p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition"
@@ -152,11 +144,9 @@ export default function SignUp() {
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      {/* Main content */}
       <div className="relative z-10 flex min-h-screen items-start justify-center px-4 pt-4 pb-8">
         <div className="w-full max-w-md">
           <div className="bg-white/85 backdrop-blur-md rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/20">
-            {/* Logo */}
             <div className="flex justify-center mb-4">
               <img
                 src="https://qootzfndochmcoijnwxf.supabase.co/storage/v1/object/public/logo/logo.png"
