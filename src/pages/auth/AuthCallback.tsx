@@ -13,44 +13,68 @@ export default function AuthCallback() {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<'customer' | 'provider'>('customer');
   const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    checkUser();
-  }, []);
+    // Supabase automatically processes the hash fragment when the client is initialized.
+    // We just need to wait for the session to be established.
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        const user = session.user;
+        setUser(user);
 
-  async function checkUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      navigate('/auth/signin');
-      return;
-    }
+        // Check if profile exists with role
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', user.id)
+          .single();
 
-    // Check if profile exists with role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, full_name')
-      .eq('id', user.id)
-      .single();
+        if (profile?.role) {
+          await refreshProfile();
+          navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+        } else {
+          setFullName(profile?.full_name || user.user_metadata?.full_name || '');
+          setNeedsRole(true);
+        }
+        setLoading(false);
+      }
+    });
 
-    if (profile?.role) {
-      // User already has role – redirect to dashboard
-      await refreshProfile();
-      navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
-    } else {
-      // New Google user – ask for role
-      setFullName(profile?.full_name || user.user_metadata?.full_name || '');
-      setNeedsRole(true);
-    }
-    setLoading(false);
-  }
+    // Also check if session already exists (in case listener fired before we attached)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && !user) {
+        const user = session.user;
+        setUser(user);
+        supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile?.role) {
+              refreshProfile().then(() => {
+                navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+              });
+            } else {
+              setFullName(profile?.full_name || user.user_metadata?.full_name || '');
+              setNeedsRole(true);
+            }
+            setLoading(false);
+          });
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [navigate, refreshProfile]);
 
   async function completeProfile(e: React.FormEvent) {
     e.preventDefault();
+    if (!user) return;
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
