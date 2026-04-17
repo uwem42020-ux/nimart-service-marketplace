@@ -30,6 +30,8 @@ const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
 const AuthCallback = lazy(() => import('./pages/auth/AuthCallback'));
 
 const Notifications = lazy(() => import('./pages/shared/Notifications'));
+const Terms = lazy(() => import('./pages/shared/Terms'));
+const Privacy = lazy(() => import('./pages/shared/Privacy'));
 
 export const router = createBrowserRouter([
   {
@@ -39,6 +41,8 @@ export const router = createBrowserRouter([
       { index: true, element: <Suspense fallback={<LoadingSkeleton />}><Home /></Suspense> },
       { path: 'search', element: <Suspense fallback={<LoadingSkeleton />}><Search /></Suspense> },
       { path: 'provider/:id', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderProfile /></Suspense> },
+      { path: 'terms', element: <Suspense fallback={<LoadingSkeleton />}><Terms /></Suspense> },
+      { path: 'privacy', element: <Suspense fallback={<LoadingSkeleton />}><Privacy /></Suspense> },
     ],
   },
   {
