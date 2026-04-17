@@ -1,3 +1,4 @@
+// src/components/common/LocationDropdown.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { MapPin, X } from 'lucide-react';
@@ -17,27 +18,36 @@ interface LocationDropdownProps {
   onSelectLga: (lgaId: string, lgaName: string) => void;
   onClear: () => void;
   onClose: () => void;
+  preloadedStates?: State[];
 }
 
-export function LocationDropdown({ onSelectState, onSelectLga, onClear, onClose }: LocationDropdownProps) {
-  const [states, setStates] = useState<State[]>([]);
+export function LocationDropdown({
+  onSelectState,
+  onSelectLga,
+  onClear,
+  onClose,
+  preloadedStates,
+}: LocationDropdownProps) {
+  const [states, setStates] = useState<State[]>(preloadedStates || []);
   const [lgas, setLgas] = useState<LGA[]>([]);
   const [selectedState, setSelectedState] = useState<string>('');
   const [view, setView] = useState<'states' | 'lgas'>('states');
 
   useEffect(() => {
-    async function fetchStates() {
-      const { data } = await supabase
-        .from('lga_centers')
-        .select('state_id, state_name')
-        .order('state_name');
-      const uniqueStates = data?.filter((v, i, a) =>
-        a.findIndex(t => t.state_id === v.state_id) === i
-      ) || [];
-      setStates(uniqueStates);
+    if (!preloadedStates) {
+      async function fetchStates() {
+        const { data } = await supabase
+          .from('lga_centers')
+          .select('state_id, state_name')
+          .order('state_name');
+        const uniqueStates = data?.filter((v, i, a) =>
+          a.findIndex(t => t.state_id === v.state_id) === i
+        ) || [];
+        setStates(uniqueStates);
+      }
+      fetchStates();
     }
-    fetchStates();
-  }, []);
+  }, [preloadedStates]);
 
   useEffect(() => {
     if (!selectedState) {

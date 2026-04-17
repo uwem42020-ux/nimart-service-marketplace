@@ -1,5 +1,5 @@
 // src/pages/customer/Home.tsx
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { ProviderCard } from '../../components/provider/ProviderCard';
@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { calculateDistance } from '../../lib/distance';
 import { LocationDropdown } from '../../components/common/LocationDropdown';
 import { MapPin, ChevronDown, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TIERS } from '../../data/categories';
 import { CategoryButtons } from '../../components/common/CategoryButtons';
 import { useLocationStore } from '../../stores/locationStore';
@@ -22,20 +22,40 @@ export interface ProviderWithProfile extends ProviderRow {
   profile: ProfileRow;
   portfolio_images: PortfolioImageRow[];
   distance?: number;
+  average_rating?: number;
+  review_count?: number;
+  lastSignInAt?: string | null;
 }
 
 export default function Home() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const stateFilter = searchParams.get('state');
   const lgaFilter = searchParams.get('lga');
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationLabel, setLocationLabel] = useState('All Nigeria');
+  const [states, setStates] = useState<any[]>([]);
 
   useGeolocation();
   const { lat: globalLat, lng: globalLng } = useLocationStore();
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
+
+  // Preload states as soon as homepage mounts
+  useEffect(() => {
+    async function fetchStates() {
+      const { data } = await supabase
+        .from('lga_centers')
+        .select('state_id, state_name')
+        .order('state_name');
+      const uniqueStates = data?.filter((v, i, a) =>
+        a.findIndex(t => t.state_id === v.state_id) === i
+      ) || [];
+      setStates(uniqueStates);
+    }
+    fetchStates();
+  }, []);
 
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
@@ -94,37 +114,67 @@ export default function Home() {
       if (!providers || providers.length === 0) return [] as ProviderWithProfile[];
 
       const providerIds = providers.map(p => p.id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', providerIds);
-      const { data: portfolioImages } = await supabase
-        .from('portfolio_images')
-        .select('*')
-        .in('provider_id', providerIds);
+      const [profilesRes, portfolioRes] = await Promise.all([
+        supabase.from('profiles').select('*').in('id', providerIds),
+        supabase.from('portfolio_images').select('*').in('provider_id', providerIds)
+      ]);
+      const profiles = profilesRes.data ?? [];
+      const portfolioImages = portfolioRes.data ?? [];
 
-      const combined: ProviderWithProfile[] = providers.map(provider => {
-        const providerProfile = profiles?.find(p => p.id === provider.id) ?? ({} as ProfileRow);
-        const images = portfolioImages?.filter(img => img.provider_id === provider.id) ?? [];
+      const providersWithDetails = await Promise.all(providers.map(async (provider) => {
+        const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
+        const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
         const distance = (userLat && userLng && providerProfile.lat && providerProfile.lng)
           ? calculateDistance(userLat, userLng, providerProfile.lat, providerProfile.lng)
           : undefined;
+
+        const { data: reviews } = await supabase
+          .from('reviews')
+          .select('rating')
+          .eq('provider_id', provider.id);
+        const avgRating = reviews?.length
+          ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
+          : 0;
+
+        const { data: lastSignInData } = await supabase
+          .rpc('get_user_last_sign_in', { user_id: provider.id });
 
         return {
           ...provider,
           profile: providerProfile,
           portfolio_images: images,
           distance,
-        };
-      });
+          average_rating: avgRating,
+          review_count: reviews?.length || 0,
+          lastSignInAt: lastSignInData,
+        } as ProviderWithProfile;
+      }));
 
       if (userLat && userLng) {
-        combined.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+        providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
       }
-      return combined;
+      return providersWithDetails;
     },
     enabled: true,
   });
+
+  // Realtime subscription to update grid when provider status changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('providers-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'providers' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['featured-providers'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const handleLocationSelect = (type: 'state' | 'lga', id: string, label: string) => {
     const params = new URLSearchParams(searchParams);
@@ -148,32 +198,22 @@ export default function Home() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Hero Section - Mobile: side-by-side shorter widths, Desktop: original full width */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
-        <h1 className="text-2xl md:text-4xl font-bold mb-3">
-          Find Trusted Service Providers in Nigeria
-        </h1>
-        <p className="text-base md:text-lg opacity-90 mb-6">
-          Connect with verified professionals for any service you need
+        <p className="text-base md:text-lg text-white/90 text-center mb-5">
+          Connect with professionals near you
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 bg-white rounded-lg p-1 flex items-center">
-            <Search className="h-5 w-5 text-gray-400 ml-3" />
-            <input
-              type="text"
-              placeholder="What service do you need?"
-              className="w-full px-3 py-3 text-gray-900 focus:outline-none rounded-lg"
-            />
-          </div>
-
-          <div className="relative">
+        <div className="flex flex-row justify-center md:justify-start gap-3 max-w-3xl mx-auto">
+          {/* Location Button - mobile: fixed width, desktop: auto width */}
+          <div className="relative w-36 sm:w-44 md:w-auto">
             <button
               onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-              className="w-full sm:w-auto bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-lg px-4 py-3 flex items-center justify-between gap-2 hover:bg-white/30 transition"
+              className="w-full bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-lg px-3 md:px-4 py-3 flex items-center justify-between gap-1 md:gap-2 hover:bg-white/30 transition"
             >
-              <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                <span className="truncate max-w-[150px]">{locationLabel}</span>
+              <div className="flex items-center gap-1 md:gap-2">
+                <MapPin className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate text-sm md:text-base">{locationLabel}</span>
               </div>
               <ChevronDown className="h-4 w-4 flex-shrink-0" />
             </button>
@@ -183,21 +223,35 @@ export default function Home() {
                 onSelectLga={(id, name) => handleLocationSelect('lga', id, `${name} LGA`)}
                 onClear={clearLocation}
                 onClose={() => setShowLocationDropdown(false)}
+                preloadedStates={states}
               />
             )}
           </div>
 
-          <button className="bg-accent-500 hover:bg-accent-600 text-white px-6 py-3 rounded-lg font-medium transition">
-            Search
-          </button>
+          {/* Search Input - mobile: fixed width, desktop: flexible full width */}
+          <div className="flex bg-white rounded-lg overflow-hidden w-40 sm:w-52 md:flex-1">
+            <div className="hidden md:flex items-center pl-3">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="I am looking for..."
+              className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
+            />
+            <button className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center">
+              <Search className="h-5 w-5" />
+              <span className="hidden md:inline ml-2">Search</span>
+            </button>
+          </div>
         </div>
       </section>
 
+      {/* Categories */}
       <section className="mb-10">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Browse by Category</h2>
         <CategoryButtons tiers={TIERS} />
       </section>
 
+      {/* Featured Providers */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
@@ -209,9 +263,9 @@ export default function Home() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-48 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : (
@@ -224,7 +278,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {featuredProviders?.map((provider) => (
                   <ProviderCard key={provider.id} provider={provider} />
                 ))}

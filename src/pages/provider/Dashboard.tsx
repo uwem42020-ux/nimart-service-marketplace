@@ -1,3 +1,4 @@
+// src/pages/provider/Dashboard.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,15 +34,25 @@ export default function ProviderDashboard() {
   }, [user]);
 
   async function fetchProviderData() {
-    const { data } = await supabase
+    // Fetch provider record
+    const { data: provider } = await supabase
       .from('providers')
-      .select('*, profile:profiles(*)')
+      .select('*')
       .eq('id', user!.id)
       .single();
-    setProviderData(data);
+
+    // Fetch profile separately
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user!.id)
+      .single();
+
+    const combined = { ...provider, profile };
+    setProviderData(combined);
 
     // Redirect to setup if profile is incomplete
-    if (data && (!data.profile.lga_id || !data.business_name)) {
+    if (combined && (!combined.profile?.lga_id || !combined.business_name)) {
       navigate('/provider/setup');
     }
   }
@@ -63,8 +74,8 @@ export default function ProviderDashboard() {
       .select('rating')
       .eq('provider_id', user!.id);
 
-    const avgRating = reviews?.length 
-      ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length 
+    const avgRating = reviews?.length
+      ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
       : 0;
 
     setStats({
@@ -89,17 +100,19 @@ export default function ProviderDashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
-        {providerData && (
-          <ProviderStatusToggle 
-            providerId={user!.id} 
-            initialStatus={providerData.status} 
+        {loading ? (
+          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse" />
+        ) : providerData ? (
+          <ProviderStatusToggle
+            providerId={user!.id}
+            initialStatus={providerData.status}
             onStatusChange={() => fetchProviderData()}
           />
-        )}
+        ) : null}
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -132,7 +145,7 @@ export default function ProviderDashboard() {
             <div>
               <p className="text-sm text-gray-500">Rating</p>
               <p className="text-2xl font-bold">
-                {stats.averageRating.toFixed(1)} 
+                {stats.averageRating.toFixed(1)}
                 <span className="text-sm text-gray-500 ml-1">({stats.reviewCount})</span>
               </p>
             </div>
@@ -141,8 +154,8 @@ export default function ProviderDashboard() {
         </div>
       </div>
 
-      {/* Setup Checklist (if incomplete) */}
-      {providerData && (!providerData.profile.lga_id || !providerData.business_name) && (
+      {/* Setup Checklist */}
+      {providerData && (!providerData.profile?.lga_id || !providerData.business_name) && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -170,7 +183,7 @@ export default function ProviderDashboard() {
         <Link to="/provider/portfolio" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Image className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Portfolio</h3>
-          <p className="text-sm text-gray-500">Upload photos of your best work</p>
+          <p className="text15 text-gray-500">Upload photos of your best work</p>
         </Link>
         <Link to="/provider/profile" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Settings className="h-8 w-8 text-primary-600 mb-4" />

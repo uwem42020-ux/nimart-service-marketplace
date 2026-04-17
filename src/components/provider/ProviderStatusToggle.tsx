@@ -10,9 +10,9 @@ interface ProviderStatusToggleProps {
 }
 
 const statusConfig = {
-  available: { label: 'Available', color: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-100' },
-  busy: { label: 'Busy', color: 'bg-yellow-500', text: 'text-yellow-700', bg: 'bg-yellow-100' },
-  away: { label: 'Away', color: 'bg-gray-400', text: 'text-gray-700', bg: 'bg-gray-100' },
+  available: { label: 'Active', icon: '/active.svg' },
+  busy: { label: 'Busy', icon: '/busy.svg' },
+  away: { label: 'Away', icon: '/away.svg' },
 };
 
 export function ProviderStatusToggle({ providerId, initialStatus, onStatusChange }: ProviderStatusToggleProps) {
@@ -25,16 +25,17 @@ export function ProviderStatusToggle({ providerId, initialStatus, onStatusChange
       setShowDropdown(false);
       return;
     }
-    
+
     setIsUpdating(true);
     try {
+      // ✅ Only update status — is_available stays true (providers remain visible)
       const { error } = await supabase
         .from('providers')
-        .update({ status: newStatus, is_available: newStatus === 'available' })
+        .update({ status: newStatus })
         .eq('id', providerId);
 
       if (error) throw error;
-      
+
       setStatus(newStatus);
       onStatusChange?.(newStatus);
       toast.success(`Status changed to ${newStatus}`);
@@ -54,16 +55,13 @@ export function ProviderStatusToggle({ providerId, initialStatus, onStatusChange
         onClick={() => setShowDropdown(!showDropdown)}
         disabled={isUpdating}
         className={cn(
-          "flex items-center space-x-2 px-4 py-2 rounded-full border text-sm font-medium transition-colors",
-          currentConfig.bg,
-          currentConfig.text,
-          "border-transparent",
+          "flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition",
           isUpdating && "opacity-50 cursor-not-allowed"
         )}
       >
-        <span className={cn("h-2.5 w-2.5 rounded-full", currentConfig.color)} />
-        <span>{currentConfig.label}</span>
-        <svg className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <img src={currentConfig.icon} alt={status} className="h-5 w-5" />
+        <span className="text-sm font-medium text-gray-700">{currentConfig.label}</span>
+        <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -75,12 +73,12 @@ export function ProviderStatusToggle({ providerId, initialStatus, onStatusChange
               key={key}
               onClick={() => updateStatus(key as any)}
               className={cn(
-                "w-full flex items-center px-4 py-2 text-sm hover:bg-gray-50",
+                "w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50",
                 status === key && "bg-gray-50"
               )}
             >
-              <span className={cn("h-2 w-2 rounded-full mr-2", config.color)} />
-              {config.label}
+              <img src={config.icon} alt={key} className="h-4 w-4" />
+              <span>{config.label}</span>
             </button>
           ))}
         </div>

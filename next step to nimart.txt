@@ -1,0 +1,58 @@
+The Roadmap to a Branded Login
+This process requires you to provide some key information to Google for their review. It typically takes 2-3 business days.
+
+Prerequisites: Get Your Docs Ready: Before you start, ensure you have accessible URLs for:
+
+Homepage: https://nimart.ng
+
+Privacy Policy: https://nimart.ng/privacy (Create this page if it doesn't exist)
+
+Terms of Service: https://nimart.ng/terms (Create this page if it doesn't exist)
+
+App Logo: A square image (ideally 120x120px) of the Nimart logo.
+
+Navigate to the Branding Section: Go to the Google Cloud Console. Make sure the correct project is selected, then navigate to "APIs & Services" → "OAuth consent screen". Once there, look for the "Branding" option in the left sidebar.
+
+Configure Brand Information: In the Branding section, fill out the following:
+
+App Name: Enter "Nimart".
+
+User support email: Select a support email address for users to contact.
+
+Upload Logo: Upload the Nimart logo you prepared.
+
+Homepage URL: Enter https://nimart.ng.
+
+Privacy Policy URL: Enter the URL for your privacy policy.
+
+Terms of Service URL: Enter the URL for your terms of service (this is optional but recommended).
+
+Authorized Domains: Add nimart.ng to this list. This is a critical step, as Google will need to verify your ownership of this domain.
+
+Verify Domain Ownership (Crucial Step): You must prove to Google that you own nimart.ng. This is done through the Google Search Console.
+
+Go to the Google Search Console.
+
+Add nimart.ng as a new property.
+
+Follow the instructions to verify ownership (the most common method is adding a TXT record to your DNS settings). Once verified, this will link your domain to your Google Cloud project.
+
+Submit for Verification: Once all the information is filled out and your domain is verified, scroll down and click "Submit for verification". Google's Trust and Safety team will review your application.
+
+✨ Important Considerations & Potential Issues
+Publishing Status: Ensure your app's publishing status is set to "In Production". If it's in "Testing," only test users will see the branded screen.
+
+Homepage URL Rejection: A common issue is Google rejecting the homepage URL as "unresponsive." If this happens, double-check that your nimart.ng homepage loads quickly, is accessible globally, and clearly describes what Nimart is. You can then resubmit after updating the URL in the Cloud Console.
+
+Pending Developer Action: If you get stuck in this state, it usually means Google is waiting for more information from you. Check the email inbox associated with your Google Cloud project for a message from api-oauth-dev-verification@google.com.
+
+Patience is Key: The review process takes time, and initial rejections are common. Just address any feedback from Google and resubmit.
+
+Once this process is complete, your users will see "Nimart" on the OAuth consent screen, which is a huge win for professionalism and user trust. Good luck with the submission, and let me know if you hit any snags.
+
+
+
+
+
+
+
