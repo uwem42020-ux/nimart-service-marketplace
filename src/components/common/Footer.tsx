@@ -1,3 +1,4 @@
+// src/components/common/Footer.tsx
 import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
 import logo from '/logo.png';
@@ -8,20 +9,19 @@ export function Footer() {
   return (
     <footer className="bg-gray-900 text-white">
       {/* Main Footer Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {/* Mobile: 2 columns, Desktop: 4 columns */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           
-          {/* Brand Column */}
+          {/* Column 1: Brand & Social */}
           <div>
             <Link to="/" className="flex items-center mb-4">
               <img src={logo} alt="Nimart" className="h-10 w-auto brightness-0 invert" />
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              Nigeria's trusted marketplace connecting customers with verified service professionals. 
-              Quality services, secure payments, and peace of mind.
+            <p className="text-gray-400 text-sm leading-relaxed mb-4">
+              Nigeria's trusted marketplace connecting customers with verified service professionals.
             </p>
-            {/* Social Links */}
-            <div className="flex gap-4 mt-6">
+            <div className="flex gap-4">
               <a href="https://facebook.com/nimartng" target="_blank" rel="noopener noreferrer" 
                  className="text-gray-400 hover:text-white transition-colors">
                 <Facebook className="h-5 w-5" />
@@ -41,7 +41,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Quick Links */}
+          {/* Column 2: Quick Links */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2 text-gray-400">
@@ -53,7 +53,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Contact Information */}
+          {/* Column 3: Contact Information */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
             <ul className="space-y-3 text-gray-400">
@@ -79,7 +79,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Legal & Resources */}
+          {/* Column 4: Legal & Resources */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Legal & Resources</h3>
             <ul className="space-y-2 text-gray-400">

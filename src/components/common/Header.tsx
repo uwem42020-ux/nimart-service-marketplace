@@ -1,10 +1,15 @@
+// src/components/common/Header.tsx
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Bell, MessageCircle, Calendar, User, ChevronDown } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { OptimizedImage } from './OptimizedImage';
+import { CustomAvatarIcon } from '../icons/CustomAvatarIcon';
+import { CustomBellIcon } from '../icons/CustomBellIcon';
+import { CustomMessageIcon } from '../icons/CustomMessageIcon';
+import { CustomBookingIcon } from '../icons/CustomBookingIcon';
 import logo from '/logo.png';
 
 export function Header() {
@@ -13,6 +18,7 @@ export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isOnMessagesPage = location.pathname.includes('/messages');
   const showMessagesBadge = !isOnMessagesPage && counts.messages > 0;
@@ -69,98 +75,140 @@ export function Header() {
     navigate(getNotificationsLink());
   };
 
+  const handleMouseEnter = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    if (user) setIsUserMenuOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!user) return;
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsUserMenuOpen(false);
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-md border-b border-gray-200/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
+          {/* Logo */}
           <Link to="/" className="flex items-center">
             <img src={logo} alt="Nimart" className="h-10 w-auto" />
           </Link>
 
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Right navigation */}
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            {/* Bookings */}
             <button
               onClick={handleBookingsClick}
-              className="relative p-2 text-gray-600 hover:text-primary-600"
+              title="Bookings"
+              className="relative"
             >
-              <Calendar className="h-6 w-6" />
+              <CustomBookingIcon />
               {counts.bookings > 0 && (
-                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full">
                   {counts.bookings > 9 ? '9+' : counts.bookings}
                 </span>
               )}
             </button>
 
+            {/* Messages */}
             <button
               onClick={handleMessagesClick}
-              className="relative p-2 text-gray-600 hover:text-primary-600"
+              title="Messages"
+              className="relative"
             >
-              <MessageCircle className="h-6 w-6" />
+              <CustomMessageIcon />
               {showMessagesBadge && (
-                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full">
                   {counts.messages > 9 ? '9+' : counts.messages}
                 </span>
               )}
             </button>
 
+            {/* Notifications */}
             <button
               onClick={handleNotificationsClick}
-              className="relative p-2 text-gray-600 hover:text-primary-600"
+              title="Notifications"
+              className="relative"
             >
-              <Bell className="h-6 w-6" />
+              <CustomBellIcon />
               {counts.system > 0 && (
-                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full">
                   {counts.system > 9 ? '9+' : counts.system}
                 </span>
               )}
             </button>
 
-            <div className="relative">
+            {/* User Menu */}
+            <div
+              className="relative"
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+            >
               <button
+                title={user ? "Account" : "Sign In"}
                 onClick={() => {
                   if (!user) {
                     navigate('/auth/signin');
-                  } else {
-                    setIsUserMenuOpen(!isUserMenuOpen);
                   }
                 }}
-                className="flex items-center space-x-2 p-1 rounded-full hover:bg-gray-100/50"
+                className="flex items-center space-x-1 p-1"
               >
                 {user && profile?.avatar_url ? (
                   <OptimizedImage
                     src={profile.avatar_url}
                     alt={profile.full_name || 'User'}
-                    className="h-8 w-8 rounded-full object-cover"
+                    className="h-8 w-8 rounded-full object-cover ring-2 ring-white"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    <User className="h-5 w-5 text-gray-600" />
-                  </div>
+                  <CustomAvatarIcon />
                 )}
                 {user && <ChevronDown className="h-4 w-4 text-gray-500" />}
               </button>
 
+              {/* Dropdown Menu */}
               {user && isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-200 z-10">
-                  <Link
-                    to={getDashboardLink()}
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to={profile?.role === 'provider' ? '/provider/profile' : '/customer/profile'}
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    Profile Settings
-                  </Link>
-                  <button
-                    onClick={handleSignOut}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Sign Out
-                  </button>
+                <div
+                  className="absolute right-0 pt-2 z-10"
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <div className="bg-white rounded-md shadow-lg py-1 border border-gray-200 min-w-[180px]">
+                    <Link
+                      to={getDashboardLink()}
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <LayoutDashboard className="h-4 w-4 text-gray-500" />
+                      Dashboard
+                    </Link>
+                    <Link
+                      to={profile?.role === 'provider' ? '/provider/profile' : '/customer/profile'}
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <Settings className="h-4 w-4 text-gray-500" />
+                      Profile Settings
+                    </Link>
+                    <hr className="my-1 border-gray-100" />
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -10,8 +10,10 @@ import { MapPin, ChevronDown, Search } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { TIERS } from '../../data/categories';
 import { CategoryButtons } from '../../components/common/CategoryButtons';
+import { CategorySidebar } from '../../components/common/CategorySidebar';
 import { useLocationStore } from '../../stores/locationStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { SEO } from '../../components/common/SEO';
 import type { Database } from '../../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -36,13 +38,14 @@ export default function Home() {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationLabel, setLocationLabel] = useState('All Nigeria');
   const [states, setStates] = useState<any[]>([]);
+  const [providerCounts, setProviderCounts] = useState<Record<string, number>>({});
+  const [subcategoryCounts, setSubcategoryCounts] = useState<Record<number, number>>({});
 
   useGeolocation();
   const { lat: globalLat, lng: globalLng } = useLocationStore();
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
 
-  // Preload states as soon as homepage mounts
   useEffect(() => {
     async function fetchStates() {
       const { data } = await supabase
@@ -60,6 +63,26 @@ export default function Home() {
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
+      const { data: allProviders, error: allError } = await supabase
+        .from('providers')
+        .select('id, selected_category_slug, selected_subcategory_id')
+        .eq('is_available', true);
+
+      if (!allError && allProviders) {
+        const catCounts: Record<string, number> = {};
+        const subCounts: Record<number, number> = {};
+        allProviders.forEach(p => {
+          if (p.selected_category_slug) {
+            catCounts[p.selected_category_slug] = (catCounts[p.selected_category_slug] || 0) + 1;
+          }
+          if (p.selected_subcategory_id) {
+            subCounts[p.selected_subcategory_id] = (subCounts[p.selected_subcategory_id] || 0) + 1;
+          }
+        });
+        setProviderCounts(catCounts);
+        setSubcategoryCounts(subCounts);
+      }
+
       let providerQuery = supabase
         .from('providers')
         .select(`
@@ -158,7 +181,6 @@ export default function Home() {
     enabled: true,
   });
 
-  // Realtime subscription to update grid when provider status changes
   useEffect(() => {
     const channel = supabase
       .channel('providers-status')
@@ -198,14 +220,15 @@ export default function Home() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Hero Section - Mobile: side-by-side shorter widths, Desktop: original full width */}
+      <SEO />
+
+      {/* Hero Section - Mobile Optimized */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
         <p className="text-base md:text-lg text-white/90 text-center mb-5">
           Connect with professionals near you
         </p>
 
         <div className="flex flex-row justify-center md:justify-start gap-3 max-w-3xl mx-auto">
-          {/* Location Button - mobile: fixed width, desktop: auto width */}
           <div className="relative w-36 sm:w-44 md:w-auto">
             <button
               onClick={() => setShowLocationDropdown(!showLocationDropdown)}
@@ -228,7 +251,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Search Input - mobile: fixed width, desktop: flexible full width */}
           <div className="flex bg-white rounded-lg overflow-hidden w-40 sm:w-52 md:flex-1">
             <div className="hidden md:flex items-center pl-3">
               <Search className="h-5 w-5 text-gray-400" />
@@ -246,47 +268,91 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="mb-10">
-        <CategoryButtons tiers={TIERS} />
-      </section>
-
-      {/* Featured Providers */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">
-            {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Featured Providers'}
-          </h2>
-          <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-            View all →
-          </Link>
+      {/* Desktop: Category Sidebar + Providers */}
+      <div className="hidden md:flex gap-6">
+        <div className="w-64 flex-shrink-0">
+          <CategorySidebar providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
         </div>
 
-        {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-            ))}
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Featured Providers'}
+            </h2>
+            <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+              View all →
+            </Link>
           </div>
-        ) : (
-          <>
-            {featuredProviders?.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">No providers found in this area.</p>
-                <button onClick={clearLocation} className="mt-2 text-primary-600 hover:underline">
-                  View all Nigeria
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {featuredProviders?.map((provider) => (
-                  <ProviderCard key={provider.id} provider={provider} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </section>
+
+          {isLoading ? (
+            <div className="grid grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {featuredProviders?.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">No providers found in this area.</p>
+                  <button onClick={clearLocation} className="mt-2 text-primary-600 hover:underline">
+                    View all Nigeria
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  {featuredProviders?.map((provider) => (
+                    <ProviderCard key={provider.id} provider={provider} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile: Category Grid + Providers */}
+      <div className="block md:hidden">
+        <section className="mb-10">
+          <CategoryButtons />
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Featured Providers'}
+            </h2>
+            <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+              View all →
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <div className="grid grid-cols-2 gap-4">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {featuredProviders?.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">No providers found in this area.</p>
+                  <button onClick={clearLocation} className="mt-2 text-primary-600 hover:underline">
+                    View all Nigeria
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {featuredProviders?.map((provider) => (
+                    <ProviderCard key={provider.id} provider={provider} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

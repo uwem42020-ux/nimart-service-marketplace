@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ProviderStatusToggle } from '../../components/provider/ProviderStatusToggle';
-import { Calendar, MessageCircle, Star, Settings, Image } from 'lucide-react';
+import { Calendar, MessageCircle, Star, Settings, Image, Package } from 'lucide-react';
 
 interface DashboardStats {
   totalBookings: number;
@@ -174,7 +174,7 @@ export default function ProviderDashboard() {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Link to="/provider/bookings" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Calendar className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Manage Bookings</h3>
@@ -183,7 +183,12 @@ export default function ProviderDashboard() {
         <Link to="/provider/portfolio" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Image className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Portfolio</h3>
-          <p className="text15 text-gray-500">Upload photos of your best work</p>
+          <p className="text-sm text-gray-500">Upload photos of your best work</p>
+        </Link>
+        <Link to="/provider/services" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+          <Package className="h-8 w-8 text-primary-600 mb-4" />
+          <h3 className="font-semibold text-gray-900">Services & Pricing</h3>
+          <p className="text-sm text-gray-500">Define your service offerings and prices</p>
         </Link>
         <Link to="/provider/profile" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Settings className="h-8 w-8 text-primary-600 mb-4" />

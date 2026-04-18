@@ -8,6 +8,7 @@ import { BookingFormModal } from '../../components/customer/BookingFormModal';
 import { PortfolioGallery } from '../../components/provider/PortfolioGallery';
 import { ReviewsList } from '../../components/reviews/ReviewsList';
 import { ChatWidget } from '../../components/chat/ChatWidget';
+import { SEO } from '../../components/common/SEO';
 import {
   MapPin,
   Star,
@@ -22,6 +23,7 @@ import {
   Shield,
   Eye,
   EyeOff,
+  Package,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
@@ -36,11 +38,13 @@ type PortfolioImageRow = Database['public']['Tables']['portfolio_images']['Row']
 type ReviewRow = Database['public']['Tables']['reviews']['Row'] & {
   reviewer: { full_name: string | null; avatar_url: string | null } | null;
 };
+type ServiceRow = Database['public']['Tables']['provider_services']['Row'];
 
 interface FullProvider extends ProviderRow {
   profile: ProfileRow | null;
   portfolio_images: PortfolioImageRow[];
   reviews: ReviewRow[];
+  services: ServiceRow[];
   distance?: number;
   completedBookings?: number;
   lastSignInAt?: string | null;
@@ -50,6 +54,13 @@ const statusIconMap: Record<string, string> = {
   available: '/active.svg',
   busy: '/busy.svg',
   away: '/away.svg',
+};
+
+const priceTypeLabels: Record<string, string> = {
+  fixed: 'Fixed Price',
+  hourly: 'Per Hour',
+  daily: 'Per Day',
+  negotiable: 'Negotiable',
 };
 
 export default function ProviderProfile() {
@@ -77,7 +88,6 @@ export default function ProviderProfile() {
     callback();
   };
 
-  // Auto‑open booking modal if ?book=true
   useEffect(() => {
     if (searchParams.get('book') === 'true' && user) {
       setShowBookingModal(true);
@@ -128,6 +138,12 @@ export default function ProviderProfile() {
         .eq('provider_id', id)
         .order('created_at', { ascending: false });
 
+      const { data: services } = await supabase
+        .from('provider_services')
+        .select('*')
+        .eq('provider_id', id)
+        .order('created_at', { ascending: true });
+
       const { data: completedData } = await supabase
         .rpc('get_provider_completed_bookings', { provider_id: id });
 
@@ -139,6 +155,7 @@ export default function ProviderProfile() {
         profile: profileData ?? null,
         portfolio_images: portfolioImages ?? [],
         reviews: (reviews as ReviewRow[]) ?? [],
+        services: services ?? [],
         completedBookings: completedData ?? 0,
         lastSignInAt: lastSignInData,
       };
@@ -251,8 +268,37 @@ export default function ProviderProfile() {
     ? `${provider.profile.lga_name}, ${provider.profile?.state_name || ''}`
     : 'Location not set';
 
+  const providerSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": provider.business_name || provider.profile?.full_name,
+    "description": provider.description,
+    "image": provider.profile?.avatar_url,
+    "telephone": provider.profile?.phone,
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": provider.profile?.lga_name,
+      "addressRegion": provider.profile?.state_name,
+      "addressCountry": "NG"
+    },
+    "aggregateRating": provider.reviews.length > 0 ? {
+      "@type": "AggregateRating",
+      "ratingValue": avgRating,
+      "reviewCount": provider.reviews.length
+    } : undefined
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <SEO
+        title={provider.business_name || provider.profile?.full_name || 'Provider Profile'}
+        description={provider.description || `Book ${provider.business_name} on Nimart. Verified professional in ${provider.profile?.lga_name}.`}
+        image={provider.profile?.avatar_url || '/og-image.png'}
+        url={`https://nimart.ng/provider/${id}`}
+        type="profile"
+        schema={providerSchema}
+      />
+
       <button
         onClick={() => navigate(-1)}
         className="mb-4 flex items-center text-gray-600 hover:text-primary-600"
@@ -382,6 +428,32 @@ export default function ProviderProfile() {
           </div>
         </div>
 
+        {/* Services & Pricing */}
+        {provider.services.length > 0 && (
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary-600" />
+              Services & Pricing
+            </h2>
+            <div className="space-y-3">
+              {provider.services.map((service) => (
+                <div key={service.id} className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-gray-900">{service.name}</p>
+                    {service.description && (
+                      <p className="text-sm text-gray-500">{service.description}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-primary-600">₦{service.price.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">{priceTypeLabels[service.price_type]}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Portfolio */}
         {provider.portfolio_images.length > 0 && (
           <div className="p-6 border-b">
@@ -427,6 +499,7 @@ export default function ProviderProfile() {
           </div>
         )}
 
+        {/* Reviews */}
         <div className="p-6">
           <h2 className="text-xl font-semibold mb-4">Reviews</h2>
           <ReviewsList reviews={provider.reviews} />
