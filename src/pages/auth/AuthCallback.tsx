@@ -1,3 +1,4 @@
+// src/pages/auth/AuthCallback.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -16,57 +17,54 @@ export default function AuthCallback() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    // Supabase automatically processes the hash fragment when the client is initialized.
-    // We just need to wait for the session to be established.
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const user = session.user;
-        setUser(user);
+    let mounted = true;
 
-        // Check if profile exists with role
-        const { data: profile } = await supabase
+    const handleCallback = async () => {
+      try {
+        // Wait for Supabase to process the OAuth token and establish a session
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) throw error;
+        if (!session) throw new Error('No session established');
+
+        const currentUser = session.user;
+        if (!mounted) return;
+        setUser(currentUser);
+
+        // Check if profile exists and has a role
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role, full_name')
-          .eq('id', user.id)
+          .eq('id', currentUser.id)
           .single();
 
+        if (profileError && profileError.code !== 'PGRST116') {
+          // PGRST116 = no rows found, which is expected for new users
+          throw profileError;
+        }
+
         if (profile?.role) {
+          // Existing user with role – refresh context and go to dashboard
           await refreshProfile();
-          navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+          navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard', { replace: true });
         } else {
-          setFullName(profile?.full_name || user.user_metadata?.full_name || '');
+          // New user – ask for role
+          setFullName(profile?.full_name || currentUser.user_metadata?.full_name || '');
           setNeedsRole(true);
         }
-        setLoading(false);
+      } catch (err: any) {
+        console.error('Auth callback error:', err);
+        toast.error('Authentication failed. Please try again.');
+        navigate('/auth/signin', { replace: true });
+      } finally {
+        if (mounted) setLoading(false);
       }
-    });
+    };
 
-    // Also check if session already exists (in case listener fired before we attached)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !user) {
-        const user = session.user;
-        setUser(user);
-        supabase
-          .from('profiles')
-          .select('role, full_name')
-          .eq('id', user.id)
-          .single()
-          .then(({ data: profile }) => {
-            if (profile?.role) {
-              refreshProfile().then(() => {
-                navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
-              });
-            } else {
-              setFullName(profile?.full_name || user.user_metadata?.full_name || '');
-              setNeedsRole(true);
-            }
-            setLoading(false);
-          });
-      }
-    });
+    handleCallback();
 
     return () => {
-      authListener.subscription.unsubscribe();
+      mounted = false;
     };
   }, [navigate, refreshProfile]);
 
@@ -75,6 +73,7 @@ export default function AuthCallback() {
     if (!user) return;
     setSubmitting(true);
     try {
+      // Update profile with chosen role and name
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -87,6 +86,7 @@ export default function AuthCallback() {
       if (profileError) throw profileError;
 
       if (role === 'provider') {
+        // Create basic provider record
         const { error: providerError } = await supabase
           .from('providers')
           .insert([{
@@ -96,13 +96,14 @@ export default function AuthCallback() {
             is_available: true,
             status: 'available',
           }]);
+
         if (providerError) throw providerError;
 
         toast.success('Account created! Please complete your business profile.');
-        navigate('/provider/setup');
+        navigate('/provider/setup', { replace: true });
       } else {
         toast.success('Welcome to Nimart!');
-        navigate('/customer/dashboard');
+        navigate('/customer/dashboard', { replace: true });
       }
     } catch (error: any) {
       toast.error(error.message);

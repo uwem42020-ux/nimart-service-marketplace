@@ -8,7 +8,7 @@ import { calculateDistance } from '../lib/distance';
 import { FilterSidebar } from '../components/search/FilterSidebar';
 import { SortDropdown } from '../components/search/SortDropdown';
 import { SEO } from '../components/common/SEO';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Search as SearchIcon, X } from 'lucide-react';
 import type { Database } from '../types/database';
@@ -48,21 +48,17 @@ export default function Search() {
   const userLat = profile?.lat ?? undefined;
   const userLng = profile?.lng ?? undefined;
 
-  // Local state for search input
   const [searchInput, setSearchInput] = useState(keyword);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
   const debouncedSearchTerm = useDebounce(searchInput, 300);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Update input when URL keyword changes
   useEffect(() => {
     setSearchInput(keyword);
   }, [keyword]);
 
-  // Fetch smart suggestions
   useEffect(() => {
     if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) {
       setSuggestions([]);
@@ -71,52 +67,46 @@ export default function Search() {
 
     const fetchSuggestions = async () => {
       const term = debouncedSearchTerm.trim();
-      
-      // Search providers (name + business_name)
+      const pattern = `%${term}%`;
+
       const providerPromise = supabase
         .from('providers')
-        .select('id, business_name, profile:profiles(full_name)')
-        .or(`business_name.ilike.%${term}%,profile.full_name.ilike.%${term}%`)
+        .select('id, business_name, profile:profiles!inner(full_name)')
+        .or(`business_name.ilike.${pattern},profile.full_name.ilike.${pattern}`)
         .limit(3);
 
-      // Search categories and subcategories (from static data, but we can also query DB)
-      // For simplicity, we'll just search provider services
       const servicePromise = supabase
         .from('provider_services')
-        .select('id, name, provider:providers(business_name)')
-        .ilike('name', `%${term}%`)
+        .select('id, name, provider:providers!inner(business_name)')
+        .ilike('name', pattern)
         .limit(3);
 
       const [providerRes, serviceRes] = await Promise.all([providerPromise, servicePromise]);
 
       const newSuggestions: Suggestion[] = [];
 
-      if (providerRes.data) {
-        providerRes.data.forEach(p => {
-          const name = p.business_name || p.profile?.full_name;
-          if (name) {
-            newSuggestions.push({
-              type: 'provider',
-              text: name,
-              subtext: 'Provider',
-              link: `/provider/${p.id}`,
-            });
-          }
-        });
-      }
-
-      if (serviceRes.data) {
-        serviceRes.data.forEach(s => {
+      providerRes.data?.forEach(p => {
+        const name = p.business_name || (p.profile as any)?.full_name;
+        if (name) {
           newSuggestions.push({
-            type: 'service',
-            text: s.name,
-            subtext: s.provider?.business_name || 'Service',
-            link: `/search?q=${encodeURIComponent(s.name)}`,
+            type: 'provider',
+            text: name,
+            subtext: 'Provider',
+            link: `/provider/${p.id}`,
           });
-        });
-      }
+        }
+      });
 
-      // Deduplicate by text
+      serviceRes.data?.forEach(s => {
+        const providerName = (s.provider as any)?.business_name;
+        newSuggestions.push({
+          type: 'service',
+          text: s.name,
+          subtext: providerName || 'Service',
+          link: `/search?q=${encodeURIComponent(s.name)}`,
+        });
+      });
+
       const unique = newSuggestions.filter(
         (v, i, a) => a.findIndex(t => t.text === v.text) === i
       );
@@ -126,7 +116,6 @@ export default function Search() {
     fetchSuggestions();
   }, [debouncedSearchTerm]);
 
-  // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -145,14 +134,14 @@ export default function Search() {
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     const params = new URLSearchParams(searchParams);
-    if (searchInput.trim()) {
-      params.set('q', searchInput.trim());
+    const trimmed = searchInput.trim();
+    if (trimmed) {
+      params.set('q', trimmed);
     } else {
       params.delete('q');
     }
     setSearchParams(params);
     setShowSuggestions(false);
-    setIsTyping(false);
   };
 
   const handleSuggestionClick = (suggestion: Suggestion) => {
@@ -186,10 +175,20 @@ export default function Search() {
         `)
         .eq('is_available', true);
 
-      // Full-text search across business_name and description (and optionally profile.full_name via join)
       if (keyword) {
-        // Join with profiles to search full_name as well
-        query = query.or(`business_name.ilike.%${keyword}%,description.ilike.%${keyword}%`);
+        const pattern = `%${keyword}%`;
+        // join with profiles to search full_name
+        const { data: profilesByName } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('full_name', pattern);
+
+        const providerIdsFromName = profilesByName?.map(p => p.id) || [];
+        if (providerIdsFromName.length > 0) {
+          query = query.or(`business_name.ilike.${pattern},description.ilike.${pattern},id.in.(${providerIdsFromName.join(',')})`);
+        } else {
+          query = query.or(`business_name.ilike.${pattern},description.ilike.${pattern}`);
+        }
       }
       if (tier) {
         query = query.eq('selected_tier_slug', tier);
@@ -300,7 +299,7 @@ export default function Search() {
         </aside>
 
         <main className="flex-1">
-          {/* Smart Search Bar */}
+          {/* Search Bar with Suggestions */}
           <div className="mb-6 relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <div className="relative">
@@ -312,7 +311,6 @@ export default function Search() {
                   onChange={(e) => {
                     setSearchInput(e.target.value);
                     setShowSuggestions(true);
-                    setIsTyping(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
                   placeholder="Search services, providers..."
@@ -338,7 +336,7 @@ export default function Search() {
               <button type="submit" className="hidden">Search</button>
             </form>
 
-            {/* Smart Suggestions Dropdown */}
+            {/* Suggestions Dropdown */}
             {showSuggestions && debouncedSearchTerm && suggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
