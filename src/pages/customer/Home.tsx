@@ -4,7 +4,6 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { ProviderCard } from '../../components/provider/ProviderCard';
 import { useAuth } from '../../contexts/AuthContext';
-import { calculateDistance } from '../../lib/distance';
 import { LocationDropdown } from '../../components/common/LocationDropdown';
 import { MapPin, ChevronDown, Search } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -42,9 +41,15 @@ export default function Home() {
   const [subcategoryCounts, setSubcategoryCounts] = useState<Record<number, number>>({});
 
   useGeolocation();
-  const { lat: globalLat, lng: globalLng } = useLocationStore();
+  const { lat: globalLat, lng: globalLng, permissionGranted } = useLocationStore();
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
+
+  useEffect(() => {
+    if (permissionGranted && globalLat && globalLng && !profile?.lat) {
+      setLocationLabel('📍 Near you');
+    }
+  }, [permissionGranted, globalLat, globalLng, profile?.lat]);
 
   useEffect(() => {
     async function fetchStates() {
@@ -137,18 +142,44 @@ export default function Home() {
       if (!providers || providers.length === 0) return [] as ProviderWithProfile[];
 
       const providerIds = providers.map(p => p.id);
-      const [profilesRes, portfolioRes] = await Promise.all([
-        supabase.from('profiles').select('*').in('id', providerIds),
-        supabase.from('portfolio_images').select('*').in('provider_id', providerIds)
-      ]);
-      const profiles = profilesRes.data ?? [];
-      const portfolioImages = portfolioRes.data ?? [];
+
+      // Fetch profiles with PostGIS distance if user location is available
+      let profiles: ProfileRow[] = [];
+      if (userLat && userLng) {
+        const { data: profilesWithDistance, error: rpcError } = await supabase
+          .rpc('get_providers_with_distance', {
+            user_lat: userLat,
+            user_lng: userLng,
+            provider_ids: providerIds
+          });
+
+        if (!rpcError && profilesWithDistance) {
+          profiles = profilesWithDistance.map((p: any) => ({
+            ...p,
+            distance_meters: p.distance_meters,
+          })) as ProfileRow[];
+        }
+      }
+
+      // Fallback: fetch profiles normally if RPC fails or no user location
+      if (profiles.length === 0) {
+        const { data: fallbackProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', providerIds);
+        profiles = fallbackProfiles || [];
+      }
+
+      const { data: portfolioImages } = await supabase
+        .from('portfolio_images')
+        .select('*')
+        .in('provider_id', providerIds);
 
       const providersWithDetails = await Promise.all(providers.map(async (provider) => {
         const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
-        const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
-        const distance = (userLat && userLng && providerProfile.lat && providerProfile.lng)
-          ? calculateDistance(userLat, userLng, providerProfile.lat, providerProfile.lng)
+        const images = (portfolioImages || []).filter(img => img.provider_id === provider.id);
+        const distance = (providerProfile as any).distance_meters
+          ? (providerProfile as any).distance_meters / 1000 // Convert meters to kilometers
           : undefined;
 
         const { data: reviews } = await supabase
@@ -176,6 +207,7 @@ export default function Home() {
       if (userLat && userLng) {
         providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
       }
+
       return providersWithDetails;
     },
     enabled: true,
@@ -222,7 +254,6 @@ export default function Home() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <SEO />
 
-      {/* Hero Section - Mobile Optimized */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
         <p className="text-base md:text-lg text-white/90 text-center mb-5">
           Connect with professionals near you
@@ -260,7 +291,10 @@ export default function Home() {
               placeholder="I am looking for..."
               className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
             />
-            <button className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center">
+            <button
+              onClick={() => navigate('/search?q=' + encodeURIComponent((document.querySelector('input[type="text"]') as HTMLInputElement)?.value || ''))}
+              className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center"
+            >
               <Search className="h-5 w-5" />
               <span className="hidden md:inline ml-2">Search</span>
             </button>
@@ -268,7 +302,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Desktop: Category Sidebar + Providers */}
       <div className="hidden md:flex gap-6">
         <div className="w-64 flex-shrink-0">
           <CategorySidebar providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
@@ -311,7 +344,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Mobile: Category Grid + Providers */}
       <div className="block md:hidden">
         <section className="mb-10">
           <CategoryButtons />
