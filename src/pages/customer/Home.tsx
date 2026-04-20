@@ -1,19 +1,20 @@
 // src/pages/customer/Home.tsx
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { ProviderCard } from '../../components/provider/ProviderCard';
 import { useAuth } from '../../contexts/AuthContext';
-import { calculateDistance } from '../../lib/distance';
 import { LocationDropdown } from '../../components/common/LocationDropdown';
-import { MapPin, ChevronDown, Search } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { MapPin, ChevronDown, Search, WifiOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { TIERS } from '../../data/categories';
 import { CategoryButtons } from '../../components/common/CategoryButtons';
 import { CategorySidebar } from '../../components/common/CategorySidebar';
 import { useLocationStore } from '../../stores/locationStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { useOffline } from '../../hooks/useOffline';
 import { SEO } from '../../components/common/SEO';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 import type { Database } from '../../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -32,6 +33,7 @@ export interface ProviderWithProfile extends ProviderRow {
 export default function Home() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const stateFilter = searchParams.get('state');
   const lgaFilter = searchParams.get('lga');
@@ -40,11 +42,39 @@ export default function Home() {
   const [states, setStates] = useState<any[]>([]);
   const [providerCounts, setProviderCounts] = useState<Record<string, number>>({});
   const [subcategoryCounts, setSubcategoryCounts] = useState<Record<number, number>>({});
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const autoLocationApplied = useRef(false);
+  const isOffline = useOffline();
 
   useGeolocation();
-  const { lat: globalLat, lng: globalLng } = useLocationStore();
+  const { lat: globalLat, lng: globalLng, permissionGranted } = useLocationStore();
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
+
+  useEffect(() => {
+    if (!permissionGranted || !globalLat || !globalLng) return;
+    if (autoLocationApplied.current) return;
+    if (searchParams.get('state') || searchParams.get('lga')) return;
+
+    const fetchNearestLGA = async () => {
+      const { data, error } = await supabase.rpc('find_nearest_lga', {
+        user_lat: globalLat,
+        user_lng: globalLng
+      });
+
+      if (!error && data && data.length > 0) {
+        const nearest = data[0];
+        const params = new URLSearchParams(searchParams);
+        params.set('state', nearest.state_id.toString());
+        params.set('lga', nearest.lga_id.toString());
+        setSearchParams(params, { replace: true });
+        setLocationLabel(`${nearest.lga_name}, ${nearest.state_name}`);
+        autoLocationApplied.current = true;
+      }
+    };
+
+    fetchNearestLGA();
+  }, [permissionGranted, globalLat, globalLng]);
 
   useEffect(() => {
     async function fetchStates() {
@@ -137,19 +167,38 @@ export default function Home() {
       if (!providers || providers.length === 0) return [] as ProviderWithProfile[];
 
       const providerIds = providers.map(p => p.id);
-      const [profilesRes, portfolioRes] = await Promise.all([
-        supabase.from('profiles').select('*').in('id', providerIds),
-        supabase.from('portfolio_images').select('*').in('provider_id', providerIds)
-      ]);
-      const profiles = profilesRes.data ?? [];
-      const portfolioImages = portfolioRes.data ?? [];
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', providerIds);
+
+      const { data: portfolioImages } = await supabase
+        .from('portfolio_images')
+        .select('*')
+        .in('provider_id', providerIds);
+
+      let distancesMap: Record<string, number> = {};
+      if (userLat && userLng) {
+        const { data: distances, error: rpcError } = await supabase
+          .rpc('get_provider_distances', {
+            user_lat: userLat,
+            user_lng: userLng,
+            provider_ids: providerIds
+          });
+
+        if (!rpcError && distances) {
+          distances.forEach((d: any) => {
+            distancesMap[d.provider_id] = d.distance_meters;
+          });
+        }
+      }
 
       const providersWithDetails = await Promise.all(providers.map(async (provider) => {
-        const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
-        const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
-        const distance = (userLat && userLng && providerProfile.lat && providerProfile.lng)
-          ? calculateDistance(userLat, userLng, providerProfile.lat, providerProfile.lng)
-          : undefined;
+        const providerProfile = profiles?.find(p => p.id === provider.id) ?? ({} as ProfileRow);
+        const images = (portfolioImages || []).filter(img => img.provider_id === provider.id);
+        const distanceMeters = distancesMap[provider.id];
+        const distance = distanceMeters ? distanceMeters / 1000 : undefined;
 
         const { data: reviews } = await supabase
           .from('reviews')
@@ -176,9 +225,11 @@ export default function Home() {
       if (userLat && userLng) {
         providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
       }
+
       return providersWithDetails;
     },
     enabled: true,
+    staleTime: 1000 * 60 * 5,
   });
 
   useEffect(() => {
@@ -210,19 +261,71 @@ export default function Home() {
     }
     setSearchParams(params);
     setShowLocationDropdown(false);
+    autoLocationApplied.current = true;
   };
 
   const clearLocation = () => {
     setSearchParams({});
     setLocationLabel('All Nigeria');
     setShowLocationDropdown(false);
+    autoLocationApplied.current = true;
   };
+
+  const handleSearch = () => {
+    const query = searchInputRef.current?.value.trim();
+    if (query) {
+      navigate(`/search?q=${encodeURIComponent(query)}`);
+    } else {
+      navigate('/search');
+    }
+  };
+
+  const NoProvidersBanner = () => (
+    <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl p-6 md:p-8 text-center border-2 border-dashed border-primary-300">
+      <div className="text-4xl md:text-5xl mb-3 md:mb-4">🚀</div>
+      <h3 className="text-lg md:text-xl font-bold text-primary-800 mb-2 md:mb-3">
+        Be the First Provider in This Area!
+      </h3>
+      <p className="text-primary-700 mb-4 text-sm md:text-base">
+        Get <span className="font-bold text-xl md:text-2xl">₦1,000</span> when you register as the first provider in your LGA.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <Link
+          to="/auth/signup?role=provider"
+          className="inline-block bg-primary-600 text-white px-6 md:px-8 py-2.5 md:py-3 rounded-lg font-medium hover:bg-primary-700 transition"
+        >
+          Claim ₦1,000 Now →
+        </Link>
+        <button
+          onClick={() => clearLocation()}
+          className="inline-block bg-white text-primary-600 border border-primary-300 px-6 md:px-8 py-2.5 md:py-3 rounded-lg font-medium hover:bg-primary-50 transition"
+        >
+          View All Nigeria 🇳🇬
+        </button>
+      </div>
+      <p className="text-xs text-primary-600 mt-3 md:mt-4">
+        Limited to first 10 providers per area. Terms apply.
+      </p>
+    </div>
+  );
+
+  const OfflineBanner = () => (
+    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center mb-4">
+      <WifiOff className="h-12 w-12 text-yellow-600 mx-auto mb-3" />
+      <h3 className="font-semibold text-gray-900 mb-1">You're offline</h3>
+      <p className="text-gray-600 text-sm">
+        Connect to the internet to load the latest providers.
+      </p>
+      <p className="text-gray-500 text-xs mt-2">
+        Previously loaded providers may still be visible below.
+      </p>
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <SEO />
 
-      {/* Hero Section - Mobile Optimized */}
       <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
         <p className="text-base md:text-lg text-white/90 text-center mb-5">
           Connect with professionals near you
@@ -256,11 +359,15 @@ export default function Home() {
               <Search className="h-5 w-5 text-gray-400" />
             </div>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="I am looking for..."
               className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
             />
-            <button className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center">
+            <button
+              onClick={handleSearch}
+              className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center"
+            >
               <Search className="h-5 w-5" />
               <span className="hidden md:inline ml-2">Search</span>
             </button>
@@ -268,7 +375,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Desktop: Category Sidebar + Providers */}
+      {/* Desktop Layout */}
       <div className="hidden md:flex gap-6">
         <div className="w-64 flex-shrink-0">
           <CategorySidebar providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
@@ -284,36 +391,31 @@ export default function Home() {
             </Link>
           </div>
 
+          {isOffline && <OfflineBanner />}
+
           {isLoading ? (
-            <div className="grid grid-cols-3 gap-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-              ))}
+            <div className="flex justify-center py-16">
+              <NimartSpinner size="lg" />
             </div>
           ) : (
             <>
-              {featuredProviders?.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">No providers found in this area.</p>
-                  <button onClick={clearLocation} className="mt-2 text-primary-600 hover:underline">
-                    View all Nigeria
-                  </button>
-                </div>
-              ) : (
+              {featuredProviders?.length === 0 && !isOffline ? (
+                <NoProvidersBanner />
+              ) : featuredProviders && featuredProviders.length > 0 ? (
                 <div className="grid grid-cols-3 gap-4">
-                  {featuredProviders?.map((provider) => (
+                  {featuredProviders.map((provider) => (
                     <ProviderCard key={provider.id} provider={provider} />
                   ))}
                 </div>
-              )}
+              ) : null}
             </>
           )}
         </div>
       </div>
 
-      {/* Mobile: Category Grid + Providers */}
+      {/* Mobile Layout */}
       <div className="block md:hidden">
-        <section className="mb-10">
+        <section className="mb-6">
           <CategoryButtons />
         </section>
 
@@ -327,28 +429,23 @@ export default function Home() {
             </Link>
           </div>
 
+          {isOffline && <OfflineBanner />}
+
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-4">
-              {[...Array(2)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-              ))}
+            <div className="flex justify-center py-16">
+              <NimartSpinner size="lg" />
             </div>
           ) : (
             <>
-              {featuredProviders?.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">No providers found in this area.</p>
-                  <button onClick={clearLocation} className="mt-2 text-primary-600 hover:underline">
-                    View all Nigeria
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {featuredProviders?.map((provider) => (
+              {featuredProviders?.length === 0 && !isOffline ? (
+                <NoProvidersBanner />
+              ) : featuredProviders && featuredProviders.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {featuredProviders.map((provider) => (
                     <ProviderCard key={provider.id} provider={provider} />
                   ))}
                 </div>
-              )}
+              ) : null}
             </>
           )}
         </section>

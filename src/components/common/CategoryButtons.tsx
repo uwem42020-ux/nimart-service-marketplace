@@ -1,3 +1,4 @@
+// src/components/common/CategoryButtons.tsx
 import { Link } from 'react-router-dom';
 import { TIERS } from '../../data/categories';
 
@@ -25,16 +26,17 @@ export function CategoryButtons() {
         <Link
           key={tier.slug}
           to={`/category/${tier.slug}`}
+          title={tier.name}
           className="flex flex-col items-center justify-center p-2 group"
         >
-          <div className="w-14 h-14 rounded-full bg-primary-50 flex items-center justify-center mb-1 group-hover:bg-primary-100 transition-colors">
+          <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mb-1 group-hover:bg-primary-100 transition-colors">
             <img
               src={tierIconMap[tier.slug]}
               alt={tier.name}
-              className="w-9 h-9 object-contain"
+              className="w-10 h-10 object-contain"
             />
           </div>
-          <span className="text-[10px] font-medium text-gray-700 text-center leading-tight">
+          <span className="text-[11px] font-medium text-gray-700 text-center leading-tight">
             {tier.name}
           </span>
         </Link>

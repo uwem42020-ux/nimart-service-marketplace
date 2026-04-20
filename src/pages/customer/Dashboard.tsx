@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, CheckCircle, Search, User } from 'lucide-react';
 import { LocationPrompt } from '../../components/customer/LocationPrompt';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface DashboardStats {
   totalBookings: number;
@@ -47,7 +48,6 @@ export default function CustomerDashboard() {
   async function fetchDashboardData() {
     setLoading(true);
     try {
-      // 1. Fetch all bookings for the customer
       const { data: bookings, error } = await supabase
         .from('bookings')
         .select('*')
@@ -63,10 +63,8 @@ export default function CustomerDashboard() {
         return;
       }
 
-      // 2. Extract unique provider IDs
       const providerIds = [...new Set(bookings.map(b => b.provider_id))];
 
-      // 3. Fetch provider details (two separate queries – no nested joins)
       const { data: providers } = await supabase
         .from('providers')
         .select('id, business_name')
@@ -77,7 +75,6 @@ export default function CustomerDashboard() {
         .select('id, full_name')
         .in('id', providerIds);
 
-      // 4. Create a lookup map for provider data
       const providerMap = new Map();
       providers?.forEach(p => {
         const profile = profiles?.find(prof => prof.id === p.id);
@@ -87,13 +84,11 @@ export default function CustomerDashboard() {
         });
       });
 
-      // 5. Combine bookings with provider data
       const bookingsWithProviders = bookings.map(booking => ({
         ...booking,
         provider: providerMap.get(booking.provider_id) || null,
       }));
 
-      // 6. Calculate stats
       const today = new Date().toISOString().split('T')[0];
       const pending = bookings.filter(b => b.status === 'pending').length;
       const completed = bookings.filter(b => b.status === 'completed').length;
@@ -106,7 +101,6 @@ export default function CustomerDashboard() {
         upcomingBookings: upcoming,
       });
 
-      // 7. Take the 5 most recent
       setRecentBookings(bookingsWithProviders.slice(0, 5));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -115,12 +109,18 @@ export default function CustomerDashboard() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <NimartSpinner size="lg" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Location Prompt for customers without location */}
       <LocationPrompt />
 
-      {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
           Welcome back, {profile?.full_name?.split(' ')[0] || 'Customer'}!
@@ -128,7 +128,6 @@ export default function CustomerDashboard() {
         <p className="text-gray-600 mt-1">Here's an overview of your activity.</p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between">
@@ -168,7 +167,6 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Link
           to="/search"
@@ -208,7 +206,6 @@ export default function CustomerDashboard() {
         </Link>
       </div>
 
-      {/* Recent Bookings */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
@@ -217,9 +214,7 @@ export default function CustomerDashboard() {
           </Link>
         </div>
 
-        {loading ? (
-          <div className="text-center py-8">Loading...</div>
-        ) : recentBookings.length === 0 ? (
+        {recentBookings.length === 0 ? (
           <div className="text-center py-8 bg-gray-50 rounded-lg">
             <Calendar className="mx-auto h-10 w-10 text-gray-400" />
             <p className="mt-2 text-gray-500">No bookings yet.</p>

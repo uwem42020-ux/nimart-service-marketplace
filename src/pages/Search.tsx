@@ -11,6 +11,7 @@ import { SEO } from '../components/common/SEO';
 import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Search as SearchIcon, X } from 'lucide-react';
+import { NimartSpinner } from '../components/common/NimartSpinner';
 import type { Database } from '../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -177,7 +178,6 @@ export default function Search() {
 
       if (keyword) {
         const pattern = `%${keyword}%`;
-        // join with profiles to search full_name
         const { data: profilesByName } = await supabase
           .from('profiles')
           .select('id')
@@ -299,7 +299,6 @@ export default function Search() {
         </aside>
 
         <main className="flex-1">
-          {/* Search Bar with Suggestions */}
           <div className="mb-6 relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <div className="relative">
@@ -336,7 +335,6 @@ export default function Search() {
               <button type="submit" className="hidden">Search</button>
             </form>
 
-            {/* Suggestions Dropdown */}
             {showSuggestions && debouncedSearchTerm && suggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
@@ -369,10 +367,8 @@ export default function Search() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-              ))}
+            <div className="flex justify-center py-20">
+              <NimartSpinner size="lg" />
             </div>
           ) : (
             <>

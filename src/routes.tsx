@@ -5,6 +5,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthLayout } from './components/layout/AuthLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { AdminRoute } from './components/common/AdminRoute';
 import { LoadingSkeleton } from './components/common/LoadingSkeleton';
 import { MessageThread } from './components/chat/MessageThread';
 
@@ -25,6 +26,7 @@ const ProviderBookings = lazy(() => import('./pages/provider/Bookings'));
 const ProviderMessages = lazy(() => import('./pages/provider/Messages'));
 const ProviderProfile = lazy(() => import('./pages/provider/Profile'));
 const ProviderServices = lazy(() => import('./pages/provider/Services'));
+const ProviderVerification = lazy(() => import('./pages/provider/Verification'));
 
 const SignIn = lazy(() => import('./pages/auth/SignIn'));
 const SignUp = lazy(() => import('./pages/auth/SignUp'));
@@ -38,6 +40,14 @@ const Cookies = lazy(() => import('./pages/shared/Cookies'));
 const Safety = lazy(() => import('./pages/shared/Safety'));
 const Help = lazy(() => import('./pages/shared/Help'));
 const Report = lazy(() => import('./pages/shared/Report'));
+const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
+
+// Admin pages
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/Users'));
+const AdminChats = lazy(() => import('./pages/admin/Chats'));
+const AdminBulkEmail = lazy(() => import('./pages/admin/BulkEmail'));
+const AdminVerifications = lazy(() => import('./pages/admin/Verifications'));
 
 export const router = createBrowserRouter([
   {
@@ -54,6 +64,7 @@ export const router = createBrowserRouter([
       { path: 'safety', element: <Suspense fallback={<LoadingSkeleton />}><Safety /></Suspense> },
       { path: 'help', element: <Suspense fallback={<LoadingSkeleton />}><Help /></Suspense> },
       { path: 'report', element: <Suspense fallback={<LoadingSkeleton />}><Report /></Suspense> },
+      { path: 'nimart-vs-nimart', element: <Suspense fallback={<LoadingSkeleton />}><NimartVsNimart /></Suspense> },
     ],
   },
   {
@@ -90,6 +101,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
+      // ✅ SPECIFIC ROUTES MUST COME FIRST
       { path: 'dashboard', element: <Suspense fallback={<LoadingSkeleton />}><ProviderDashboard /></Suspense> },
       { path: 'setup', element: <Suspense fallback={<LoadingSkeleton />}><ProviderSetup /></Suspense> },
       { path: 'portfolio', element: <Suspense fallback={<LoadingSkeleton />}><ProviderPortfolio /></Suspense> },
@@ -98,7 +110,27 @@ export const router = createBrowserRouter([
       { path: 'messages', element: <Suspense fallback={<LoadingSkeleton />}><ProviderMessages /></Suspense> },
       { path: 'messages/:threadId', element: <Suspense fallback={<LoadingSkeleton />}><MessageThread /></Suspense> },
       { path: 'profile', element: <Suspense fallback={<LoadingSkeleton />}><ProviderProfile /></Suspense> },
+      { path: 'verification', element: <Suspense fallback={<LoadingSkeleton />}><ProviderVerification /></Suspense> },
       { path: 'notifications', element: <Suspense fallback={<LoadingSkeleton />}><Notifications /></Suspense> },
+      
+      // ⚠️ DYNAMIC ROUTE MUST COME LAST
+      // Note: This route is for the public-facing provider profile (customer view)
+      // It is intentionally placed at the end to avoid capturing /provider/verification, /provider/setup, etc.
+    ],
+  },
+  {
+    path: '/admin',
+    element: (
+      <AdminRoute>
+        <DashboardLayout />
+      </AdminRoute>
+    ),
+    children: [
+      { path: 'dashboard', element: <Suspense fallback={<LoadingSkeleton />}><AdminDashboard /></Suspense> },
+      { path: 'users', element: <Suspense fallback={<LoadingSkeleton />}><AdminUsers /></Suspense> },
+      { path: 'chats', element: <Suspense fallback={<LoadingSkeleton />}><AdminChats /></Suspense> },
+      { path: 'email', element: <Suspense fallback={<LoadingSkeleton />}><AdminBulkEmail /></Suspense> },
+      { path: 'verifications', element: <Suspense fallback={<LoadingSkeleton />}><AdminVerifications /></Suspense> },
     ],
   },
   {

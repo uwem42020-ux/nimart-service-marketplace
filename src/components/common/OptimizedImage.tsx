@@ -8,19 +8,28 @@ interface OptimizedImageProps {
   className?: string;
   width?: number;
   height?: number;
+  quality?: number; // optional, default 60 for performance
 }
 
-export function OptimizedImage({ src, alt, className, width, height }: OptimizedImageProps) {
+export function OptimizedImage({
+  src,
+  alt,
+  className,
+  width,
+  height,
+  quality = 60,
+}: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
 
   // Build optimized URL with transformation parameters if width/height provided
   let optimizedSrc = src;
-  if ((width || height) && !error) {
+  if (!error) {
     try {
       const url = new URL(src);
       if (width) url.searchParams.set('width', width.toString());
       if (height) url.searchParams.set('height', height.toString());
+      if (quality) url.searchParams.set('quality', quality.toString());
       optimizedSrc = url.toString();
     } catch {
       // If URL parsing fails, fall back to original src

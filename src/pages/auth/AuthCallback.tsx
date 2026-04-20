@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { User, Briefcase, CheckCircle } from 'lucide-react';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -21,7 +22,6 @@ export default function AuthCallback() {
 
     const handleCallback = async () => {
       try {
-        // Wait for Supabase to process the OAuth token and establish a session
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) throw error;
@@ -31,7 +31,6 @@ export default function AuthCallback() {
         if (!mounted) return;
         setUser(currentUser);
 
-        // Check if profile exists and has a role
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role, full_name')
@@ -39,16 +38,13 @@ export default function AuthCallback() {
           .single();
 
         if (profileError && profileError.code !== 'PGRST116') {
-          // PGRST116 = no rows found, which is expected for new users
           throw profileError;
         }
 
         if (profile?.role) {
-          // Existing user with role – refresh context and go to dashboard
           await refreshProfile();
           navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard', { replace: true });
         } else {
-          // New user – ask for role
           setFullName(profile?.full_name || currentUser.user_metadata?.full_name || '');
           setNeedsRole(true);
         }
@@ -73,7 +69,6 @@ export default function AuthCallback() {
     if (!user) return;
     setSubmitting(true);
     try {
-      // Update profile with chosen role and name
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -86,7 +81,6 @@ export default function AuthCallback() {
       if (profileError) throw profileError;
 
       if (role === 'provider') {
-        // Create basic provider record
         const { error: providerError } = await supabase
           .from('providers')
           .insert([{
@@ -115,7 +109,7 @@ export default function AuthCallback() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <NimartSpinner size="lg" />
       </div>
     );
   }

@@ -44,3 +44,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </HelmetProvider>
   </React.StrictMode>
 );
+
+// Prefetch critical provider data once service worker is ready
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.ready.then(() => {
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      fetch(`${SUPABASE_URL}/rest/v1/providers?select=*&limit=20`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      }).catch(() => {
+        // Silently fail – offline data will be served from cache if available
+      });
+    }
+  });
+}

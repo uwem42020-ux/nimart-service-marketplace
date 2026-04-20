@@ -10,7 +10,7 @@ export default {
           200: '#99dfbf',
           300: '#66cf9f',
           400: '#33bf7f',
-          500: '#008751', // main brand green
+          500: '#008751',
           600: '#006c41',
           700: '#005131',
           800: '#003620',
@@ -30,9 +30,16 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Montserrat', 'system-ui', 'sans-serif'],
+      },
+      fontWeight: {
+        normal: '400',
+        medium: '500',
+        semibold: '600',
+        bold: '700',
+        extrabold: '800',
       },
     },
   },
   plugins: [],
-}
+};

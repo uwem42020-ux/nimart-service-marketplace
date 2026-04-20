@@ -4,7 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ProviderStatusToggle } from '../../components/provider/ProviderStatusToggle';
-import { Calendar, MessageCircle, Star, Settings, Image, Package } from 'lucide-react';
+import { Calendar, MessageCircle, Star, Settings, Image, Package, Shield } from 'lucide-react';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface DashboardStats {
   totalBookings: number;
@@ -26,22 +27,23 @@ export default function ProviderDashboard() {
     reviewCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState(false);
+  const [hasPendingVerification, setHasPendingVerification] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     fetchProviderData();
     fetchStats();
+    checkVerificationStatus();
   }, [user]);
 
   async function fetchProviderData() {
-    // Fetch provider record
     const { data: provider } = await supabase
       .from('providers')
       .select('*')
       .eq('id', user!.id)
       .single();
 
-    // Fetch profile separately
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
@@ -50,15 +52,14 @@ export default function ProviderDashboard() {
 
     const combined = { ...provider, profile };
     setProviderData(combined);
+    setIsVerified(profile?.is_verified || false);
 
-    // Redirect to setup if profile is incomplete
     if (combined && (!combined.profile?.lga_id || !combined.business_name)) {
       navigate('/provider/setup');
     }
   }
 
   async function fetchStats() {
-    // Bookings stats
     const { data: bookings } = await supabase
       .from('bookings')
       .select('*')
@@ -68,7 +69,6 @@ export default function ProviderDashboard() {
     const pendingCount = bookings?.filter(b => b.status === 'pending').length || 0;
     const completedCount = bookings?.filter(b => b.status === 'completed').length || 0;
 
-    // Reviews stats
     const { data: reviews } = await supabase
       .from('reviews')
       .select('rating')
@@ -88,10 +88,21 @@ export default function ProviderDashboard() {
     setLoading(false);
   }
 
+  async function checkVerificationStatus() {
+    const { data } = await supabase
+      .from('verification_documents')
+      .select('status')
+      .eq('provider_id', user!.id)
+      .eq('status', 'pending')
+      .limit(1);
+
+    setHasPendingVerification(data && data.length > 0);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <NimartSpinner size="lg" />
       </div>
     );
   }
@@ -100,16 +111,55 @@ export default function ProviderDashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
-        {loading ? (
-          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse" />
-        ) : providerData ? (
+        {providerData ? (
           <ProviderStatusToggle
             providerId={user!.id}
             initialStatus={providerData.status}
             onStatusChange={() => fetchProviderData()}
           />
-        ) : null}
+        ) : (
+          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse" />
+        )}
       </div>
+
+      {/* Verification Status Banner */}
+      {!isVerified && !hasPendingVerification && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="h-6 w-6 text-blue-600" />
+            <div>
+              <p className="font-medium text-blue-800">Get verified to build trust with customers</p>
+              <p className="text-sm text-blue-600">Verified providers get more bookings</p>
+            </div>
+          </div>
+          <Link
+            to="/provider/verification"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
+          >
+            Get Verified
+          </Link>
+        </div>
+      )}
+
+      {hasPendingVerification && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+          <Shield className="h-6 w-6 text-yellow-600" />
+          <div>
+            <p className="font-medium text-yellow-800">Verification in progress</p>
+            <p className="text-sm text-yellow-600">We're reviewing your documents. This usually takes 24-48 hours.</p>
+          </div>
+        </div>
+      )}
+
+      {isVerified && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+          <Shield className="h-6 w-6 text-green-600" />
+          <div>
+            <p className="font-medium text-green-800">Your account is verified!</p>
+            <p className="text-sm text-green-600">The verified badge appears on your profile.</p>
+          </div>
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -174,26 +224,31 @@ export default function ProviderDashboard() {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Link to="/provider/bookings" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Calendar className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Manage Bookings</h3>
-          <p className="text-sm text-gray-500">View and manage upcoming appointments</p>
+          <p className="text-sm text-gray-500">View and manage appointments</p>
         </Link>
         <Link to="/provider/portfolio" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Image className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Portfolio</h3>
-          <p className="text-sm text-gray-500">Upload photos of your best work</p>
+          <p className="text-sm text-gray-500">Upload photos of your work</p>
         </Link>
         <Link to="/provider/services" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Package className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Services & Pricing</h3>
-          <p className="text-sm text-gray-500">Define your service offerings and prices</p>
+          <p className="text-sm text-gray-500">Define your offerings</p>
+        </Link>
+        <Link to="/provider/verification" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+          <Shield className="h-8 w-8 text-primary-600 mb-4" />
+          <h3 className="font-semibold text-gray-900">Get Verified</h3>
+          <p className="text-sm text-gray-500">Earn the verified badge</p>
         </Link>
         <Link to="/provider/profile" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
           <Settings className="h-8 w-8 text-primary-600 mb-4" />
           <h3 className="font-semibold text-gray-900">Profile Settings</h3>
-          <p className="text-sm text-gray-500">Update your business information</p>
+          <p className="text-sm text-gray-500">Update your information</p>
         </Link>
       </div>
     </div>

@@ -1,8 +1,10 @@
 // src/components/common/LoadingSkeleton.tsx
+import { NimartSpinner } from './NimartSpinner';
+
 export function LoadingSkeleton() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    <div className="min-h-screen flex items-center justify-center bg-white/50">
+      <NimartSpinner size="lg" />
     </div>
   );
 }

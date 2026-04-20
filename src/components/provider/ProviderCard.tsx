@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 import type { Database } from '../../types/database';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLocationStore } from '../../stores/locationStore';
 import toast from 'react-hot-toast';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -28,7 +29,6 @@ interface ProviderCardProps {
   className?: string;
 }
 
-// Map status to SVG icon
 const statusIconMap: Record<string, string> = {
   available: '/active.svg',
   busy: '/busy.svg',
@@ -38,6 +38,7 @@ const statusIconMap: Record<string, string> = {
 export const ProviderCard = memo(function ProviderCard({ provider, className }: ProviderCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
 
   const locationString = provider.profile?.lga_name
     ? `${provider.profile.lga_name}, ${provider.profile.state_name || ''}`
@@ -64,28 +65,72 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
       navigate('/auth/signin');
       return;
     }
-    // Navigate to provider profile with booking modal open
     navigate(`/provider/${provider.id}?book=true`);
+  };
+
+  const handleEnableLocation = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setPermissionDenied(false);
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          toast.success('Location enabled! Refreshing...');
+          setTimeout(() => window.location.reload(), 500);
+        },
+        () => {
+          toast.error('Location permission denied');
+        }
+      );
+    } else {
+      toast.error('Geolocation not supported');
+    }
+  };
+
+  const renderDistance = () => {
+    if (provider.distance !== undefined) {
+      return (
+        <span className="text-xs font-medium text-gray-700">
+          {formatDistance(provider.distance)}
+        </span>
+      );
+    }
+    
+    if (permissionGranted && userLat && userLng) {
+      return <span className="text-xs text-gray-400">Calculating...</span>;
+    }
+    
+    return (
+      <button
+        onClick={handleEnableLocation}
+        className="text-xs text-primary-600 hover:underline"
+      >
+        📍 Enable location
+      </button>
+    );
   };
 
   return (
     <div className={cn('bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden', className)}>
-      {/* Image Section */}
-      <Link to={`/provider/${provider.id}`} className="block relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
-        {provider.profile?.avatar_url ? (
-          <OptimizedImage
-            src={provider.profile.avatar_url}
-            alt={provider.business_name || provider.profile.full_name || 'Provider'}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-primary-50">
-            <span className="text-4xl font-semibold text-primary-600">
-              {(provider.business_name || provider.profile?.full_name || 'P')[0]}
-            </span>
-          </div>
-        )}
-        {/* Animated Status Icon with White Outline (animate-ping for all) */}
+      <Link to={`/provider/${provider.id}`} className="block relative w-full overflow-hidden bg-gray-100">
+        <div className="relative w-full" style={{ paddingBottom: '100%' }}>
+          {provider.profile?.avatar_url ? (
+            <OptimizedImage
+              src={provider.profile.avatar_url}
+              alt={provider.business_name || provider.profile.full_name || 'Provider'}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-primary-50">
+              <span className="text-4xl font-semibold text-primary-600">
+                {(provider.business_name || provider.profile?.full_name || 'P')[0]}
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="absolute top-3 right-3">
           <div className="relative">
             <span
@@ -103,7 +148,7 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
             />
           </div>
         </div>
-        {/* Verified Badge */}
+
         {provider.profile?.is_verified && (
           <div className="absolute top-3 left-3 bg-blue-500 text-white p-1 rounded-full">
             <CheckCircle className="h-4 w-4" />
@@ -111,7 +156,6 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         )}
       </Link>
 
-      {/* Content Section */}
       <div className="p-4">
         <Link to={`/provider/${provider.id}`} className="block">
           <h3 className="font-semibold text-primary-600 truncate mb-1 hover:underline">
@@ -145,13 +189,7 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         </div>
 
         <div className="flex items-center justify-between mb-3">
-          {provider.distance !== undefined ? (
-            <span className="text-xs font-medium text-gray-700">
-              {formatDistance(provider.distance)}
-            </span>
-          ) : (
-            <span className="text-xs text-gray-400">Distance N/A</span>
-          )}
+          {renderDistance()}
           {provider.average_rating !== undefined && provider.average_rating > 0 ? (
             <div className="flex items-center">
               <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400 mr-0.5" />
@@ -167,7 +205,6 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
           )}
         </div>
 
-        {/* Book Now Button */}
         <button
           onClick={handleBookNow}
           className="block w-full bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium py-2 rounded-lg transition-colors text-center"

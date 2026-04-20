@@ -1,26 +1,32 @@
+// src/pages/provider/Profile.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SetPasswordForm } from '../../components/profile/SetPasswordForm';
 import toast from 'react-hot-toast';
-import { User, Phone, Store, FileText, Save, Camera, AlertCircle } from 'lucide-react';
+import { User, Phone, Store, FileText, Save, Camera, AlertCircle, Home, Landmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function ProviderProfile() {
   const { user, profile, updateProfile } = useAuth();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
+  const [landmark, setLandmark] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isSetupComplete, setIsSetupComplete] = useState(true);
+  const [phoneError, setPhoneError] = useState('');
 
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
+      setStreetAddress(profile.street_address || '');
+      setLandmark(profile.landmark || '');
       setAvatarUrl(profile.avatar_url);
     }
     fetchProviderData();
@@ -39,17 +45,50 @@ export default function ProviderProfile() {
       setDescription(provider.description || '');
     }
 
-    // Check if setup is complete
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('lga_id')
+      .select('lga_id, street_address')
       .eq('id', user.id)
       .single();
 
-    if (!provider?.business_name || !profileData?.lga_id) {
+    if (!provider?.business_name || !profileData?.lga_id || !profileData?.street_address) {
       setIsSetupComplete(false);
     }
   }
+
+  const validatePhoneNumber = (phoneNumber: string): boolean => {
+    const localNumber = phoneNumber.replace('+234', '');
+    const isValid = /^\d{10}$/.test(localNumber);
+    
+    if (!isValid) {
+      setPhoneError('Please enter a valid 10-digit Nigerian phone number');
+      return false;
+    }
+    
+    setPhoneError('');
+    return true;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+    
+    if (!value.startsWith('+234')) {
+      value = '+234' + value.replace(/[^0-9]/g, '');
+    }
+    
+    const prefix = '+234';
+    const digits = value.slice(4).replace(/\D/g, '');
+    const limitedDigits = digits.slice(0, 10);
+    const finalValue = prefix + limitedDigits;
+    
+    setPhone(finalValue);
+    
+    if (limitedDigits.length === 10) {
+      validatePhoneNumber(finalValue);
+    } else {
+      setPhoneError('');
+    }
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,7 +97,6 @@ export default function ProviderProfile() {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      // ✅ Include user ID as folder to satisfy RLS policy
       const fileName = `${user!.id}/${user!.id}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
@@ -82,12 +120,20 @@ export default function ProviderProfile() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (phone && !validatePhoneNumber(phone)) {
+      return;
+    }
+    
     setSaving(true);
     try {
-      // Update profile
-      await updateProfile({ full_name: fullName, phone });
+      await updateProfile({
+        full_name: fullName,
+        phone,
+        street_address: streetAddress,
+        landmark: landmark || null,
+      });
 
-      // Update provider record
       const { error: providerError } = await supabase
         .from('providers')
         .update({ business_name: businessName, description })
@@ -96,6 +142,7 @@ export default function ProviderProfile() {
       if (providerError) throw providerError;
 
       toast.success('Profile updated');
+      fetchProviderData();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -107,7 +154,6 @@ export default function ProviderProfile() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Provider Profile</h1>
 
-      {/* Setup incomplete warning */}
       {!isSetupComplete && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
           <div className="flex items-start">
@@ -124,7 +170,6 @@ export default function ProviderProfile() {
         </div>
       )}
 
-      {/* Personal Information */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,11 +219,43 @@ export default function ProviderProfile() {
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={handlePhoneChange}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="+234 123 456 7890"
+                maxLength={14}
               />
             </div>
+            {phoneError && (
+              <p className="mt-1 text-xs text-red-600">{phoneError}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Home className="inline h-4 w-4 mr-1" />
+              Street Address
+            </label>
+            <input
+              type="text"
+              value={streetAddress}
+              onChange={(e) => setStreetAddress(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g., 15 Adeola Odeku Street"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Landmark className="inline h-4 w-4 mr-1" />
+              Nearest Landmark
+            </label>
+            <input
+              type="text"
+              value={landmark}
+              onChange={(e) => setLandmark(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g., Near First Bank"
+            />
           </div>
 
           <div>
@@ -222,7 +299,6 @@ export default function ProviderProfile() {
         </form>
       </div>
 
-      {/* Password Section */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <SetPasswordForm />
       </div>

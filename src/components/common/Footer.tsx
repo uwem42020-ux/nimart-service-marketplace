@@ -89,6 +89,7 @@ export function Footer() {
               <li><Link to="/safety" className="hover:text-white transition">Safety Tips</Link></li>
               <li><Link to="/help" className="hover:text-white transition">Help Center</Link></li>
               <li><Link to="/report" className="hover:text-white transition">Report an Issue</Link></li>
+              <li><Link to="/nimart-vs-nimart" className="hover:text-white transition">Nimart vs. NIMART</Link></li>
             </ul>
           </div>
         </div>
@@ -104,7 +105,7 @@ export function Footer() {
             <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-500">
               <Link to="/terms" className="hover:text-white transition">Terms</Link>
               <Link to="/privacy" className="hover:text-white transition">Privacy</Link>
-              <Link to="/sitemap" className="hover:text-white transition">Sitemap</Link>
+              <Link to="/cookies" className="hover:text-white transition">Cookies</Link>
             </div>
           </div>
         </div>
