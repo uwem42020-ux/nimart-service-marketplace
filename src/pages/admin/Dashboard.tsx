@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Users, UserCheck, UserX, MessageCircle, Mail, Shield, Calendar } from 'lucide-react';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Stats {
   totalUsers: number;
@@ -58,7 +59,9 @@ export default function AdminDashboard() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="lg" />
+        </div>
       ) : (
         <>
           {/* Stats Grid */}

@@ -118,8 +118,8 @@ export function LocationDropdown({
                   onClick={() => handleStateClick(state.state_id.toString(), state.state_name)}
                   className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 rounded-md"
                 >
-                  <span className="text-gray-900">{state.state_name}</span>
-                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-gray-900 break-words">{state.state_name}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">→</span>
                 </button>
               ))}
             </div>
@@ -143,7 +143,7 @@ export function LocationDropdown({
                 <button
                   key={lga.lga_id}
                   onClick={() => handleLgaClick(lga.lga_id.toString(), lga.lga_name)}
-                  className="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 rounded-md text-gray-900"
+                  className="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 rounded-md text-gray-900 break-words"
                 >
                   {lga.lga_name}
                 </button>

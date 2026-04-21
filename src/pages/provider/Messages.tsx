@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useEffect } from 'react';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function ProviderMessages() {
   const { user } = useAuth();
@@ -67,7 +68,9 @@ export default function ProviderMessages() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Messages</h1>
 
       {isLoading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : threads?.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <MessageCircle className="mx-auto h-12 w-12 text-gray-400" />

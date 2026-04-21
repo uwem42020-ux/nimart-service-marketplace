@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { User, Briefcase, Mail, CheckCircle, ArrowLeft } from 'lucide-react';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 type Step = 'email' | 'otp' | 'profile';
 
@@ -19,7 +20,7 @@ export default function SignUp() {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Pre-select role from URL parameter (e.g., ?role=provider)
+  // 从 URL 参数预选角色（例如 ?role=provider）
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam === 'provider') {
@@ -141,16 +142,22 @@ export default function SignUp() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <NimartSpinner size="lg" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen">
-      {/* Full‑screen background image */}
       <div
         className="fixed inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: 'url("/loginbg.jpg")' }}
       />
       <div className="fixed inset-0 bg-black/40" />
 
-      {/* Back Arrow */}
       <Link
         to="/"
         className="fixed top-6 left-6 z-20 p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition"
@@ -194,7 +201,7 @@ export default function SignUp() {
                     disabled={loading}
                     className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
                   >
-                    {loading ? 'Sending...' : 'Send OTP'}
+                    Send OTP
                   </button>
                 </form>
 
@@ -265,7 +272,7 @@ export default function SignUp() {
                   disabled={loading}
                   className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
                 >
-                  {loading ? 'Verifying...' : 'Verify & Continue'}
+                  Verify & Continue
                 </button>
                 <button
                   type="button"
@@ -297,10 +304,9 @@ export default function SignUp() {
                   </div>
                 </div>
 
-                {/* 🔥 PROMINENT ROLE SELECTION CARDS */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
-                    What brings you to Nimart?
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    I want to...
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
@@ -344,7 +350,7 @@ export default function SignUp() {
                   className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium flex items-center justify-center gap-2"
                 >
                   <CheckCircle className="h-5 w-5" />
-                  {loading ? 'Creating account...' : 'Complete Sign Up'}
+                  Complete Sign Up
                 </button>
               </form>
             )}

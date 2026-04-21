@@ -6,6 +6,7 @@ import { Upload, X, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OptimizedImage } from '../../components/common/OptimizedImage';
 import imageCompression from 'browser-image-compression';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface PortfolioImage {
   id: string;

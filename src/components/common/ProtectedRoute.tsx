@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { NimartSpinner } from './NimartSpinner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -67,7 +68,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   if (isLoading || checkingSetup) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <NimartSpinner size="lg" />
       </div>
     );
   }

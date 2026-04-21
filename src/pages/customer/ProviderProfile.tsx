@@ -9,6 +9,7 @@ import { PortfolioGallery } from '../../components/provider/PortfolioGallery';
 import { ReviewsList } from '../../components/reviews/ReviewsList';
 import { ChatWidget } from '../../components/chat/ChatWidget';
 import { SEO } from '../../components/common/SEO';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 import {
   MapPin,
   Star,
@@ -24,8 +25,10 @@ import {
   Eye,
   EyeOff,
   Package,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { OptimizedImage } from '../../components/common/OptimizedImage';
 import { cn } from '../../lib/utils';
@@ -77,7 +80,9 @@ export default function ProviderProfile() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
-  const [selectedMobileImage, setSelectedMobileImage] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
 
   const requireAuth = (callback: () => void) => {
     if (!user) {
@@ -227,6 +232,15 @@ export default function ProviderProfile() {
     }
     setSubmittingReport(true);
     try {
+      const { error } = await supabase
+        .from('reports')
+        .insert({
+          reporter_id: user.id,
+          provider_id: id!,
+          reason: reportReason.trim(),
+        });
+
+      if (error) throw error;
       toast.success('Thank you for your report. Our team will review it.');
       setShowReportModal(false);
       setReportReason('');
@@ -237,10 +251,45 @@ export default function ProviderProfile() {
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current || !provider?.portfolio_images.length) return;
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 50;
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0 && currentImageIndex < provider.portfolio_images.length - 1) {
+        setCurrentImageIndex(prev => prev + 1);
+      } else if (diff < 0 && currentImageIndex > 0) {
+        setCurrentImageIndex(prev => prev - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  const nextImage = () => {
+    if (provider?.portfolio_images && currentImageIndex < provider.portfolio_images.length - 1) {
+      setCurrentImageIndex(prev => prev + 1);
+    }
+  };
+
+  const prevImage = () => {
+    if (currentImageIndex > 0) {
+      setCurrentImageIndex(prev => prev - 1);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <NimartSpinner size="lg" />
       </div>
     );
   }
@@ -458,41 +507,66 @@ export default function ProviderProfile() {
         {provider.portfolio_images.length > 0 && (
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold mb-4">Portfolio</h2>
+            {/* Mobile: Swipeable Carousel */}
             <div className="block md:hidden">
-              <div className="space-y-2">
-                <div className="relative rounded-lg overflow-hidden">
-                  <OptimizedImage
-                    src={provider.portfolio_images[selectedMobileImage].image_url}
-                    alt="Main portfolio"
-                    className="w-full h-64 object-cover"
-                  />
-                  <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
-                    {selectedMobileImage + 1} / {provider.portfolio_images.length}
-                  </div>
+              <div
+                className="relative overflow-hidden rounded-lg"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div
+                  className="flex transition-transform duration-300 ease-out"
+                  style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
+                >
+                  {provider.portfolio_images.map((image) => (
+                    <div key={image.id} className="w-full flex-shrink-0">
+                      <img
+                        src={image.image_url}
+                        alt={image.title || 'Portfolio'}
+                        className="w-full h-auto object-contain"
+                        style={{ maxHeight: '70vh' }}
+                      />
+                    </div>
+                  ))}
                 </div>
+                {/* Navigation Arrows */}
                 {provider.portfolio_images.length > 1 && (
-                  <div className="grid grid-cols-4 gap-2">
-                    {provider.portfolio_images.slice(0, 4).map((img, idx) => (
-                      <button
-                        key={img.id}
-                        onClick={() => setSelectedMobileImage(idx)}
-                        className={cn(
-                          "rounded-lg overflow-hidden border-2 transition",
-                          selectedMobileImage === idx ? "border-primary-500" : "border-transparent"
-                        )}
-                      >
-                        <OptimizedImage
-                          src={img.image_url}
-                          alt={`Thumbnail ${idx + 1}`}
-                          className="w-full h-16 object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <button
+                      onClick={prevImage}
+                      disabled={currentImageIndex === 0}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 bg-black/30 text-white rounded-full disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      disabled={currentImageIndex === provider.portfolio_images.length - 1}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-black/30 text-white rounded-full disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </>
                 )}
-                <p className="text-xs text-gray-500 text-center">Tap thumbnails to view</p>
+                {/* Dots Indicator */}
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                  {provider.portfolio_images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={cn(
+                        'w-2 h-2 rounded-full transition-all',
+                        currentImageIndex === idx
+                          ? 'bg-white scale-125'
+                          : 'bg-white/50'
+                      )}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
+            {/* Desktop: Grid Gallery */}
             <div className="hidden md:block">
               <PortfolioGallery images={provider.portfolio_images} />
             </div>

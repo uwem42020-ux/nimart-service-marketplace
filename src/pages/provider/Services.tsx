@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Plus, Edit2, Trash2, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Service {
   id: string;
@@ -136,7 +137,9 @@ export default function ProviderServices() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : services.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">No services added yet.</p>

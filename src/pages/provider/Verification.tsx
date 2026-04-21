@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { Upload, X, CheckCircle, Clock, XCircle, Loader2, AlertCircle, Camera } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface VerificationDocument {
   id: string;
@@ -42,29 +43,6 @@ const documentTypes = [
     required: false
   },
 ];
-
-function VerificationSkeleton() {
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse mb-2" />
-      <div className="h-4 w-72 bg-gray-200 rounded-lg animate-pulse mb-6" />
-      <div className="h-16 bg-gray-200 rounded-lg animate-pulse mb-6" />
-      <div className="space-y-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white rounded-lg shadow-sm border p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-2" />
-                <div className="h-4 w-full max-w-md bg-gray-200 rounded animate-pulse" />
-              </div>
-              <div className="h-9 w-20 bg-gray-200 rounded-lg animate-pulse" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function ProviderVerification() {
   const { user, profile } = useAuth();
@@ -294,7 +272,11 @@ export default function ProviderVerification() {
   const overallStatus = getOverallStatus();
 
   if (isLoading) {
-    return <VerificationSkeleton />;
+    return (
+      <div className="flex justify-center py-12">
+        <NimartSpinner size="md" />
+      </div>
+    );
   }
 
   return (

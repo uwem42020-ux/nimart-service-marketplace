@@ -339,7 +339,7 @@ export default function Home() {
             >
               <div className="flex items-center gap-1 md:gap-2">
                 <MapPin className="h-5 w-5 flex-shrink-0" />
-                <span className="truncate text-sm md:text-base">{locationLabel}</span>
+                <span className="truncate max-w-[100px] sm:max-w-[150px]">{locationLabel}</span>
               </div>
               <ChevronDown className="h-4 w-4 flex-shrink-0" />
             </button>

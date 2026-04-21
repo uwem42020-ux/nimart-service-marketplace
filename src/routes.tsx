@@ -48,6 +48,7 @@ const AdminUsers = lazy(() => import('./pages/admin/Users'));
 const AdminChats = lazy(() => import('./pages/admin/Chats'));
 const AdminBulkEmail = lazy(() => import('./pages/admin/BulkEmail'));
 const AdminVerifications = lazy(() => import('./pages/admin/Verifications'));
+const AdminReports = lazy(() => import('./pages/admin/Reports'));
 
 export const router = createBrowserRouter([
   {
@@ -101,7 +102,6 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      // ✅ SPECIFIC ROUTES MUST COME FIRST
       { path: 'dashboard', element: <Suspense fallback={<LoadingSkeleton />}><ProviderDashboard /></Suspense> },
       { path: 'setup', element: <Suspense fallback={<LoadingSkeleton />}><ProviderSetup /></Suspense> },
       { path: 'portfolio', element: <Suspense fallback={<LoadingSkeleton />}><ProviderPortfolio /></Suspense> },
@@ -112,10 +112,6 @@ export const router = createBrowserRouter([
       { path: 'profile', element: <Suspense fallback={<LoadingSkeleton />}><ProviderProfile /></Suspense> },
       { path: 'verification', element: <Suspense fallback={<LoadingSkeleton />}><ProviderVerification /></Suspense> },
       { path: 'notifications', element: <Suspense fallback={<LoadingSkeleton />}><Notifications /></Suspense> },
-      
-      // ⚠️ DYNAMIC ROUTE MUST COME LAST
-      // Note: This route is for the public-facing provider profile (customer view)
-      // It is intentionally placed at the end to avoid capturing /provider/verification, /provider/setup, etc.
     ],
   },
   {
@@ -131,6 +127,7 @@ export const router = createBrowserRouter([
       { path: 'chats', element: <Suspense fallback={<LoadingSkeleton />}><AdminChats /></Suspense> },
       { path: 'email', element: <Suspense fallback={<LoadingSkeleton />}><AdminBulkEmail /></Suspense> },
       { path: 'verifications', element: <Suspense fallback={<LoadingSkeleton />}><AdminVerifications /></Suspense> },
+      { path: 'reports', element: <Suspense fallback={<LoadingSkeleton />}><AdminReports /></Suspense> },
     ],
   },
   {

@@ -5,6 +5,7 @@ import { Search, Ban, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface AdminUser {
   id: string;
@@ -149,7 +150,9 @@ export default function AdminUsers() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
           <table className="w-full">

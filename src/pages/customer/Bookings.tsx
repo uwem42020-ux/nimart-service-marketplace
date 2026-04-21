@@ -6,6 +6,7 @@ import { Calendar, Clock, MapPin, Star, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Booking {
   id: string;
@@ -143,7 +144,9 @@ export default function CustomerBookings() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : bookings.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Calendar className="mx-auto h-12 w-12 text-gray-400" />

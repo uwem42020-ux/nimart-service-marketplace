@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Bell, CheckCircle, Calendar, MessageCircle, AlertCircle, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import toast from 'react-hot-toast';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Notification {
   id: string;
@@ -126,7 +127,9 @@ export default function Notifications() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : filteredNotifications.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Bell className="mx-auto h-12 w-12 text-gray-400" />

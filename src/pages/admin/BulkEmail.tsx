@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Mail, Send, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function AdminBulkEmail() {
   const { user } = useAuth();
@@ -145,14 +146,20 @@ export default function AdminBulkEmail() {
           <p className="mt-1 text-xs text-gray-500">You can use HTML formatting.</p>
         </div>
 
-        <button
-          onClick={sendBulkEmail}
-          disabled={loading || !subject.trim() || !content.trim()}
-          className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-        >
-          <Send className="h-5 w-5" />
-          {loading ? 'Sending...' : 'Send Bulk Email'}
-        </button>
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <NimartSpinner size="md" />
+          </div>
+        ) : (
+          <button
+            onClick={sendBulkEmail}
+            disabled={loading || !subject.trim() || !content.trim()}
+            className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            <Send className="h-5 w-5" />
+            Send Bulk Email
+          </button>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { MessageCircle, Send, ChevronRight, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 import toast from 'react-hot-toast';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Chat {
   id: string;
@@ -165,7 +166,9 @@ export default function AdminChats() {
           </div>
           <div className="overflow-y-auto h-full">
             {loading ? (
-              <div className="p-4 text-center">Loading...</div>
+              <div className="flex justify-center p-4">
+                <NimartSpinner size="md" />
+              </div>
             ) : chats.length === 0 ? (
               <div className="p-4 text-center text-gray-500">No chats yet</div>
             ) : (

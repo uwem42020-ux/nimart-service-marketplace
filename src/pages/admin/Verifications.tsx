@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Eye, ChevronDown, ChevronRight, FileText, Shield 
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
+import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface VerificationDocument {
   id: string;
@@ -256,7 +257,9 @@ export default function AdminVerifications() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="flex justify-center py-12">
+          <NimartSpinner size="md" />
+        </div>
       ) : providerGroups.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">No verification requests found.</p>
