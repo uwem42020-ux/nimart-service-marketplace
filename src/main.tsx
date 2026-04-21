@@ -7,6 +7,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { router } from './routes';
+import { UpdateNotification } from './components/common/UpdateNotification';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <NotificationProvider>
+            <UpdateNotification />
             <RouterProvider router={router} />
             <Toaster
               position="top-center"
