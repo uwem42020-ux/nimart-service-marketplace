@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'inline',  // 👈 ADD THIS LINE
       includeAssets: [
         'favicon.ico',
         'favicon-16x16.png',
@@ -86,7 +87,6 @@ export default defineConfig({
             }
           }
         ],
-        // 👇 Force new service worker to activate immediately
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,

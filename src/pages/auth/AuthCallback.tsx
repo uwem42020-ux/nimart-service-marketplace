@@ -69,6 +69,7 @@ export default function AuthCallback() {
     if (!user) return;
     setSubmitting(true);
     try {
+      // Update profile with role
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -81,17 +82,43 @@ export default function AuthCallback() {
       if (profileError) throw profileError;
 
       if (role === 'provider') {
+        // Small delay for database trigger
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Get default subcategory
+        const { data: defaultSub } = await supabase
+          .from('subcategories')
+          .select('id')
+          .or('name.ilike.%vehicle%,name.ilike.%mechanic%')
+          .limit(1)
+          .maybeSingle();
+
+        // Upsert provider row
         const { error: providerError } = await supabase
           .from('providers')
-          .insert([{
+          .upsert({
             id: user.id,
+            business_name: fullName,
+            description: 'Professional service provider',
             selected_tier_slug: 'automotive',
             selected_category_slug: 'vehicle-mechanics',
+            selected_subcategory_id: defaultSub?.id || null,
             is_available: true,
             status: 'available',
-          }]);
+          }, {
+            onConflict: 'id',
+            ignoreDuplicates: false,
+          });
 
-        if (providerError) throw providerError;
+        if (providerError) {
+          console.error('Provider upsert error:', providerError);
+        }
+
+        // Mark as incomplete to force setup
+        await supabase
+          .from('profiles')
+          .update({ is_complete: false })
+          .eq('id', user.id);
 
         toast.success('Account created! Please complete your business profile.');
         navigate('/provider/setup', { replace: true });
@@ -100,7 +127,8 @@ export default function AuthCallback() {
         navigate('/customer/dashboard', { replace: true });
       }
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Profile completion error:', error);
+      toast.error(error.message || 'Failed to complete profile');
     } finally {
       setSubmitting(false);
     }

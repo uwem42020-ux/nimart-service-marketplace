@@ -20,7 +20,6 @@ export default function SignUp() {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 从 URL 参数预选角色（例如 ?role=provider）
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam === 'provider') {
@@ -76,6 +75,7 @@ export default function SignUp() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Check if profile already has a role
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('role')
@@ -89,6 +89,7 @@ export default function SignUp() {
         return;
       }
 
+      // Update profile with role and name
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -100,29 +101,58 @@ export default function SignUp() {
 
       if (profileError) throw profileError;
 
-      await refreshProfile();
-
+      // For providers, ensure they have a complete starting record
       if (role === 'provider') {
+        // Small delay to allow database trigger to run
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Get default subcategory
+        const { data: defaultSub } = await supabase
+          .from('subcategories')
+          .select('id')
+          .or('name.ilike.%vehicle%,name.ilike.%mechanic%')
+          .limit(1)
+          .maybeSingle();
+
+        // Upsert provider row (will create or update)
         const { error: providerError } = await supabase
           .from('providers')
-          .insert([{
+          .upsert({
             id: user.id,
+            business_name: fullName,
+            description: 'Professional service provider',
             selected_tier_slug: 'automotive',
             selected_category_slug: 'vehicle-mechanics',
+            selected_subcategory_id: defaultSub?.id || null,
             is_available: true,
             status: 'available',
-          }]);
+          }, {
+            onConflict: 'id',
+            ignoreDuplicates: false,
+          });
 
-        if (providerError) throw providerError;
+        if (providerError) {
+          console.error('Provider upsert error:', providerError);
+          // Continue anyway - trigger should have created it
+        }
 
+        // Mark as incomplete to force setup page
+        await supabase
+          .from('profiles')
+          .update({ is_complete: false })
+          .eq('id', user.id);
+
+        await refreshProfile();
         toast.success('Account created! Please complete your business profile.');
         navigate('/provider/setup');
       } else {
+        await refreshProfile();
         toast.success('Welcome to Nimart!');
         navigate('/customer/dashboard');
       }
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Signup completion error:', error);
+      toast.error(error.message || 'Failed to complete signup');
     } finally {
       setLoading(false);
     }
