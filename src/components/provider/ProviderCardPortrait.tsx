@@ -35,6 +35,18 @@ const statusIconMap: Record<string, string> = {
   away: '/away.svg',
 };
 
+const statusLabel: Record<string, string> = {
+  available: 'Available',
+  busy: 'Busy',
+  away: 'Away',
+};
+
+const statusRingColor: Record<string, string> = {
+  available: 'bg-green-500',
+  busy: 'bg-yellow-500',
+  away: 'bg-red-500',
+};
+
 export const ProviderCardPortrait = memo(function ProviderCardPortrait({
   provider,
   className,
@@ -44,7 +56,7 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
   const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
 
   const locationString = provider.profile?.lga_name
-    ? `${provider.profile.lga_name}, ${provider.profile.state_name || ''}`
+    ? provider.profile.lga_name
     : 'Location not set';
 
   const categoryDisplay = provider.selected_category_slug
@@ -56,7 +68,11 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
 
   const lastSeen = provider.lastSignInAt
     ? formatDistanceToNow(new Date(provider.lastSignInAt), { addSuffix: true })
+    : provider.profile?.updated_at
+    ? formatDistanceToNow(new Date(provider.profile.updated_at), { addSuffix: true })
     : 'Recently';
+
+  const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
 
   const handleBookNow = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -108,12 +124,12 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
   return (
     <div
       className={cn(
-        'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col',
-        'break-inside-avoid',
+        'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col break-inside-avoid',
+        isBoosted && 'border-2 border-amber-500',
         className
       )}
     >
-      {/* Image – natural height, no forced aspect ratio */}
+      {/* Image section */}
       <Link to={`/provider/${provider.id}`} className="block relative w-full bg-gray-100">
         {provider.profile?.avatar_url ? (
           <OptimizedImage
@@ -123,44 +139,61 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
             width={400}
           />
         ) : (
-          <div className="w-full h-40 flex items-center justify-center bg-primary-50">
-            <span className="text-4xl font-semibold text-primary-600">
-              {(provider.business_name || provider.profile?.full_name || 'P')[0]}
-            </span>
+          <div className="relative w-full h-40">
+            <img
+              src="/profile.png"
+              alt="Placeholder"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/30" />
           </div>
         )}
 
-        {/* Status icon */}
-        <div className="absolute top-3 right-3">
-          <img
-            src={statusIconMap[provider.status] || '/active.svg'}
-            alt={provider.status}
-            className="h-6 w-6 ring-2 ring-white rounded-full"
-          />
-        </div>
-
-        {/* Verified badge */}
+        {/* Verified badge (top right) */}
         {provider.profile?.is_verified && (
-          <div className="absolute top-3 left-3 bg-blue-500 text-white p-1 rounded-full">
-            <CheckCircle className="h-4 w-4" />
+          <div className="absolute top-3 right-3 bg-white rounded-full p-0.5 shadow-sm z-10">
+            <img src="/verify.png" alt="Verified" className="h-7 w-7" />
           </div>
         )}
 
-        {/* Boosted badge */}
-        {new Date(provider.boost_until) > new Date() && (
-          <div className="absolute top-3 left-3 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
-            Boosted
+        {/* Boosted badge – bottom left, vertical */}
+        {isBoosted && (
+          <div
+            className="absolute bottom-3 left-0 bg-amber-500 text-white rounded-r-md px-2 py-2 shadow-md z-10"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            <span className="text-sm font-black tracking-wide">BOOSTED</span>
           </div>
         )}
       </Link>
 
-      {/* Details – flex column, pushes button to bottom */}
+      {/* Details */}
       <div className="p-3 sm:p-4 flex flex-col flex-1">
-        <Link to={`/provider/${provider.id}`} className="block">
-          <h3 className="font-semibold text-primary-600 truncate mb-1 hover:underline text-sm">
-            {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
-          </h3>
-        </Link>
+        {/* Provider name with small icon + larger pulsing ring */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="relative flex-shrink-0">
+            {/* Larger pulsing ring (20px) behind small icon */}
+            <span
+              className={cn(
+                'absolute w-5 h-5 -top-1 -left-1 rounded-full animate-ping opacity-75',
+                statusRingColor[provider.status] || 'bg-gray-500'
+              )}
+              style={{ animationDuration: '1.1s' }}
+            />
+            {/* Small status icon (12px) */}
+            <img
+              src={statusIconMap[provider.status] || '/active.svg'}
+              alt={provider.status}
+              className="relative h-3 w-3 z-10"
+              title={statusLabel[provider.status] || provider.status}
+            />
+          </div>
+          <Link to={`/provider/${provider.id}`} className="block flex-1">
+            <h3 className="font-semibold text-primary-600 truncate hover:underline text-sm">
+              {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
+            </h3>
+          </Link>
+        </div>
 
         {provider.description && (
           <p className="text-xs text-gray-600 line-clamp-2 mb-2">{provider.description}</p>

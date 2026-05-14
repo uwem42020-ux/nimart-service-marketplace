@@ -1,7 +1,7 @@
 // src/components/provider/ProviderCard.tsx
 import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Star, CheckCircle, Briefcase, Clock } from 'lucide-react';
+import { MapPin, Star, Briefcase, Clock } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
 import { formatDistance } from '../../lib/distance';
 import { cn } from '../../lib/utils';
@@ -35,13 +35,25 @@ const statusIconMap: Record<string, string> = {
   away: '/away.svg',
 };
 
+const statusLabel: Record<string, string> = {
+  available: 'Available',
+  busy: 'Busy',
+  away: 'Away',
+};
+
+const statusRingColor: Record<string, string> = {
+  available: 'bg-green-500',
+  busy: 'bg-yellow-500',
+  away: 'bg-red-500',
+};
+
 export const ProviderCard = memo(function ProviderCard({ provider, className }: ProviderCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
 
   const locationString = provider.profile?.lga_name
-    ? `${provider.profile.lga_name}, ${provider.profile.state_name || ''}`
+    ? provider.profile.lga_name
     : 'Location not set';
 
   const categoryDisplay = provider.selected_category_slug
@@ -57,6 +69,8 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
     ? formatDistanceToNow(new Date(provider.profile.updated_at), { addSuffix: true })
     : 'Recently';
 
+  const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
+
   const handleBookNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -71,18 +85,14 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
   const handleEnableLocation = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
     setPermissionDenied(false);
-    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         () => {
           toast.success('Location enabled! Refreshing...');
           setTimeout(() => window.location.reload(), 500);
         },
-        () => {
-          toast.error('Location permission denied');
-        }
+        () => toast.error('Location permission denied')
       );
     } else {
       toast.error('Geolocation not supported');
@@ -97,23 +107,24 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         </span>
       );
     }
-    
     if (permissionGranted && userLat && userLng) {
       return <span className="text-xs text-gray-400">Calculating...</span>;
     }
-    
     return (
-      <button
-        onClick={handleEnableLocation}
-        className="text-xs text-primary-600 hover:underline"
-      >
+      <button onClick={handleEnableLocation} className="text-xs text-primary-600 hover:underline">
         📍 Enable location
       </button>
     );
   };
 
   return (
-    <div className={cn('bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden', className)}>
+    <div
+      className={cn(
+        'bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden',
+        isBoosted && 'border-2 border-amber-500',
+        className
+      )}
+    >
       <Link to={`/provider/${provider.id}`} className="block relative w-full overflow-hidden bg-gray-100">
         <div className="relative w-full" style={{ paddingBottom: '100%' }}>
           {provider.profile?.avatar_url ? (
@@ -123,50 +134,62 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-primary-50">
-              <span className="text-4xl font-semibold text-primary-600">
-                {(provider.business_name || provider.profile?.full_name || 'P')[0]}
-              </span>
+            <div className="absolute inset-0 w-full h-full">
+              <img
+                src="/profile.png"
+                alt="Placeholder"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/30" />
             </div>
           )}
         </div>
 
-        <div className="absolute top-3 right-3">
-          <div className="relative">
-            <span
-              className={cn(
-                "absolute inset-0 rounded-full opacity-75 animate-ping",
-                provider.status === 'available' && "bg-green-400",
-                provider.status === 'busy' && "bg-yellow-400",
-                provider.status === 'away' && "bg-red-400"
-              )}
-            />
-            <img
-              src={statusIconMap[provider.status] || '/active.svg'}
-              alt={provider.status}
-              className="relative h-6 w-6 ring-2 ring-white rounded-full"
-            />
-          </div>
-        </div>
-
+        {/* Verified badge (top right) */}
         {provider.profile?.is_verified && (
-          <div className="absolute top-3 left-3 bg-blue-500 text-white p-1 rounded-full">
-            <CheckCircle className="h-4 w-4" />
+          <div className="absolute top-3 right-3 bg-white rounded-full p-0.5 shadow-sm z-10">
+            <img src="/verify.png" alt="Verified" className="h-7 w-7" />
+          </div>
+        )}
+
+        {/* Boosted badge – bottom left, vertical */}
+        {isBoosted && (
+          <div
+            className="absolute bottom-3 left-0 bg-amber-500 text-white rounded-r-md px-2 py-2 shadow-md z-10"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            <span className="text-sm font-black tracking-wide">BOOSTED</span>
           </div>
         )}
       </Link>
 
       <div className="p-4">
-        <Link to={`/provider/${provider.id}`} className="block">
-          <h3 className="font-semibold text-primary-600 truncate mb-1 hover:underline">
-            {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
-          </h3>
-        </Link>
+        {/* Provider name with status icon on left + pulsing ring */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="relative flex-shrink-0">
+            <span
+              className={cn(
+                'absolute w-5 h-5 -top-1 -left-1 rounded-full animate-ping opacity-75',
+                statusRingColor[provider.status] || 'bg-gray-500'
+              )}
+              style={{ animationDuration: '1.1s' }}
+            />
+            <img
+              src={statusIconMap[provider.status] || '/active.svg'}
+              alt={provider.status}
+              className="relative h-3 w-3 z-10"
+              title={statusLabel[provider.status] || provider.status}
+            />
+          </div>
+          <Link to={`/provider/${provider.id}`} className="block flex-1">
+            <h3 className="font-semibold text-primary-600 truncate hover:underline">
+              {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
+            </h3>
+          </Link>
+        </div>
 
         {provider.description && (
-          <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-            {provider.description}
-          </p>
+          <p className="text-sm text-gray-600 line-clamp-2 mb-2">{provider.description}</p>
         )}
 
         <Link

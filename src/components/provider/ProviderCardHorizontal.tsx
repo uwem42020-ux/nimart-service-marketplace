@@ -1,7 +1,7 @@
 // src/components/provider/ProviderCardHorizontal.tsx
 import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Star, Briefcase, Clock, CheckCircle } from 'lucide-react';
+import { MapPin, Star, Briefcase, Clock } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
 import { formatDistance } from '../../lib/distance';
 import { cn } from '../../lib/utils';
@@ -33,6 +33,18 @@ const statusIconMap: Record<string, string> = {
   away: '/away.svg',
 };
 
+const statusLabel: Record<string, string> = {
+  available: 'Available',
+  busy: 'Busy',
+  away: 'Away',
+};
+
+const statusRingColor: Record<string, string> = {
+  available: 'bg-green-500',
+  busy: 'bg-yellow-500',
+  away: 'bg-red-500',
+};
+
 export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
   provider,
   className,
@@ -41,7 +53,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
   const navigate = useNavigate();
 
   const locationString = provider.profile?.lga_name
-    ? `${provider.profile.lga_name}, ${provider.profile.state_name || ''}`
+    ? provider.profile.lga_name
     : 'Location not set';
 
   const categoryDisplay = provider.selected_category_slug
@@ -53,7 +65,11 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
 
   const lastSeen = provider.lastSignInAt
     ? formatDistanceToNow(new Date(provider.lastSignInAt), { addSuffix: true })
+    : provider.profile?.updated_at
+    ? formatDistanceToNow(new Date(provider.profile.updated_at), { addSuffix: true })
     : 'Recently';
+
+  const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
 
   const handleBook = () => {
     if (provider.status === 'away') return;
@@ -68,10 +84,11 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
     <div
       className={cn(
         'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-row items-stretch hover:shadow-md transition-shadow',
+        isBoosted && 'border-2 border-amber-500',
         className
       )}
     >
-      {/* Image */}
+      {/* Image area */}
       <Link
         to={`/provider/${provider.id}`}
         className="w-28 sm:w-32 flex-shrink-0 relative bg-gray-100 overflow-hidden"
@@ -83,45 +100,64 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-primary-50">
-            <span className="text-3xl font-semibold text-primary-600">
-              {(provider.business_name || provider.profile?.full_name || 'P')[0]}
-            </span>
+          <div className="w-full h-full relative">
+            <img
+              src="/profile.png"
+              alt="Placeholder"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/30" />
           </div>
         )}
-        {/* Status icon */}
-        <img
-          src={statusIconMap[provider.status] || '/active.svg'}
-          alt={provider.status}
-          className="absolute top-2 right-2 h-5 w-5 ring-2 ring-white rounded-full"
-        />
-        {/* Verified badge */}
+
+        {/* Verified badge (top right) */}
         {provider.profile?.is_verified && (
-          <div className="absolute top-2 left-2 bg-blue-500 text-white p-0.5 rounded-full">
-            <CheckCircle className="h-3.5 w-3.5" />
+          <div className="absolute top-2 right-2 bg-white rounded-full p-0.5 shadow-sm z-10">
+            <img src="/verify.png" alt="Verified" className="h-6 w-6" />
           </div>
         )}
-        {/* Boosted badge – placed next to verified badge if both present */}
-        {new Date(provider.boost_until) > new Date() && (
-          <div className={`absolute top-2 ${provider.profile?.is_verified ? 'left-12' : 'left-2'} bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-medium`}>
-            Boosted
+
+        {/* Boosted badge – bottom left, vertical (smaller for horizontal card) */}
+        {isBoosted && (
+          <div
+            className="absolute bottom-2 left-0 bg-amber-500 text-white rounded-r-md px-1.5 py-1.5 shadow-md z-10"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            <span className="text-[10px] font-black tracking-wide">BOOSTED</span>
           </div>
         )}
       </Link>
 
       {/* Details */}
       <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between">
-        <div>
+        {/* Provider name + status icon inline, left side */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="relative flex-shrink-0">
+            <span
+              className={cn(
+                'absolute w-5 h-5 -top-1 -left-1 rounded-full animate-ping opacity-75',
+                statusRingColor[provider.status] || 'bg-gray-500'
+              )}
+              style={{ animationDuration: '1.1s' }}
+            />
+            <img
+              src={statusIconMap[provider.status] || '/active.svg'}
+              alt={provider.status}
+              className="relative h-3 w-3 z-10"
+              title={statusLabel[provider.status] || provider.status}
+            />
+          </div>
           <Link
             to={`/provider/${provider.id}`}
-            className="font-semibold text-primary-600 truncate hover:underline"
+            className="font-semibold text-primary-600 truncate hover:underline flex-1"
           >
             {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
           </Link>
-          {provider.description && (
-            <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{provider.description}</p>
-          )}
         </div>
+
+        {provider.description && (
+          <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{provider.description}</p>
+        )}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
           <span className="flex items-center gap-1 text-gray-600">
