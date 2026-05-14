@@ -2,19 +2,23 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { ProviderCard } from '../../components/provider/ProviderCard';
+import { ProviderCardPortrait } from '../../components/provider/ProviderCardPortrait';
+import { ProviderCardHorizontal } from '../../components/provider/ProviderCardHorizontal';
 import { useAuth } from '../../contexts/AuthContext';
 import { LocationDropdown } from '../../components/common/LocationDropdown';
-import { MapPin, ChevronDown, Search, WifiOff } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import { TIERS } from '../../data/categories';
+import { QuickLinksBanner } from '../../components/common/QuickLinksBanner';
+import { TopProvidersSlider } from '../../components/common/TopProvidersSlider';
 import { CategoryButtons } from '../../components/common/CategoryButtons';
 import { CategorySidebar } from '../../components/common/CategorySidebar';
+import { MapPin, ChevronDown, Search, WifiOff, LayoutGrid, List } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocationStore } from '../../stores/locationStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { useOffline } from '../../hooks/useOffline';
 import { SEO } from '../../components/common/SEO';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { cn } from '../../lib/utils';
+import { useSmartSort } from '../../hooks/useSmartSort';
 import type { Database } from '../../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -30,6 +34,33 @@ export interface ProviderWithProfile extends ProviderRow {
   lastSignInAt?: string | null;
 }
 
+// Homepage structured data
+const homeSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Nimart",
+  "url": "https://nimart.ng",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://nimart.ng/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+};
+
+const orgSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Nimart",
+  "url": "https://nimart.ng",
+  "logo": "https://nimart.ng/logo.png",
+  "sameAs": [
+    "https://www.tiktok.com/@nimart.ng",
+    "https://www.instagram.com/nimartng",
+    "https://x.com/nimartng",
+    "https://web.facebook.com/people/Nimart/61551209078955/"
+  ]
+};
+
 export default function Home() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -40,8 +71,28 @@ export default function Home() {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationLabel, setLocationLabel] = useState('All Nigeria');
   const [states, setStates] = useState<any[]>([]);
-  const [providerCounts, setProviderCounts] = useState<Record<string, number>>({});
-  const [subcategoryCounts, setSubcategoryCounts] = useState<Record<number, number>>({});
+  const [preloadedLgas, setPreloadedLgas] = useState<Record<string, any[]>>({});
+
+  // Persist counts in localStorage
+  const [providerCounts, setProviderCounts] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('nimart_provider_counts');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [subcategoryCounts, setSubcategoryCounts] = useState<Record<number, number>>(() => {
+    try {
+      const saved = localStorage.getItem('nimart_subcategory_counts');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const autoLocationApplied = useRef(false);
   const isOffline = useOffline();
@@ -50,6 +101,58 @@ export default function Home() {
   const { lat: globalLat, lng: globalLng, permissionGranted } = useLocationStore();
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
+
+  // AI sorting hook
+  const { data: smartSortData } = useSmartSort(
+    profile?.id,
+    userLat,
+    userLng,
+    undefined,
+    undefined,
+    20
+  );
+
+  // Save counts to localStorage on change
+  useEffect(() => {
+    if (Object.keys(providerCounts).length > 0) {
+      localStorage.setItem('nimart_provider_counts', JSON.stringify(providerCounts));
+    }
+  }, [providerCounts]);
+
+  useEffect(() => {
+    if (Object.keys(subcategoryCounts).length > 0) {
+      localStorage.setItem('nimart_subcategory_counts', JSON.stringify(subcategoryCounts));
+    }
+  }, [subcategoryCounts]);
+
+  // Preload states and LGAs
+  useEffect(() => {
+    async function preloadLocations() {
+      const { data: allStates } = await supabase
+        .from('lga_centers')
+        .select('state_id, state_name')
+        .order('state_name');
+      const uniqueStates = allStates?.filter((v, i, a) =>
+        a.findIndex(t => t.state_id === v.state_id) === i
+      ) || [];
+      setStates(uniqueStates);
+
+      const { data: allLgas } = await supabase
+        .from('lga_centers')
+        .select('lga_id, lga_name, state_id, lat, lng')
+        .order('lga_name');
+      if (allLgas) {
+        const grouped: Record<string, any[]> = {};
+        allLgas.forEach((lga) => {
+          const key = lga.state_id.toString();
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(lga);
+        });
+        setPreloadedLgas(grouped);
+      }
+    }
+    preloadLocations();
+  }, []);
 
   useEffect(() => {
     if (!permissionGranted || !globalLat || !globalLng) return;
@@ -76,23 +179,10 @@ export default function Home() {
     fetchNearestLGA();
   }, [permissionGranted, globalLat, globalLng]);
 
-  useEffect(() => {
-    async function fetchStates() {
-      const { data } = await supabase
-        .from('lga_centers')
-        .select('state_id, state_name')
-        .order('state_name');
-      const uniqueStates = data?.filter((v, i, a) =>
-        a.findIndex(t => t.state_id === v.state_id) === i
-      ) || [];
-      setStates(uniqueStates);
-    }
-    fetchStates();
-  }, []);
-
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
+      // Fetch counts – only update on success
       const { data: allProviders, error: allError } = await supabase
         .from('providers')
         .select('id, selected_category_slug, selected_subcategory_id')
@@ -112,6 +202,7 @@ export default function Home() {
         setProviderCounts(catCounts);
         setSubcategoryCounts(subCounts);
       }
+      // On error, previous counts remain
 
       let providerQuery = supabase
         .from('providers')
@@ -125,10 +216,12 @@ export default function Home() {
           selected_category_slug,
           selected_subcategory_id,
           tags,
-          boost_until
+          boost_until,
+          top_placement_until
         `)
         .eq('is_available', true)
         .order('boost_until', { ascending: false, nullsFirst: false })
+        .order('status', { ascending: true })
         .limit(20);
 
       if (lgaFilter) {
@@ -168,16 +261,31 @@ export default function Home() {
 
       const providerIds = providers.map(p => p.id);
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', providerIds);
+      // ----------------------------------------------------------------
+      // 1. Batch fetch profiles, portfolio images, and reviews
+      // ----------------------------------------------------------------
+      const [profilesRes, portfolioRes, reviewsRes] = await Promise.all([
+        supabase.from('profiles').select('*').in('id', providerIds),
+        supabase.from('portfolio_images').select('*').in('provider_id', providerIds),
+        supabase.from('reviews').select('provider_id, rating').in('provider_id', providerIds),
+      ]);
 
-      const { data: portfolioImages } = await supabase
-        .from('portfolio_images')
-        .select('*')
-        .in('provider_id', providerIds);
+      const profiles = profilesRes.data ?? [];
+      const portfolioImages = portfolioRes.data ?? [];
+      const allReviews = reviewsRes.data ?? [];
 
+      // Build a reviews map: provider_id → { totalRating, count }
+      const reviewsMap = new Map<string, { sum: number; count: number }>();
+      allReviews.forEach(r => {
+        const curr = reviewsMap.get(r.provider_id) || { sum: 0, count: 0 };
+        curr.sum += r.rating;
+        curr.count += 1;
+        reviewsMap.set(r.provider_id, curr);
+      });
+
+      // ----------------------------------------------------------------
+      // 2. Distances (optional)
+      // ----------------------------------------------------------------
       let distancesMap: Record<string, number> = {};
       if (userLat && userLng) {
         const { data: distances, error: rpcError } = await supabase
@@ -194,22 +302,24 @@ export default function Home() {
         }
       }
 
-      const providersWithDetails = await Promise.all(providers.map(async (provider) => {
-        const providerProfile = profiles?.find(p => p.id === provider.id) ?? ({} as ProfileRow);
-        const images = (portfolioImages || []).filter(img => img.provider_id === provider.id);
+      // ----------------------------------------------------------------
+      // 3. Assemble final provider objects (no per‑provider queries!)
+      // ----------------------------------------------------------------
+      const providersWithDetails = providers.map(provider => {
+        const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
+        const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
+
         const distanceMeters = distancesMap[provider.id];
         const distance = distanceMeters ? distanceMeters / 1000 : undefined;
 
-        const { data: reviews } = await supabase
-          .from('reviews')
-          .select('rating')
-          .eq('provider_id', provider.id);
-        const avgRating = reviews?.length
-          ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
+        const reviewStats = reviewsMap.get(provider.id);
+        const avgRating = reviewStats
+          ? reviewStats.sum / reviewStats.count
           : 0;
+        const reviewCount = reviewStats?.count || 0;
 
-        const { data: lastSignInData } = await supabase
-          .rpc('get_user_last_sign_in', { user_id: provider.id });
+        // Use profile.updated_at as a simple "last seen" heuristic
+        const lastSignInAt = providerProfile.updated_at || null;
 
         return {
           ...provider,
@@ -217,13 +327,17 @@ export default function Home() {
           portfolio_images: images,
           distance,
           average_rating: avgRating,
-          review_count: reviews?.length || 0,
-          lastSignInAt: lastSignInData,
+          review_count: reviewCount,
+          lastSignInAt,
         } as ProviderWithProfile;
-      }));
+      });
 
-      if (userLat && userLng) {
-        providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+      // ----------------------------------------------------------------
+      // 4. Apply AI sorting if available
+      // ----------------------------------------------------------------
+      if (smartSortData && smartSortData.length > 0) {
+        const scoreMap = new Map(smartSortData.map(s => [s.provider_id, s.score]));
+        providersWithDetails.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
       }
 
       return providersWithDetails;
@@ -323,133 +437,208 @@ export default function Home() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <SEO />
+    <>
+      {/* Hero section – full width, solid green, directly after header */}
+      <section className="w-full bg-[#008751] py-6 md:py-8 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SEO
+            title="Nimart - Nigeria's Trusted Service Marketplace"
+            description="Connect with verified professionals across Nigeria. Book trusted services for home, auto, beauty, and more."
+            url="https://nimart.ng"
+            schema={{ ...homeSchema, ...orgSchema }}
+          />
+          <p className="text-base md:text-lg text-white/90 text-center mb-4">
+            Connect with professionals near you
+          </p>
 
-      <section className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 md:p-8 mb-8 text-white">
-        <p className="text-base md:text-lg text-white/90 text-center mb-5">
-          Connect with professionals near you
-        </p>
-
-        <div className="flex flex-row justify-center md:justify-start gap-3 max-w-3xl mx-auto">
-          <div className="relative w-36 sm:w-44 md:w-auto">
-            <button
-              onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-              className="w-full bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-lg px-3 md:px-4 py-3 flex items-center justify-between gap-1 md:gap-2 hover:bg-white/30 transition"
-            >
-              <div className="flex items-center gap-1 md:gap-2">
-                <MapPin className="h-5 w-5 flex-shrink-0" />
-                <span className="truncate max-w-[100px] sm:max-w-[150px]">{locationLabel}</span>
-              </div>
-              <ChevronDown className="h-4 w-4 flex-shrink-0" />
-            </button>
-            {showLocationDropdown && (
-              <LocationDropdown
-                onSelectState={(id, name) => handleLocationSelect('state', id, name)}
-                onSelectLga={(id, name) => handleLocationSelect('lga', id, `${name} LGA`)}
-                onClear={clearLocation}
-                onClose={() => setShowLocationDropdown(false)}
-                preloadedStates={states}
-              />
-            )}
-          </div>
-
-          <div className="flex bg-white rounded-lg overflow-hidden w-40 sm:w-52 md:flex-1">
-            <div className="hidden md:flex items-center pl-3">
-              <Search className="h-5 w-5 text-gray-400" />
+          <div className="flex flex-row justify-center md:justify-start gap-3 max-w-3xl mx-auto">
+            {/* Location button */}
+            <div className="relative flex-1 md:w-auto">
+              <button
+                onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                className="w-full bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-lg px-3 md:px-4 py-3 flex items-center justify-between gap-1 md:gap-2 hover:bg-white/30 transition"
+              >
+                <div className="flex items-center gap-1 md:gap-2">
+                  <MapPin className="h-5 w-5 flex-shrink-0" />
+                  <span className="truncate">{locationLabel}</span>
+                </div>
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              </button>
+              {showLocationDropdown && (
+                <LocationDropdown
+                  onSelectState={(id, name) => handleLocationSelect('state', id, name)}
+                  onSelectLga={(id, name) => handleLocationSelect('lga', id, `${name} LGA`)}
+                  onClear={clearLocation}
+                  onClose={() => setShowLocationDropdown(false)}
+                  preloadedStates={states}
+                  preloadedLgas={preloadedLgas}
+                />
+              )}
             </div>
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="I am looking for..."
-              className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
-            />
-            <button
-              onClick={handleSearch}
-              className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center"
-            >
-              <Search className="h-5 w-5" />
-              <span className="hidden md:inline ml-2">Search</span>
-            </button>
+
+            {/* Search bar */}
+            <div className="flex bg-white rounded-lg overflow-hidden flex-1 md:flex-1">
+              <div className="hidden md:flex items-center pl-3">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="I am looking for..."
+                className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
+              />
+              <button
+                onClick={handleSearch}
+                className="bg-accent-500 hover:bg-accent-600 text-white px-3 md:px-6 transition flex items-center justify-center"
+              >
+                <Search className="h-5 w-5" />
+                <span className="hidden md:inline ml-2">Search</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Desktop Layout */}
-      <div className="hidden md:flex gap-6">
-        <div className="w-64 flex-shrink-0">
-          <CategorySidebar providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
+      {/* Main content – centered */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Desktop Layout */}
+        <div className="hidden md:flex gap-6">
+          <div className="w-64 flex-shrink-0 self-start">
+            <CategorySidebar providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
+          </div>
+          <div className="flex-1">
+            {/* Quick Links Banner */}
+            <QuickLinksBanner />
+
+            {/* Top Providers Slider (boosted with top placement) */}
+            <TopProvidersSlider />
+
+            {/* Toolbar: title, view toggle, view all */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Recommended Providers'}
+              </h2>
+              <div className="flex items-center gap-2">
+                {/* View toggle */}
+                <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={cn('p-2 text-gray-500 hover:text-primary-600', viewMode === 'grid' && 'bg-primary-50 text-primary-600')}
+                    title="Grid view"
+                  >
+                    <LayoutGrid className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={cn('p-2 text-gray-500 hover:text-primary-600', viewMode === 'list' && 'bg-primary-50 text-primary-600')}
+                    title="List view"
+                  >
+                    <List className="h-5 w-5" />
+                  </button>
+                </div>
+                <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">View all →</Link>
+              </div>
+            </div>
+
+            {isOffline && <OfflineBanner />}
+            {isLoading ? (
+              <div className="flex justify-center py-16"><NimartSpinner size="lg" /></div>
+            ) : (
+              <>
+                {featuredProviders?.length === 0 && !isOffline ? (
+                  <NoProvidersBanner />
+                ) : featuredProviders && featuredProviders.length > 0 ? (
+                  viewMode === 'grid' ? (
+                    /* Desktop masonry columns (3 cols) */
+                    <div className="columns-3 gap-4">
+                      {featuredProviders.map((provider) => (
+                        <div key={provider.id} className="mb-4 break-inside-avoid">
+                          <ProviderCardPortrait provider={provider} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {featuredProviders.map((provider) => (
+                        <ProviderCardHorizontal key={provider.id} provider={provider} />
+                      ))}
+                    </div>
+                  )
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">
-              {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Featured Providers'}
-            </h2>
-            <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-              View all →
-            </Link>
+        {/* Mobile Layout */}
+        <div className="block md:hidden">
+          {/* Quick Links Banner */}
+          <QuickLinksBanner />
+
+          {/* Top Providers Slider (boosted with top placement) */}
+          <TopProvidersSlider />
+
+          {/* Category Buttons – NOT sticky, scrolls with page */}
+          <div className="mb-4">
+            <CategoryButtons providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
           </div>
 
-          {isOffline && <OfflineBanner />}
-
-          {isLoading ? (
-            <div className="flex justify-center py-16">
-              <NimartSpinner size="lg" />
-            </div>
-          ) : (
-            <>
-              {featuredProviders?.length === 0 && !isOffline ? (
-                <NoProvidersBanner />
-              ) : featuredProviders && featuredProviders.length > 0 ? (
-                <div className="grid grid-cols-3 gap-4">
-                  {featuredProviders.map((provider) => (
-                    <ProviderCard key={provider.id} provider={provider} />
-                  ))}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-gray-900">
+                {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Recommended'}
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={cn('p-2', viewMode === 'grid' && 'bg-primary-50 text-primary-600')}
+                    title="Grid view"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={cn('p-2', viewMode === 'list' && 'bg-primary-50 text-primary-600')}
+                    title="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
                 </div>
-              ) : null}
-            </>
-          )}
+                <Link to="/search" className="text-xs text-primary-600 font-medium">View all →</Link>
+              </div>
+            </div>
+
+            {isOffline && <OfflineBanner />}
+            {isLoading ? (
+              <div className="flex justify-center py-16"><NimartSpinner size="lg" /></div>
+            ) : (
+              <>
+                {featuredProviders?.length === 0 && !isOffline ? (
+                  <NoProvidersBanner />
+                ) : featuredProviders && featuredProviders.length > 0 ? (
+                  viewMode === 'grid' ? (
+                    /* Mobile masonry columns (2 cols) */
+                    <div className="columns-2 gap-2">
+                      {featuredProviders.map((provider) => (
+                        <div key={provider.id} className="mb-2 break-inside-avoid">
+                          <ProviderCardPortrait provider={provider} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {featuredProviders.map((provider) => (
+                        <ProviderCardHorizontal key={provider.id} provider={provider} />
+                      ))}
+                    </div>
+                  )
+                ) : null}
+              </>
+            )}
+          </section>
         </div>
       </div>
-
-      {/* Mobile Layout */}
-      <div className="block md:hidden">
-        <section className="mb-6">
-          <CategoryButtons />
-        </section>
-
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">
-              {lgaFilter || stateFilter ? 'Providers in Selected Area' : 'Featured Providers'}
-            </h2>
-            <Link to="/search" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-              View all →
-            </Link>
-          </div>
-
-          {isOffline && <OfflineBanner />}
-
-          {isLoading ? (
-            <div className="flex justify-center py-16">
-              <NimartSpinner size="lg" />
-            </div>
-          ) : (
-            <>
-              {featuredProviders?.length === 0 && !isOffline ? (
-                <NoProvidersBanner />
-              ) : featuredProviders && featuredProviders.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {featuredProviders.map((provider) => (
-                    <ProviderCard key={provider.id} provider={provider} />
-                  ))}
-                </div>
-              ) : null}
-            </>
-          )}
-        </section>
-      </div>
-    </div>
+    </>
   );
 }

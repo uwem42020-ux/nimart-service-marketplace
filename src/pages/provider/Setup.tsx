@@ -4,9 +4,19 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
-import { MapPin, Store, ChevronDown, Save, AlertCircle, Home, Landmark, Phone } from 'lucide-react';
+import {
+  MapPin,
+  Store,
+  ChevronDown,
+  Save,
+  AlertCircle,
+  Home,
+  Landmark,
+  Phone,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { TIERS, getCategoriesByTier, getSubcategoriesByCategory } from '../../data/categories';
+import { DraggableMap } from '../../components/common/DraggableMap';
 import type { Category, Subcategory } from '../../data/categories';
 
 interface State {
@@ -38,12 +48,13 @@ export default function ProviderSetup() {
   // Address states
   const [streetAddress, setStreetAddress] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [addressArea, setAddressArea] = useState(''); // neighbourhood/village
 
   // Business states
   const [businessName, setBusinessName] = useState('');
   const [description, setDescription] = useState('');
 
-  // Phone validation
+  // Phone
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
@@ -54,26 +65,33 @@ export default function ProviderSetup() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>('');
 
-  // Terms acceptance
+  // Terms
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // Fetch all states on mount
+  // Map coordinates – updated as the user drags the pin
+  const [mapLat, setMapLat] = useState<number>(9.0556);
+  const [mapLng, setMapLng] = useState<number>(7.4914);
+  const [mapCenterLat, setMapCenterLat] = useState<number>(9.0556);
+  const [mapCenterLng, setMapCenterLng] = useState<number>(7.4914);
+
+  // ── Fetch all states on mount ──────────────────────
   useEffect(() => {
     async function fetchStates() {
       const { data } = await supabase
         .from('lga_centers')
         .select('state_id, state_name')
         .order('state_name');
-      
-      const uniqueStates = data?.filter((v, i, a) => 
-        a.findIndex(t => t.state_id === v.state_id) === i
-      ) || [];
+
+      const uniqueStates =
+        data?.filter(
+          (v, i, a) => a.findIndex(t => t.state_id === v.state_id) === i
+        ) || [];
       setStates(uniqueStates);
     }
     fetchStates();
   }, []);
 
-  // Fetch LGAs when state changes
+  // ── Fetch LGAs when state changes ──────────────────
   useEffect(() => {
     if (!selectedState) {
       setLgas([]);
@@ -90,7 +108,22 @@ export default function ProviderSetup() {
     fetchLgas();
   }, [selectedState]);
 
-  // Load categories when tier changes
+  // ── When LGA changes, move the map centre and the marker ──
+  useEffect(() => {
+    if (!selectedLga) return;
+    const lga = lgas.find(l => l.lga_id.toString() === selectedLga);
+    if (lga?.lat && lga?.lng) {
+      setMapCenterLat(lga.lat);
+      setMapCenterLng(lga.lng);
+      // Only move the marker if the user hasn't manually placed it yet
+      if (mapLat === 9.0556 && mapLng === 7.4914) {
+        setMapLat(lga.lat);
+        setMapLng(lga.lng);
+      }
+    }
+  }, [selectedLga, lgas]);
+
+  // ── Load categories when tier changes ──────────────
   useEffect(() => {
     setCategories(getCategoriesByTier(selectedTier));
     setSelectedCategory('');
@@ -98,7 +131,7 @@ export default function ProviderSetup() {
     setSelectedSubcategoryId('');
   }, [selectedTier]);
 
-  // Load subcategories when category changes
+  // ── Load subcategories when category changes ───────
   useEffect(() => {
     if (selectedCategory) {
       setSubcategories(getSubcategoriesByCategory(selectedCategory));
@@ -106,31 +139,37 @@ export default function ProviderSetup() {
     }
   }, [selectedCategory]);
 
-  // Pre-fill existing data if any
+  // ── Pre‑fill existing data (if any) ────────────────
   useEffect(() => {
     async function fetchExistingProvider() {
       if (!user) return;
 
       const { data: provider } = await supabase
         .from('providers')
-        .select('business_name, description, selected_tier_slug, selected_category_slug, selected_subcategory_id')
+        .select(
+          'business_name, description, selected_tier_slug, selected_category_slug, selected_subcategory_id'
+        )
         .eq('id', user.id)
         .single();
-      
+
       if (provider) {
         setBusinessName(provider.business_name || '');
         setDescription(provider.description || '');
         if (provider.selected_tier_slug) setSelectedTier(provider.selected_tier_slug);
-        if (provider.selected_category_slug) setSelectedCategory(provider.selected_category_slug);
-        if (provider.selected_subcategory_id) setSelectedSubcategoryId(provider.selected_subcategory_id.toString());
+        if (provider.selected_category_slug)
+          setSelectedCategory(provider.selected_category_slug);
+        if (provider.selected_subcategory_id)
+          setSelectedSubcategoryId(provider.selected_subcategory_id.toString());
       }
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('lga_id, street_address, landmark, phone')
+        .select(
+          'lga_id, street_address, landmark, phone, address_area, lat, lng'
+        )
         .eq('id', user.id)
         .single();
-      
+
       if (profileData) {
         if (profileData.lga_id) {
           const { data: lgaData } = await supabase
@@ -138,7 +177,7 @@ export default function ProviderSetup() {
             .select('state_id')
             .eq('lga_id', profileData.lga_id)
             .single();
-          
+
           if (lgaData) {
             setSelectedState(lgaData.state_id.toString());
             setSelectedLga(profileData.lga_id.toString());
@@ -146,9 +185,11 @@ export default function ProviderSetup() {
         }
         setStreetAddress(profileData.street_address || '');
         setLandmark(profileData.landmark || '');
-        if (profileData.phone) {
-          // If phone exists and starts with +234, just display it
-          setPhoneNumber(profileData.phone);
+        if (profileData.phone) setPhoneNumber(profileData.phone);
+        setAddressArea(profileData.address_area || '');
+        if (profileData.lat && profileData.lng) {
+          setMapLat(profileData.lat);
+          setMapLng(profileData.lng);
         }
       }
 
@@ -157,56 +198,51 @@ export default function ProviderSetup() {
     fetchExistingProvider();
   }, [user]);
 
+  // ── Phone validation ────────────────────────────────
   const validatePhoneNumber = (phone: string): boolean => {
-    // Remove +234 prefix for validation
     const localNumber = phone.replace('+234', '');
-    
-    // Check if it's exactly 10 digits and all numbers
     const isValid = /^\d{10}$/.test(localNumber);
-    
     if (!isValid) {
       setPhoneError('Please enter a valid 10-digit Nigerian phone number');
       return false;
     }
-    
     setPhoneError('');
     return true;
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
-    
-    // Ensure it starts with +234
     if (!value.startsWith('+234')) {
       value = '+234' + value.replace(/[^0-9]/g, '');
     }
-    
-    // Remove any non-digit characters after +234
     const prefix = '+234';
-    const digits = value.slice(4).replace(/\D/g, '');
-    
-    // Limit to 10 digits
-    const limitedDigits = digits.slice(0, 10);
-    
-    const finalValue = prefix + limitedDigits;
+    const digits = value.slice(4).replace(/\D/g, '').slice(0, 10);
+    const finalValue = prefix + digits;
     setPhoneNumber(finalValue);
-    
-    if (limitedDigits.length === 10) {
-      validatePhoneNumber(finalValue);
-    } else {
-      setPhoneError('');
-    }
+    if (digits.length === 10) validatePhoneNumber(finalValue);
+    else setPhoneError('');
   };
 
+  // ── Map pin drag ────────────────────────────────────
+  const handleMarkerDrag = (lat: number, lng: number) => {
+    setMapLat(lat);
+    setMapLng(lng);
+  };
+
+  // ── Submit ─────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedLga) {
       toast.error('Please select your LGA');
       return;
     }
     if (!streetAddress.trim()) {
       toast.error('Street address is required');
+      return;
+    }
+    if (!addressArea.trim()) {
+      toast.error('Area / Neighbourhood is required');
       return;
     }
     if (!businessName.trim()) {
@@ -217,19 +253,9 @@ export default function ProviderSetup() {
       toast.error('Please enter a valid phone number');
       return;
     }
-    if (!validatePhoneNumber(phoneNumber)) {
-      return;
-    }
-    if (!selectedTier) {
-      toast.error('Please select a service tier');
-      return;
-    }
-    if (!selectedCategory) {
-      toast.error('Please select a category');
-      return;
-    }
-    if (!selectedSubcategoryId) {
-      toast.error('Please select a subcategory');
+    if (!validatePhoneNumber(phoneNumber)) return;
+    if (!selectedTier || !selectedCategory || !selectedSubcategoryId) {
+      toast.error('Please complete service category selection');
       return;
     }
     if (!termsAccepted) {
@@ -239,17 +265,21 @@ export default function ProviderSetup() {
 
     setLoading(true);
     try {
-      const selectedLgaData = lgas.find(l => l.lga_id.toString() === selectedLga);
-      
+      const selectedLgaData = lgas.find(
+        l => l.lga_id.toString() === selectedLga
+      );
+
+      // Update profile with exact coordinates from the map
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           lga_id: parseInt(selectedLga),
           lga_name: selectedLgaData?.lga_name,
-          lat: selectedLgaData?.lat,
-          lng: selectedLgaData?.lng,
+          lat: mapLat,
+          lng: mapLng,
           street_address: streetAddress,
           landmark: landmark || null,
+          address_area: addressArea,
           phone: phoneNumber,
           is_complete: true,
         })
@@ -257,6 +287,7 @@ export default function ProviderSetup() {
 
       if (profileError) throw profileError;
 
+      // Update provider business info
       const { error: providerError } = await supabase
         .from('providers')
         .update({
@@ -271,7 +302,6 @@ export default function ProviderSetup() {
       if (providerError) throw providerError;
 
       await refreshProfile();
-      
       toast.success('Profile setup complete! You are now visible to customers.');
       navigate('/provider/dashboard');
     } catch (error: any) {
@@ -281,6 +311,7 @@ export default function ProviderSetup() {
     }
   };
 
+  // ── Initial loading spinner ─────────────────────────
   if (initialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -289,55 +320,52 @@ export default function ProviderSetup() {
     );
   }
 
-  const isAlreadyComplete = profile?.is_complete && profile?.lga_id && businessName;
-
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Provider Profile</h1>
-      <p className="text-gray-600 mb-2">This information helps customers find and trust you.</p>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        Complete Your Provider Profile
+      </h1>
+      <p className="text-gray-600 mb-2">
+        This information helps customers find and trust you.
+      </p>
       <p className="text-sm text-amber-600 mb-6 flex items-start gap-1">
         <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-        <span>Your full name and address must match your official ID document for verification purposes.</span>
+        <span>
+          Your full name and address must match your official ID document for
+          verification purposes.
+        </span>
       </p>
 
-      {isAlreadyComplete && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
-          <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-green-700">
-                Your profile is already complete. You can update your information below.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Location Section */}
+        {/* ── Location Section ──────────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <MapPin className="h-5 w-5 mr-2 text-primary-600" />
             Service Location
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* State Dropdown */}
             <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                State *
+              </label>
               <button
                 type="button"
                 onClick={() => setShowStateDropdown(!showStateDropdown)}
                 className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <span className={cn(!selectedState && "text-gray-400")}>
-                  {selectedState ? states.find(s => s.state_id.toString() === selectedState)?.state_name : 'Select your state'}
+                <span className={cn(!selectedState && 'text-gray-400')}>
+                  {selectedState
+                    ? states.find(s => s.state_id.toString() === selectedState)
+                        ?.state_name
+                    : 'Select your state'}
                 </span>
                 <ChevronDown className="h-4 w-4 text-gray-400" />
               </button>
               {showStateDropdown && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {states.map((state) => (
+                  {states.map(state => (
                     <button
                       key={state.state_id}
                       type="button"
@@ -357,21 +385,26 @@ export default function ProviderSetup() {
 
             {/* LGA Dropdown */}
             <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">LGA *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                LGA *
+              </label>
               <button
                 type="button"
                 onClick={() => setShowLgaDropdown(!showLgaDropdown)}
                 disabled={!selectedState}
                 className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                <span className={cn(!selectedLga && "text-gray-400")}>
-                  {selectedLga ? lgas.find(l => l.lga_id.toString() === selectedLga)?.lga_name : 'Select your LGA'}
+                <span className={cn(!selectedLga && 'text-gray-400')}>
+                  {selectedLga
+                    ? lgas.find(l => l.lga_id.toString() === selectedLga)
+                        ?.lga_name
+                    : 'Select your LGA'}
                 </span>
                 <ChevronDown className="h-4 w-4 text-gray-400" />
               </button>
               {showLgaDropdown && selectedState && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {lgas.map((lga) => (
+                  {lgas.map(lga => (
                     <button
                       key={lga.lga_id}
                       type="button"
@@ -406,7 +439,7 @@ export default function ProviderSetup() {
           </div>
 
           {/* Landmark */}
-          <div>
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Landmark className="inline h-4 w-4 mr-1" />
               Nearest Landmark (optional)
@@ -416,21 +449,54 @@ export default function ProviderSetup() {
               value={landmark}
               onChange={(e) => setLandmark(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g., Near First Bank, opposite GTBank"
+              placeholder="e.g., Near First Bank"
             />
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Your location helps customers find you. Coordinates are automatically set from LGA.
+
+          {/* Area / Neighbourhood */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Area / Neighbourhood *
+            </label>
+            <input
+              type="text"
+              value={addressArea}
+              onChange={(e) => setAddressArea(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g., Wuse 2, Gwarinpa, Kubwa Village"
+            />
+          </div>
+
+          {/* Draggable Map */}
+          <div className="mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Drop a Pin on Your Exact Location *
+            </label>
+            <DraggableMap
+              centerLat={mapCenterLat}
+              centerLng={mapCenterLng}
+              markerLat={mapLat}
+              markerLng={mapLng}
+              onMarkerDrag={handleMarkerDrag}
+              height="280px"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Drag the marker or click on the map to place your exact
+              workshop/office. Coordinates are stored for accurate distance.
+            </p>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Your exact location helps customers find you accurately.
           </p>
         </div>
 
-        {/* Contact Information */}
+        {/* ── Contact Information ────────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Phone className="h-5 w-5 mr-2 text-primary-600" />
             Contact Information
           </h2>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Phone Number *
@@ -453,7 +519,7 @@ export default function ProviderSetup() {
           </div>
         </div>
 
-        {/* Business Details */}
+        {/* ── Business Information ───────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Store className="h-5 w-5 mr-2 text-primary-600" />
@@ -484,7 +550,7 @@ export default function ProviderSetup() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Describe your services, experience, and what makes you unique..."
+                placeholder="Describe your services..."
               />
             </div>
 
@@ -499,8 +565,10 @@ export default function ProviderSetup() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               >
-                {TIERS.map((tier) => (
-                  <option key={tier.slug} value={tier.slug}>{tier.name}</option>
+                {TIERS.map(tier => (
+                  <option key={tier.slug} value={tier.slug}>
+                    {tier.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -518,8 +586,10 @@ export default function ProviderSetup() {
                 disabled={categories.length === 0}
               >
                 <option value="">Select Category</option>
-                {categories.map((cat) => (
-                  <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                {categories.map(cat => (
+                  <option key={cat.slug} value={cat.slug}>
+                    {cat.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -537,15 +607,17 @@ export default function ProviderSetup() {
                 disabled={subcategories.length === 0}
               >
                 <option value="">Select Subcategory</option>
-                {subcategories.map((sub) => (
-                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                {subcategories.map(sub => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
         </div>
 
-        {/* Terms Acceptance */}
+        {/* ── Terms Acceptance ────────────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -556,15 +628,19 @@ export default function ProviderSetup() {
             />
             <span className="text-sm text-gray-700">
               I agree to the{' '}
-              <Link to="/terms" target="_blank" className="text-primary-600 hover:underline">Terms of Service</Link>
-              {' '}and{' '}
-              <Link to="/cookies" target="_blank" className="text-primary-600 hover:underline">Cookie Policy</Link>
-              {' '}*
+              <Link to="/terms" target="_blank" className="text-primary-600 hover:underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link to="/cookies" target="_blank" className="text-primary-600 hover:underline">
+                Cookie Policy
+              </Link>{' '}
+              *
             </span>
           </label>
         </div>
 
-        {/* Submit Button */}
+        {/* ── Submit ──────────────────────────────────── */}
         <div className="flex justify-end">
           <button
             type="submit"

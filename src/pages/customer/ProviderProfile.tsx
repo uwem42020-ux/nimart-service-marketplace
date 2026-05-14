@@ -1,5 +1,6 @@
 // src/pages/customer/ProviderProfile.tsx
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,6 +11,9 @@ import { ReviewsList } from '../../components/reviews/ReviewsList';
 import { ChatWidget } from '../../components/chat/ChatWidget';
 import { SEO } from '../../components/common/SEO';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { ProviderCardPortrait } from '../../components/provider/ProviderCardPortrait';
+import { ProviderCardHorizontal } from '../../components/provider/ProviderCardHorizontal';
+import { Breadcrumbs } from '../../components/common/Breadcrumbs';
 import {
   MapPin,
   Star,
@@ -21,12 +25,14 @@ import {
   Flag,
   Phone,
   Clock,
-  Shield,
-  Eye,
-  EyeOff,
   Package,
-  ChevronLeft,
-  ChevronRight,
+  ArrowRight,
+  Share2,
+  GraduationCap,
+  Languages,
+  User,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
@@ -51,7 +57,14 @@ interface FullProvider extends ProviderRow {
   distance?: number;
   completedBookings?: number;
   lastSignInAt?: string | null;
+  created_at?: string;
 }
+
+const statusLabel: Record<string, string> = {
+  available: 'Active now',
+  busy: 'Busy',
+  away: 'Away',
+};
 
 const statusIconMap: Record<string, string> = {
   available: '/active.svg',
@@ -84,6 +97,8 @@ export default function ProviderProfile() {
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
+  const [similarViewMode, setSimilarViewMode] = useState<'grid' | 'list'>('grid');
+
   const requireAuth = (callback: () => void) => {
     if (!user) {
       toast.error('Please sign in to continue');
@@ -91,6 +106,55 @@ export default function ProviderProfile() {
       return;
     }
     callback();
+  };
+
+  // Opens the ChatWidget by directly clicking its floating button
+  const openChat = () => {
+    const chatButton = document.querySelector(
+      '.fixed.bottom-4.right-4 button'
+    ) as HTMLButtonElement | null;
+    if (chatButton) {
+      chatButton.click();
+    } else {
+      toast.error('Chat could not be opened. Please refresh and try again.');
+    }
+  };
+
+  // Share with fallbacks that work on HTTP
+  const shareProviderLink = () => {
+    const url = `${window.location.origin}/provider/${id}`;
+    if (navigator.share) {
+      navigator.share({ title: providerName, url }).catch(() => fallbackCopy(url));
+    } else {
+      fallbackCopy(url);
+    }
+  };
+
+  const fallbackCopy = (text: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text)
+        .then(() => toast.success('Link copied'))
+        .catch(() => execCopy(text));
+    } else {
+      execCopy(text);
+    }
+  };
+
+  const execCopy = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy link');
+    }
+    document.body.removeChild(textarea);
   };
 
   useEffect(() => {
@@ -115,7 +179,6 @@ export default function ProviderProfile() {
         .select('*')
         .eq('id', id)
         .single();
-
       if (providerError) throw providerError;
       if (!providerData) throw new Error('Provider not found');
 
@@ -133,13 +196,7 @@ export default function ProviderProfile() {
 
       const { data: reviews } = await supabase
         .from('reviews')
-        .select(`
-          id,
-          rating,
-          content,
-          created_at,
-          reviewer:reviewer_id(full_name, avatar_url)
-        `)
+        .select(`id, rating, content, created_at, reviewer:reviewer_id(full_name, avatar_url)`)
         .eq('provider_id', id)
         .order('created_at', { ascending: false });
 
@@ -163,6 +220,7 @@ export default function ProviderProfile() {
         services: services ?? [],
         completedBookings: completedData ?? 0,
         lastSignInAt: lastSignInData,
+        created_at: profileData?.created_at,
       };
 
       if (profile?.lat && profile?.lng && profileData?.lat && profileData?.lng) {
@@ -179,12 +237,88 @@ export default function ProviderProfile() {
     enabled: !!id,
   });
 
+  const { data: similarProviders } = useQuery({
+    queryKey: ['similar-providers', id],
+    queryFn: async () => {
+      if (!id || !provider) return [];
+      const { data: currentProfile } = await supabase
+        .from('profiles')
+        .select('lat, lng')
+        .eq('id', id)
+        .single();
+
+      const { data: allProviders } = await supabase
+        .from('providers')
+        .select('id, business_name, selected_category_slug, selected_tier_slug')
+        .neq('id', id)
+        .eq('is_available', true)
+        .limit(30);
+
+      if (!allProviders || allProviders.length === 0) return [];
+
+      const providerIds = allProviders.map((p: any) => p.id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, lat, lng, avatar_url, full_name')
+        .in('id', providerIds);
+
+      const profileMap = new Map<string, any>();
+      profiles?.forEach((prof: any) => profileMap.set(prof.id, prof));
+
+      const userLat = currentProfile?.lat;
+      const userLng = currentProfile?.lng;
+
+      const enriched = allProviders
+        .filter((p: any) => profileMap.has(p.id))
+        .map((p: any) => {
+          const prof = profileMap.get(p.id);
+          const distance =
+            userLat && userLng && prof?.lat && prof?.lng
+              ? calculateDistance(userLat, userLng, prof.lat, prof.lng)
+              : undefined;
+          return {
+            id: p.id,
+            business_name: p.business_name || prof?.full_name,
+            selected_category_slug: p.selected_category_slug,
+            selected_tier_slug: p.selected_tier_slug,
+            profile: {
+              full_name: prof?.full_name,
+              avatar_url: prof?.avatar_url,
+              lat: prof?.lat,
+              lng: prof?.lng,
+            },
+            distance,
+            description: '',
+            status: 'available',
+            is_available: true,
+            selected_subcategory_id: null,
+            tags: [],
+            boost_until: null,
+            portfolio_images: [],
+            average_rating: 0,
+            review_count: 0,
+            lastSignInAt: null,
+          };
+        });
+
+      const currentCategory = provider.selected_category_slug;
+      const currentTier = provider.selected_tier_slug;
+
+      const sorted = enriched.sort((a: any, b: any) => {
+        if (a.selected_category_slug === currentCategory && b.selected_category_slug !== currentCategory) return -1;
+        if (a.selected_category_slug !== currentCategory && b.selected_category_slug === currentCategory) return 1;
+        if (a.selected_tier_slug === currentTier && b.selected_tier_slug !== currentTier) return -1;
+        if (a.selected_tier_slug !== currentTier && b.selected_tier_slug === currentTier) return 1;
+        return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+      });
+
+      return sorted.slice(0, 6);
+    },
+    enabled: !!id && !!provider,
+  });
+
   const submitReview = async () => {
-    if (!user) {
-      toast.error('Please sign in to leave a review');
-      navigate('/auth/signin');
-      return;
-    }
+    if (!user) { toast.error('Please sign in to leave a review'); navigate('/auth/signin'); return; }
     setSubmittingReview(true);
     try {
       const { data: existingReview } = await supabase
@@ -193,72 +327,41 @@ export default function ProviderProfile() {
         .eq('reviewer_id', user.id)
         .eq('provider_id', id!)
         .maybeSingle();
-
-      if (existingReview) {
-        toast.error('You have already reviewed this provider');
-        setShowReviewModal(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('reviews')
-        .insert([{
-          reviewer_id: user.id,
-          provider_id: id!,
-          rating: reviewRating,
-          content: reviewContent || null,
-        }]);
-
+      if (existingReview) { toast.error('You have already reviewed this provider'); setShowReviewModal(false); return; }
+      const { error } = await supabase.from('reviews').insert([{
+        reviewer_id: user.id,
+        provider_id: id!,
+        rating: reviewRating,
+        content: reviewContent || null,
+      }]);
       if (error) throw error;
       toast.success('Review submitted! Thank you.');
       setShowReviewModal(false);
       refetch();
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSubmittingReview(false);
-    }
+    } catch (error: any) { toast.error(error.message); }
+    finally { setSubmittingReview(false); }
   };
 
   const submitReport = async () => {
-    if (!user) {
-      toast.error('Please sign in to report this provider');
-      navigate('/auth/signin');
-      return;
-    }
-    if (!reportReason.trim()) {
-      toast.error('Please provide a reason for the report');
-      return;
-    }
+    if (!user) { toast.error('Please sign in to report this provider'); navigate('/auth/signin'); return; }
+    if (!reportReason.trim()) { toast.error('Please provide a reason for the report'); return; }
     setSubmittingReport(true);
     try {
-      const { error } = await supabase
-        .from('reports')
-        .insert({
-          reporter_id: user.id,
-          provider_id: id!,
-          reason: reportReason.trim(),
-        });
-
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: user.id,
+        provider_id: id!,
+        reason: reportReason.trim(),
+      });
       if (error) throw error;
       toast.success('Thank you for your report. Our team will review it.');
       setShowReportModal(false);
       setReportReason('');
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSubmittingReport(false);
-    }
+    } catch (error: any) { toast.error(error.message); }
+    finally { setSubmittingReport(false); }
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchMove = (e: React.TouchEvent) => { touchEndX.current = e.touches[0].clientX; };
   const handleTouchEnd = () => {
     if (!touchStartX.current || !touchEndX.current || !provider?.portfolio_images.length) return;
     const diff = touchStartX.current - touchEndX.current;
@@ -274,33 +377,15 @@ export default function ProviderProfile() {
     touchEndX.current = null;
   };
 
-  const nextImage = () => {
-    if (provider?.portfolio_images && currentImageIndex < provider.portfolio_images.length - 1) {
-      setCurrentImageIndex(prev => prev + 1);
-    }
-  };
-
-  const prevImage = () => {
-    if (currentImageIndex > 0) {
-      setCurrentImageIndex(prev => prev - 1);
-    }
-  };
-
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <NimartSpinner size="lg" />
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center"><NimartSpinner size="lg" /></div>;
   }
 
   if (!provider) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8 text-center">
         <p className="text-gray-500">Provider not found.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">
-          Go back
-        </button>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">Go back</button>
       </div>
     );
   }
@@ -317,185 +402,248 @@ export default function ProviderProfile() {
     ? `${provider.profile.lga_name}, ${provider.profile?.state_name || ''}`
     : 'Location not set';
 
+  const joinedYear = provider.created_at
+    ? new Date(provider.created_at).getFullYear()
+    : null;
+
+  const categoryName = provider.selected_category_slug
+    ?.split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ') || 'Provider';
+
+  const lgaName = provider.profile?.lga_name || 'your area';
+  const stateName = provider.profile?.state_name || 'Nigeria';
+  const providerName = provider.business_name || provider.profile?.full_name || 'Provider';
+
+  const dynamicTitle = `${categoryName} in ${lgaName}, ${stateName} – ${providerName} on Nimart`;
+
+  const breadcrumbItems = [
+    { label: 'Home', to: '/' },
+    { label: categoryName, to: `/search?category=${provider.selected_category_slug}` },
+    { label: providerName },
+  ];
+
   const providerSchema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": provider.business_name || provider.profile?.full_name,
-    "description": provider.description,
+    "name": providerName,
+    "description": provider.description || `${categoryName} based in ${lgaName}.`,
     "image": provider.profile?.avatar_url,
     "telephone": provider.profile?.phone,
+    "url": `https://nimart.ng/provider/${id}`,
     "address": {
       "@type": "PostalAddress",
-      "addressLocality": provider.profile?.lga_name,
-      "addressRegion": provider.profile?.state_name,
+      "streetAddress": provider.profile?.street_address || '',
+      "addressLocality": lgaName,
+      "addressRegion": stateName,
       "addressCountry": "NG"
     },
+    "geo": (provider.profile?.lat && provider.profile?.lng) ? {
+      "@type": "GeoCoordinates",
+      "latitude": provider.profile.lat,
+      "longitude": provider.profile.lng
+    } : undefined,
     "aggregateRating": provider.reviews.length > 0 ? {
       "@type": "AggregateRating",
       "ratingValue": avgRating,
       "reviewCount": provider.reviews.length
-    } : undefined
+    } : undefined,
+    "review": provider.reviews.length > 0 ? provider.reviews.slice(0, 5).map(r => ({
+      "@type": "Review",
+      "author": r.reviewer?.full_name || 'Anonymous',
+      "reviewRating": { "@type": "Rating", "ratingValue": r.rating },
+      "reviewBody": r.content || '',
+      "datePublished": r.created_at
+    })) : undefined,
+    "makesOffer": provider.services.length > 0 ? provider.services.map(s => ({
+      "@type": "Offer",
+      "name": s.name,
+      "description": s.description || '',
+      "price": s.price,
+      "priceCurrency": "NGN",
+      "priceType": s.price_type
+    })) : undefined,
+    "openingHours": provider.status === 'available' ? ['Mo-Su 00:00-23:59'] : undefined
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-0 sm:px-4 sm:px-6 lg:px-8 py-0 sm:py-8">
       <SEO
-        title={provider.business_name || provider.profile?.full_name || 'Provider Profile'}
-        description={provider.description || `Book ${provider.business_name} on Nimart. Verified professional in ${provider.profile?.lga_name}.`}
+        title={dynamicTitle}
+        description={provider.description || `Book ${providerName} on Nimart. Verified professional in ${lgaName}.`}
         image={provider.profile?.avatar_url || '/og-image.png'}
         url={`https://nimart.ng/provider/${id}`}
         type="profile"
         schema={providerSchema}
       />
 
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-4 flex items-center text-gray-600 hover:text-primary-600"
-      >
-        <ArrowLeft className="h-5 w-5 mr-1" />
-        Back to results
-      </button>
+      {/* ============== MODERN MOBILE LAYOUT ============== */}
+      <div className="block md:hidden">
+        {/* Cover photo */}
+        <div className="relative h-48 sm:h-52 bg-gray-100">
+          {provider.profile?.cover_photo ? (
+            <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute top-4 left-4 z-10 bg-white/20 backdrop-blur-md text-white p-2 rounded-full border border-white/30 shadow-lg"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        </div>
 
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        <div className="p-6 border-b">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Avatar with Status Icon */}
-            <div className="relative w-32 h-32 mx-auto md:mx-0 flex-shrink-0">
+        {/* Avatar & status */}
+        <div className="relative flex justify-center -mt-14 mb-4 px-4">
+          <div className="relative">
+            <div className="w-28 h-28 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white">
               {provider.profile?.avatar_url ? (
-                <OptimizedImage
-                  src={provider.profile.avatar_url}
-                  alt={provider.business_name || provider.profile.full_name || ''}
-                  className="w-full h-full rounded-full object-cover"
-                />
+                <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full rounded-full bg-primary-100 flex items-center justify-center">
-                  <span className="text-4xl font-semibold text-primary-600">
-                    {(provider.business_name || provider.profile?.full_name || 'P')[0]}
-                  </span>
+                <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
+                  {(providerName || 'P')[0]}
                 </div>
               )}
+              {provider.profile?.is_verified && (
+                <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
+              )}
+            </div>
+            <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-md">
               <img
                 src={statusIconMap[provider.status] || '/active.svg'}
                 alt={provider.status}
-                className="absolute bottom-2 right-2 h-6 w-6 ring-2 ring-white rounded-full"
+                className="h-6 w-6"
               />
-            </div>
-
-            <div className="flex-1 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-gray-900">
-                  {provider.business_name || provider.profile?.full_name}
-                </h1>
-                {provider.profile?.is_verified && (
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" />
-                    Verified
-                  </span>
-                )}
-              </div>
-              <p className="text-gray-600 mb-3">{provider.description}</p>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm">
-                <div className="flex items-center text-gray-600">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  <span>
-                    {locationString}
-                    {provider.distance && (
-                      <span className="ml-1 text-gray-500">
-                        ({formatDistance(provider.distance)})
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                  <span className="font-medium">{avgRating.toFixed(1)}</span>
-                  <span className="text-gray-500 ml-1">({provider.reviews.length} reviews)</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Calendar className="h-4 w-4 mr-1" />
-                  <span>{provider.completedBookings} bookings completed</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Clock className="h-4 w-4 mr-1" />
-                  <span>Last seen {lastSeen}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-row justify-end md:justify-start gap-2">
-              <button
-                onClick={() => requireAuth(() => setShowBookingModal(true))}
-                className="bg-primary-600 text-white px-4 py-1.5 rounded-lg hover:bg-primary-700 transition flex items-center gap-1 text-sm"
-              >
-                <Calendar className="h-4 w-4" />
-                Book Now
-              </button>
-              <button
-                onClick={() => requireAuth(() => document.getElementById('chat-widget-trigger')?.click())}
-                className="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition flex items-center gap-1 text-sm"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Message
-              </button>
-              <button
-                onClick={() => requireAuth(() => setShowReportModal(true))}
-                className="border border-red-300 text-red-600 px-4 py-1.5 rounded-lg hover:bg-red-50 transition flex items-center gap-1 text-sm"
-              >
-                <Flag className="h-4 w-4" />
-                Report
-              </button>
-            </div>
-          </div>
-
-          {/* Contact & Safety Row */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => requireAuth(() => setShowPhone(!showPhone))}
-                className="flex items-center gap-1 text-sm text-primary-600 hover:underline"
-              >
-                <Phone className="h-4 w-4" />
-                {showPhone ? (
-                  <span>{provider.profile?.phone || 'No phone provided'}</span>
-                ) : (
-                  <span>Show Contact</span>
-                )}
-                {showPhone ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <div className="flex items-start gap-2 text-sm text-gray-600">
-              <Shield className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
-                <p className="font-medium mb-1">Safety Tips</p>
-                <p>• Meet in a safe location</p>
-                <p>• Verify the provider's identity and reviews</p>
-                <p>• Avoid paying upfront before service completion</p>
-                <p>• Keep communication on the platform</p>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Services & Pricing */}
+        {/* Identity card */}
+        <div className="px-4 mb-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center">
+            <h1 className="text-xl font-bold text-gray-900">{providerName}</h1>
+            <p className="text-sm font-medium text-primary-600 mt-0.5">{categoryName}</p>
+            {provider.description && (
+              <p className="text-sm text-gray-500 mt-2 leading-relaxed">{provider.description}</p>
+            )}
+            <div className="flex justify-center mt-3">
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                {statusLabel[provider.status] || 'Active now'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons – all 5 visible, centred, working */}
+        <div className="px-2 mb-6">
+          <div className="flex flex-nowrap gap-1 justify-center">
+            <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white text-[10px] font-semibold rounded-xl w-14 shadow-md shadow-primary-600/20">
+              <Calendar className="h-4 w-4" />
+              <span>Book</span>
+            </button>
+            <button onClick={() => requireAuth(openChat)} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-gray-200 bg-white text-gray-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
+              <MessageCircle className="h-4 w-4" />
+              <span>Message</span>
+            </button>
+            <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-red-200 bg-red-50 text-red-600 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
+              <Flag className="h-4 w-4" />
+              <span>Report</span>
+            </button>
+            <button onClick={shareProviderLink} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-gray-200 bg-white text-gray-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
+              <Share2 className="h-4 w-4" />
+              <span>Share</span>
+            </button>
+            {!showPhone ? (
+              <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-primary-200 bg-primary-50 text-primary-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
+                <Phone className="h-4 w-4" />
+                <span>Contact</span>
+              </button>
+            ) : (
+              <a href={`tel:${provider.profile?.phone || ''}`} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-50 text-primary-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
+                <Phone className="h-4 w-4" />
+                <span className="truncate max-w-[50px]">{provider.profile?.phone || 'No phone'}</span>
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="px-4 mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
+                <MapPin className="h-3.5 w-3.5 text-primary-500" /> {locationString}
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
+                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" /> {avgRating.toFixed(1)} ({provider.reviews.length})
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
+                <Calendar className="h-3.5 w-3.5 text-gray-400" /> {provider.completedBookings} bookings
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
+                <Clock className="h-3.5 w-3.5 text-gray-400" /> {lastSeen}
+              </span>
+              {joinedYear && (
+                <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
+                  <User className="h-3.5 w-3.5 text-gray-400" /> Joined {joinedYear}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Portfolio */}
+        {provider.portfolio_images.length > 0 && (
+          <div className="px-4 mb-6">
+            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
+            </h2>
+            <div
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {provider.portfolio_images.map((image) => (
+                <Link
+                  key={image.id}
+                  to={`/provider/${id}/portfolio`}
+                  className="snap-start flex-shrink-0 w-40 h-40 rounded-2xl overflow-hidden bg-gray-100 shadow-md border border-gray-200/60"
+                >
+                  <img src={image.image_url} alt={image.title || 'Portfolio'} className="w-full h-full object-cover" />
+                </Link>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2 text-center">Swipe to see more →</p>
+          </div>
+        )}
+
+        {/* Services */}
         {provider.services.length > 0 && (
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary-600" />
-              Services & Pricing
+          <div className="px-4 mb-6">
+            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Services
             </h2>
             <div className="space-y-3">
               {provider.services.map((service) => (
-                <div key={service.id} className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-gray-900">{service.name}</p>
+                <div
+                  key={service.id}
+                  className="flex justify-between items-start bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
+                >
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900 text-sm">{service.name}</p>
                     {service.description && (
-                      <p className="text-sm text-gray-500">{service.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">{service.description}</p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-primary-600">₦{service.price.toLocaleString()}</p>
-                    <p className="text-xs text-gray-400">{priceTypeLabels[service.price_type]}</p>
+                  <div className="text-right ml-3">
+                    <p className="font-bold text-primary-600 text-sm">₦{service.price.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400 font-medium">{priceTypeLabels[service.price_type]}</p>
                   </div>
                 </div>
               ))}
@@ -503,102 +651,334 @@ export default function ProviderProfile() {
           </div>
         )}
 
-        {/* Portfolio */}
-        {provider.portfolio_images.length > 0 && (
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold mb-4">Portfolio</h2>
-            {/* Mobile: Swipeable Carousel */}
-            <div className="block md:hidden">
-              <div
-                className="relative overflow-hidden rounded-lg"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
-                <div
-                  className="flex transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
+        {/* About */}
+        <div className="px-4 mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> About
+            </h2>
+            {provider.description && (
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {provider.profile?.education && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <GraduationCap className="h-3.5 w-3.5" /> {provider.profile.education}
+                </span>
+              )}
+              {provider.profile?.languages && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <Languages className="h-3.5 w-3.5" /> {provider.profile.languages}
+                </span>
+              )}
+              {provider.profile?.gender && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <User className="h-3.5 w-3.5" /> {provider.profile.gender}
+                </span>
+              )}
+              {provider.profile?.age && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <Calendar className="h-3.5 w-3.5" /> {provider.profile.age} years
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Reviews */}
+        <div className="px-4 mb-8">
+          <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
+          </h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <ReviewsList reviews={provider.reviews} />
+          </div>
+        </div>
+
+        {/* Similar providers */}
+        {similarProviders && similarProviders.length > 0 && (
+          <div className="px-4 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Similar Providers
+              </h2>
+              <div className="flex border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <button
+                  onClick={() => setSimilarViewMode('grid')}
+                  className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'grid' && 'bg-primary-50 text-primary-600')}
+                  title="Grid view"
                 >
-                  {provider.portfolio_images.map((image) => (
-                    <div key={image.id} className="w-full flex-shrink-0">
-                      <img
-                        src={image.image_url}
-                        alt={image.title || 'Portfolio'}
-                        className="w-full h-auto object-contain"
-                        style={{ maxHeight: '70vh' }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {/* Navigation Arrows */}
-                {provider.portfolio_images.length > 1 && (
-                  <>
-                    <button
-                      onClick={prevImage}
-                      disabled={currentImageIndex === 0}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 bg-black/30 text-white rounded-full disabled:opacity-30"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={nextImage}
-                      disabled={currentImageIndex === provider.portfolio_images.length - 1}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-black/30 text-white rounded-full disabled:opacity-30"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
-                )}
-                {/* Dots Indicator */}
-                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
-                  {provider.portfolio_images.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentImageIndex(idx)}
-                      className={cn(
-                        'w-2 h-2 rounded-full transition-all',
-                        currentImageIndex === idx
-                          ? 'bg-white scale-125'
-                          : 'bg-white/50'
-                      )}
-                    />
-                  ))}
-                </div>
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setSimilarViewMode('list')}
+                  className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'list' && 'bg-primary-50 text-primary-600')}
+                  title="List view"
+                >
+                  <List className="h-4 w-4" />
+                </button>
               </div>
             </div>
-            {/* Desktop: Grid Gallery */}
-            <div className="hidden md:block">
+            {similarViewMode === 'grid' ? (
+              <div className="columns-2 gap-3">
+                {similarProviders.map((p: any) => (
+                  <div key={p.id} className="mb-3 break-inside-avoid">
+                    <ProviderCardPortrait provider={p} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {similarProviders.map((p: any) => (
+                  <ProviderCardHorizontal key={p.id} provider={p} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ============== MODERN DESKTOP LAYOUT ============== */}
+      <div className="hidden md:block">
+        <Breadcrumbs items={breadcrumbItems} />
+        <button
+          onClick={() => navigate(-1)}
+          className="mb-4 flex items-center text-sm text-gray-600 hover:text-primary-600 transition-colors font-medium"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to results
+        </button>
+
+        {/* Profile card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+          {/* Cover */}
+          <div className="relative h-56 bg-gradient-to-r from-primary-100 to-primary-50">
+            {provider.profile?.cover_photo ? (
+              <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+          </div>
+
+          {/* Main info */}
+          <div className="relative px-6 sm:px-8 -mt-14 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
+            {/* Avatar */}
+            <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
+              {provider.profile?.avatar_url ? (
+                <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
+                  {(providerName || 'P')[0]}
+                </div>
+              )}
+              {provider.profile?.is_verified && (
+                <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5">
+                  <CheckCircle className="h-5 w-5 text-white" />
+                </div>
+              )}
+            </div>
+
+            {/* Name and status */}
+            <div className="flex-1 mt-4 sm:mt-0 sm:ml-4">
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
+                <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  {statusLabel[provider.status] || 'Active now'}
+                </span>
+              </div>
+              <p className="text-sm font-medium text-primary-600">{categoryName}</p>
+              {provider.description && (
+                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">{provider.description}</p>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+              <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all">
+                <Calendar className="h-5 w-5" /> Book
+              </button>
+              <button onClick={() => requireAuth(openChat)} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all">
+                <MessageCircle className="h-5 w-5" /> Message
+              </button>
+              <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 bg-red-50 text-red-600 text-sm font-semibold rounded-xl hover:bg-red-100 shadow-sm transition-all">
+                <Flag className="h-5 w-5" /> Report
+              </button>
+              <button onClick={shareProviderLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all">
+                <Share2 className="h-5 w-5" /> Share
+              </button>
+              {!showPhone ? (
+                <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all">
+                  <Phone className="h-5 w-5" /> Contact
+                </button>
+              ) : (
+                <a href={`tel:${provider.profile?.phone || ''}`} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all">
+                  <Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Stats bar */}
+          <div className="mx-6 border-t border-gray-100 pt-4 pb-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                <MapPin className="h-4 w-4 text-primary-500" /><span>{locationString}</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /><span>{avgRating.toFixed(1)} ({provider.reviews.length} reviews)</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                <Calendar className="h-4 w-4 text-gray-400" /><span>{provider.completedBookings} bookings</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                <Clock className="h-4 w-4 text-gray-400" /><span>Last seen {lastSeen}</span>
+              </div>
+              {joinedYear && (
+                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  <User className="h-4 w-4 text-gray-400" /><span>Joined {joinedYear}</span>
+                </div>
+              )}
+              {provider.profile?.gender && (
+                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  <User className="h-4 w-4 text-gray-400" /><span>{provider.profile.gender}</span>
+                </div>
+              )}
+              {provider.profile?.age && (
+                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  <Calendar className="h-4 w-4 text-gray-400" /><span>{provider.profile.age} years old</span>
+                </div>
+              )}
+              {provider.profile?.education && (
+                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  <GraduationCap className="h-4 w-4 text-gray-400" /><span>{provider.profile.education}</span>
+                </div>
+              )}
+              {provider.profile?.languages && (
+                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  <Languages className="h-4 w-4 text-gray-400" /><span>{provider.profile.languages}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Services & Portfolio in a two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Services card */}
+          {provider.services.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="w-1 h-5 bg-primary-500 rounded-full"></span>
+                <Package className="h-5 w-5 text-primary-600" /> Services & Pricing
+              </h2>
+              <div className="space-y-4">
+                {provider.services.map((service) => (
+                  <div key={service.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                      <p className="font-semibold text-gray-900">{service.name}</p>
+                      {service.description && <p className="text-sm text-gray-500 mt-1">{service.description}</p>}
+                    </div>
+                    <div className="text-right ml-4">
+                      <p className="font-bold text-primary-600">₦{service.price.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 font-medium">{priceTypeLabels[service.price_type]}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Portfolio card */}
+          {provider.portfolio_images.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
+              </h2>
               <PortfolioGallery images={provider.portfolio_images} />
+            </div>
+          )}
+        </div>
+
+        {/* About & Reviews columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* About card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> About
+            </h2>
+            {provider.description && (
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {provider.profile?.education && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <GraduationCap className="h-4 w-4" /> {provider.profile.education}
+                </span>
+              )}
+              {provider.profile?.languages && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <Languages className="h-4 w-4" /> {provider.profile.languages}
+                </span>
+              )}
+              {provider.profile?.gender && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <User className="h-4 w-4" /> {provider.profile.gender}
+                </span>
+              )}
+              {provider.profile?.age && (
+                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
+                  <Calendar className="h-4 w-4" /> {provider.profile.age} years
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Reviews card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
+            </h2>
+            <ReviewsList reviews={provider.reviews} />
+          </div>
+        </div>
+
+        {/* Similar providers */}
+        {similarProviders && similarProviders.length > 0 && (
+          <div className="mt-8 mb-8">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span className="w-1 h-6 bg-primary-500 rounded-full"></span> Similar Providers
+              </h2>
+              <Link
+                to={`/search?category=${encodeURIComponent(provider.selected_category_slug)}`}
+                className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors"
+              >
+                View all <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="columns-2 md:columns-3 lg:columns-4 gap-5">
+              {similarProviders.map((p: any) => (
+                <div key={p.id} className="mb-5 break-inside-avoid">
+                  <ProviderCardPortrait provider={p} />
+                </div>
+              ))}
             </div>
           </div>
         )}
-
-        {/* Reviews */}
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Reviews</h2>
-          <ReviewsList reviews={provider.reviews} />
-        </div>
       </div>
 
+      {/* ============== MODALS & CHAT WIDGET (rendered normally) ============== */}
       <BookingFormModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
         providerId={id!}
-        providerName={provider.business_name || provider.profile?.full_name || 'Provider'}
+        providerName={providerName}
       />
 
-      <div className="hidden">
-        <ChatWidget
-          recipientId={id!}
-          recipientName={provider.business_name || provider.profile?.full_name || 'Provider'}
-        />
-        <button id="chat-widget-trigger" onClick={() => {
-          const widgetButton = document.querySelector('.fixed.bottom-4.right-4 button') as HTMLButtonElement;
-          widgetButton?.click();
-        }} />
-      </div>
+      {/* ChatWidget – always visible, its floating button controls open/close */}
+      <ChatWidget recipientId={id!} recipientName={providerName} />
 
-      {/* Review Modal */}
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -612,19 +992,9 @@ export default function ProviderProfile() {
               <div>
                 <label className="block text-sm font-medium mb-2">Rating</label>
                 <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setReviewRating(star)}
-                      className="focus:outline-none"
-                    >
-                      <Star
-                        className={cn(
-                          'h-8 w-8',
-                          star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'
-                        )}
-                      />
+                  {[1,2,3,4,5].map(star => (
+                    <button key={star} type="button" onClick={() => setReviewRating(star)}>
+                      <Star className={cn('h-8 w-8', star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300')} />
                     </button>
                   ))}
                 </div>
@@ -640,17 +1010,10 @@ export default function ProviderProfile() {
                 />
               </div>
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowReviewModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
+                <button onClick={() => setShowReviewModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                   Cancel
                 </button>
-                <button
-                  onClick={submitReview}
-                  disabled={submittingReview}
-                  className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-                >
+                <button onClick={submitReview} disabled={submittingReview} className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">
                   {submittingReview ? 'Submitting...' : 'Submit Review'}
                 </button>
               </div>
@@ -658,8 +1021,6 @@ export default function ProviderProfile() {
           </div>
         </div>
       )}
-
-      {/* Report Modal */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -670,9 +1031,7 @@ export default function ProviderProfile() {
               </button>
             </div>
             <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600">
-                Please let us know why you're reporting this provider.
-              </p>
+              <p className="text-sm text-gray-600">Please let us know why you're reporting this provider.</p>
               <textarea
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
@@ -681,17 +1040,10 @@ export default function ProviderProfile() {
                 placeholder="e.g., Fake profile, inappropriate content, etc."
               />
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowReportModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
+                <button onClick={() => setShowReportModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                   Cancel
                 </button>
-                <button
-                  onClick={submitReport}
-                  disabled={submittingReport}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
-                >
+                <button onClick={submitReport} disabled={submittingReport} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50">
                   {submittingReport ? 'Submitting...' : 'Submit Report'}
                 </button>
               </div>

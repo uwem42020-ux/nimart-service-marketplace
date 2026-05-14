@@ -139,3 +139,84 @@
 .animate-float-down {
   animation: floatDown 1.2s ease-in-out infinite;
 }
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  font-family: 'Montserrat', system-ui, sans-serif;
+}
+
+/* Fix for Leaflet's default icon paths */
+.leaflet-default-icon-path {
+  background-image: url(https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png);
+}
+
+/* Cluster styles */
+.marker-cluster-small {
+  background-color: rgba(0, 135, 81, 0.3) !important;
+}
+.marker-cluster-small div {
+  background-color: #008751 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+.marker-cluster-medium {
+  background-color: rgba(0, 135, 81, 0.4) !important;
+}
+.marker-cluster-medium div {
+  background-color: #008751 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+.marker-cluster-large {
+  background-color: rgba(0, 135, 81, 0.5) !important;
+}
+.marker-cluster-large div {
+  background-color: #008751 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* Mobile map fixes */
+.leaflet-control-zoom {
+  margin-top: 70px !important;
+}
+
+/* Custom provider marker */
+.provider-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.provider-marker-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Bottom sheet animation */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Hide scrollbar for provider list */
+.map-provider-list::-webkit-scrollbar {
+  width: 4px;
+}
+.map-provider-list::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 2px;
+}

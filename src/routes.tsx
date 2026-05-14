@@ -12,7 +12,9 @@ import { MessageThread } from './components/chat/MessageThread';
 // Lazy load pages
 const Home = lazy(() => import('./pages/customer/Home'));
 const Search = lazy(() => import('./pages/Search'));
+const MapPage = lazy(() => import('./pages/MapPage'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage'));
+const ServiceLocationPage = lazy(() => import('./pages/ServiceLocationPage'));
 const CustomerProviderProfile = lazy(() => import('./pages/customer/ProviderProfile'));
 const CustomerBookings = lazy(() => import('./pages/customer/Bookings'));
 const CustomerMessages = lazy(() => import('./pages/customer/Messages'));
@@ -27,6 +29,7 @@ const ProviderMessages = lazy(() => import('./pages/provider/Messages'));
 const ProviderProfile = lazy(() => import('./pages/provider/Profile'));
 const ProviderServices = lazy(() => import('./pages/provider/Services'));
 const ProviderVerification = lazy(() => import('./pages/provider/Verification'));
+const ProviderPayment = lazy(() => import('./pages/provider/Payment'));
 
 const SignIn = lazy(() => import('./pages/auth/SignIn'));
 const SignUp = lazy(() => import('./pages/auth/SignUp'));
@@ -49,6 +52,11 @@ const AdminChats = lazy(() => import('./pages/admin/Chats'));
 const AdminBulkEmail = lazy(() => import('./pages/admin/BulkEmail'));
 const AdminVerifications = lazy(() => import('./pages/admin/Verifications'));
 const AdminReports = lazy(() => import('./pages/admin/Reports'));
+const AdminCoins = lazy(() => import('./pages/admin/Coins'));
+const AdminPayments = lazy(() => import('./pages/admin/Payments'));
+
+// NEW: Provider portfolio page (customer view)
+const CustomerProviderPortfolio = lazy(() => import('./pages/customer/ProviderPortfolio'));
 
 export const router = createBrowserRouter([
   {
@@ -57,8 +65,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Suspense fallback={<LoadingSkeleton />}><Home /></Suspense> },
       { path: 'search', element: <Suspense fallback={<LoadingSkeleton />}><Search /></Suspense> },
+      { path: 'map', element: <Suspense fallback={<LoadingSkeleton />}><MapPage /></Suspense> },
       { path: 'category/:tierSlug', element: <Suspense fallback={<LoadingSkeleton />}><CategoryPage /></Suspense> },
+      { path: 'services/:categorySlug/in/:lgaId', element: <Suspense fallback={<LoadingSkeleton />}><ServiceLocationPage /></Suspense> },
       { path: 'provider/:id', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderProfile /></Suspense> },
+      // NEW: provider portfolio page (customer view)
+      { path: 'provider/:id/portfolio', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderPortfolio /></Suspense> },
       { path: 'terms', element: <Suspense fallback={<LoadingSkeleton />}><Terms /></Suspense> },
       { path: 'privacy', element: <Suspense fallback={<LoadingSkeleton />}><Privacy /></Suspense> },
       { path: 'cookies', element: <Suspense fallback={<LoadingSkeleton />}><Cookies /></Suspense> },
@@ -111,6 +123,7 @@ export const router = createBrowserRouter([
       { path: 'messages/:threadId', element: <Suspense fallback={<LoadingSkeleton />}><MessageThread /></Suspense> },
       { path: 'profile', element: <Suspense fallback={<LoadingSkeleton />}><ProviderProfile /></Suspense> },
       { path: 'verification', element: <Suspense fallback={<LoadingSkeleton />}><ProviderVerification /></Suspense> },
+      { path: 'payment', element: <Suspense fallback={<LoadingSkeleton />}><ProviderPayment /></Suspense> },
       { path: 'notifications', element: <Suspense fallback={<LoadingSkeleton />}><Notifications /></Suspense> },
     ],
   },
@@ -128,6 +141,8 @@ export const router = createBrowserRouter([
       { path: 'email', element: <Suspense fallback={<LoadingSkeleton />}><AdminBulkEmail /></Suspense> },
       { path: 'verifications', element: <Suspense fallback={<LoadingSkeleton />}><AdminVerifications /></Suspense> },
       { path: 'reports', element: <Suspense fallback={<LoadingSkeleton />}><AdminReports /></Suspense> },
+      { path: 'coins', element: <Suspense fallback={<LoadingSkeleton />}><AdminCoins /></Suspense> },
+      { path: 'payments', element: <Suspense fallback={<LoadingSkeleton />}><AdminPayments /></Suspense> },
     ],
   },
   {

@@ -1,7 +1,6 @@
 // src/components/common/LocationDropdown.tsx
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { MapPin, X } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, X, ChevronRight } from 'lucide-react';
 
 interface State {
   state_id: number;
@@ -18,7 +17,8 @@ interface LocationDropdownProps {
   onSelectLga: (lgaId: string, lgaName: string) => void;
   onClear: () => void;
   onClose: () => void;
-  preloadedStates?: State[];
+  preloadedStates: State[];
+  preloadedLgas: Record<string, LGA[]>;
 }
 
 export function LocationDropdown({
@@ -27,129 +27,107 @@ export function LocationDropdown({
   onClear,
   onClose,
   preloadedStates,
+  preloadedLgas,
 }: LocationDropdownProps) {
-  const [states, setStates] = useState<State[]>(preloadedStates || []);
-  const [lgas, setLgas] = useState<LGA[]>([]);
-  const [selectedState, setSelectedState] = useState<string>('');
-  const [view, setView] = useState<'states' | 'lgas'>('states');
-
-  useEffect(() => {
-    if (!preloadedStates) {
-      async function fetchStates() {
-        const { data } = await supabase
-          .from('lga_centers')
-          .select('state_id, state_name')
-          .order('state_name');
-        const uniqueStates = data?.filter((v, i, a) =>
-          a.findIndex(t => t.state_id === v.state_id) === i
-        ) || [];
-        setStates(uniqueStates);
-      }
-      fetchStates();
-    }
-  }, [preloadedStates]);
-
-  useEffect(() => {
-    if (!selectedState) {
-      setLgas([]);
-      return;
-    }
-    async function fetchLgas() {
-      const { data } = await supabase
-        .from('lga_centers')
-        .select('lga_id, lga_name')
-        .eq('state_id', parseInt(selectedState))
-        .order('lga_name');
-      setLgas(data || []);
-    }
-    fetchLgas();
-  }, [selectedState]);
+  const [selectedStateId, setSelectedStateId] = useState<string>('');
+  const [showLgas, setShowLgas] = useState(false);
 
   const handleStateClick = (stateId: string, stateName: string) => {
-    setSelectedState(stateId);
-    setView('lgas');
+    setSelectedStateId(stateId);
+    setShowLgas(true);
+    // Do NOT call onSelectState here – we wait until the user picks an LGA
   };
 
   const handleLgaClick = (lgaId: string, lgaName: string) => {
     onSelectLga(lgaId, lgaName);
+    onClose();
   };
 
   const handleBack = () => {
-    setView('states');
-    setSelectedState('');
+    setShowLgas(false);
+    setSelectedStateId('');
+  };
+
+  const handleSelectEntireState = () => {
+    const state = preloadedStates.find(s => s.state_id.toString() === selectedStateId);
+    if (state) {
+      onSelectState(selectedStateId, state.state_name);
+      onClose();
+    }
   };
 
   const handleSelectAllNigeria = () => {
     onClear();
+    onClose();
   };
 
-  const handleSelectEntireState = () => {
-    const state = states.find(s => s.state_id.toString() === selectedState);
-    if (state) {
-      onSelectState(selectedState, state.state_name);
-    }
-  };
+  const currentLgas = preloadedLgas[selectedStateId] || [];
 
   return (
-    <div className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 mt-2 w-full sm:w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-20">
-      <div className="p-2">
-        <div className="flex items-center justify-between border-b pb-2 mb-2">
-          <h3 className="font-medium text-gray-900">
-            {view === 'states' ? 'Select Location' : 'Select LGA'}
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X className="h-4 w-4 text-gray-500" />
-          </button>
-        </div>
+    <div className="absolute right-0 mt-2 w-full sm:w-72 bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">
+          {showLgas ? 'Select LGA' : 'Select Location'}
+        </h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
-        {view === 'states' ? (
-          <>
+      {/* Content */}
+      <div className="max-h-60 overflow-y-auto">
+        {!showLgas ? (
+          // States list
+          <div>
+            {/* All Nigeria option */}
             <button
               onClick={handleSelectAllNigeria}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 rounded-md"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-green-50/80 transition-colors"
             >
               <MapPin className="h-4 w-4 text-primary-600" />
-              <span className="font-medium text-gray-900">All Nigeria 🇳🇬</span>
+              <span className="font-medium text-gray-900">All Nigeria</span>
             </button>
-            <div className="max-h-64 overflow-y-auto mt-1">
-              {states.map((state) => (
-                <button
-                  key={state.state_id}
-                  onClick={() => handleStateClick(state.state_id.toString(), state.state_name)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 rounded-md"
-                >
-                  <span className="text-gray-900 break-words">{state.state_name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">→</span>
-                </button>
-              ))}
-            </div>
-          </>
+            {preloadedStates.map((state) => (
+              <button
+                key={state.state_id}
+                onClick={() => handleStateClick(state.state_id.toString(), state.state_name)}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50/80 transition-colors flex items-center justify-between"
+              >
+                {state.state_name}
+                <ChevronRight className="h-4 w-4 text-gray-400" />
+              </button>
+            ))}
+          </div>
         ) : (
-          <>
+          // LGA list
+          <div>
             <button
               onClick={handleBack}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-primary-600 hover:bg-gray-50 rounded-md mb-1"
+              className="w-full text-left px-4 py-2.5 text-sm text-primary-600 hover:bg-green-50/80 font-medium flex items-center gap-1 border-b border-gray-100"
             >
-              ← Back to states
+              ← Back to States
             </button>
             <button
               onClick={handleSelectEntireState}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 rounded-md font-medium text-gray-900"
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50/80 font-medium border-b border-gray-100"
             >
-              Entire {states.find(s => s.state_id.toString() === selectedState)?.state_name}
+              Entire {preloadedStates.find(s => s.state_id.toString() === selectedStateId)?.state_name}
             </button>
-            <div className="max-h-64 overflow-y-auto mt-1">
-              {lgas.map((lga) => (
+            {currentLgas.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-gray-500">No LGAs found</p>
+            ) : (
+              currentLgas.map((lga) => (
                 <button
                   key={lga.lga_id}
                   onClick={() => handleLgaClick(lga.lga_id.toString(), lga.lga_name)}
-                  className="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 rounded-md text-gray-900 break-words"
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50/80 transition-colors"
                 >
                   {lga.lga_name}
                 </button>
-              ))}
-            </div>
-          </>
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -2,16 +2,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { ProviderCard } from '../components/provider/ProviderCard';
+import { ProviderCardPortrait } from '../components/provider/ProviderCardPortrait';
+import { ProviderCardHorizontal } from '../components/provider/ProviderCardHorizontal';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateDistance } from '../lib/distance';
-import { FilterSidebar } from '../components/search/FilterSidebar';
+import { EnhancedFilterSidebar } from '../components/search/EnhancedFilterSidebar';
 import { SortDropdown } from '../components/search/SortDropdown';
 import { SEO } from '../components/common/SEO';
 import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
-import { Search as SearchIcon, X } from 'lucide-react';
+import {
+  Search as SearchIcon,
+  X,
+  LayoutGrid,
+  List,
+  Map,
+} from 'lucide-react';
 import { NimartSpinner } from '../components/common/NimartSpinner';
+import { cn } from '../lib/utils';
 import type { Database } from '../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -38,6 +46,7 @@ export default function Search() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sortBy, setSortBy] = useState<string>('distance');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const keyword = searchParams.get('q') || '';
   const tier = searchParams.get('tier');
@@ -60,6 +69,7 @@ export default function Search() {
     setSearchInput(keyword);
   }, [keyword]);
 
+  // Autocomplete – safe version (fixed the old embedded filter bug)
   useEffect(() => {
     if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) {
       setSuggestions([]);
@@ -72,8 +82,8 @@ export default function Search() {
 
       const providerPromise = supabase
         .from('providers')
-        .select('id, business_name, profile:profiles!inner(full_name)')
-        .or(`business_name.ilike.${pattern},profile.full_name.ilike.${pattern}`)
+        .select('id, business_name')
+        .ilike('business_name', pattern)
         .limit(3);
 
       const servicePromise = supabase
@@ -87,11 +97,10 @@ export default function Search() {
       const newSuggestions: Suggestion[] = [];
 
       providerRes.data?.forEach(p => {
-        const name = p.business_name || (p.profile as any)?.full_name;
-        if (name) {
+        if (p.business_name) {
           newSuggestions.push({
             type: 'provider',
-            text: name,
+            text: p.business_name,
             subtext: 'Provider',
             link: `/provider/${p.id}`,
           });
@@ -117,6 +126,7 @@ export default function Search() {
     fetchSuggestions();
   }, [debouncedSearchTerm]);
 
+  // Close suggestions on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -157,6 +167,7 @@ export default function Search() {
     setShowSuggestions(false);
   };
 
+  // Providers query – exactly the old stable logic
   const { data: providers, isLoading } = useQuery({
     queryKey: ['search-providers', keyword, tier, category, subcategory, state, lga, userLat, userLng, sortBy],
     queryFn: async () => {
@@ -283,22 +294,26 @@ export default function Search() {
       return providersWithDetails;
     },
     enabled: true,
+    staleTime: 0,
   });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <SEO
         title={`Search${keyword ? `: ${keyword}` : ''}`}
-        description={`Find trusted service providers in Nigeria. Browse by category, location, and ratings.`}
+        description="Find trusted service providers in Nigeria. Browse by category, location, and ratings."
         url={`https://nimart.ng/search?${searchParams.toString()}`}
       />
 
       <div className="flex flex-col lg:flex-row gap-8">
+        {/* Sidebar */}
         <aside className="lg:w-64 flex-shrink-0">
-          <FilterSidebar />
+          <EnhancedFilterSidebar />
         </aside>
 
+        {/* Main content */}
         <main className="flex-1">
+          {/* Search bar with autocomplete */}
           <div className="mb-6 relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <div className="relative">
@@ -335,6 +350,7 @@ export default function Search() {
               <button type="submit" className="hidden">Search</button>
             </form>
 
+            {/* Suggestions dropdown */}
             {showSuggestions && debouncedSearchTerm && suggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
@@ -359,34 +375,75 @@ export default function Search() {
             )}
           </div>
 
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {keyword ? `Results for "${keyword}"` : tier ? `${tier} Services` : 'All Providers'}
+          {/* Toolbar: heading, view toggle, map, sort */}
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h1 className="text-xl font-bold text-gray-900">
+              {keyword ? `Results for "${keyword}"` : tier ? `${tier} Services` : category ? category : 'All Providers'}
+              {providers && providers.length > 0 && (
+                <span className="text-sm text-gray-500 ml-2">({providers.length})</span>
+              )}
             </h1>
-            <SortDropdown value={sortBy} onChange={setSortBy} />
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={cn('p-2', viewMode === 'grid' ? 'bg-primary-50 text-primary-600' : 'text-gray-500 hover:text-primary-600')}
+                  title="Grid view"
+                >
+                  <LayoutGrid className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn('p-2', viewMode === 'list' ? 'bg-primary-50 text-primary-600' : 'text-gray-500 hover:text-primary-600')}
+                  title="List view"
+                >
+                  <List className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Map button */}
+              <Link
+                to="/map"
+                className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:text-primary-600"
+                title="Map view"
+              >
+                <Map className="h-5 w-5" />
+              </Link>
+
+              {/* Sort dropdown */}
+              <SortDropdown value={sortBy} onChange={setSortBy} />
+            </div>
           </div>
 
+          {/* Results */}
           {isLoading ? (
             <div className="flex justify-center py-20">
               <NimartSpinner size="lg" />
             </div>
+          ) : !providers || providers.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-lg border">
+              <p className="text-gray-500">No providers found.</p>
+              <Link to="/" className="mt-2 inline-block text-primary-600 hover:underline">
+                Browse all providers
+              </Link>
+            </div>
+          ) : viewMode === 'grid' ? (
+            /* Masonry grid with portrait cards */
+            <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+              {providers.map((provider) => (
+                <div key={provider.id} className="mb-4 break-inside-avoid">
+                  <ProviderCardPortrait provider={provider} />
+                </div>
+              ))}
+            </div>
           ) : (
-            <>
-              {providers?.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">No providers found.</p>
-                  <Link to="/" className="mt-2 inline-block text-primary-600 hover:underline">
-                    Browse all providers
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {providers?.map((provider) => (
-                    <ProviderCard key={provider.id} provider={provider} />
-                  ))}
-                </div>
-              )}
-            </>
+            /* List view with horizontal cards */
+            <div className="flex flex-col gap-3">
+              {providers.map((provider) => (
+                <ProviderCardHorizontal key={provider.id} provider={provider} />
+              ))}
+            </div>
           )}
         </main>
       </div>
