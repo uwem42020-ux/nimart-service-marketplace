@@ -1,7 +1,8 @@
+// src/components/common/TopProvidersSlider.tsx
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
-import { MapPin, Star } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { OptimizedImage } from './OptimizedImage';
 import { useEffect, useState } from 'react';
 
@@ -24,11 +25,11 @@ const loadFromCache = (key: string, maxAge = 1000 * 60 * 60 * 24) => {
   }
 };
 
-// Skeleton card component – looks exactly like real card but gray
+// Skeleton card – image full width, no border
 const SkeletonCard = () => (
-  <div className="flex-shrink-0 w-36 sm:w-[30%] lg:w-[22%] snap-start bg-white rounded-xl border-2 border-gray-200 p-2 flex flex-col animate-pulse">
-    <div className="w-full aspect-square rounded-lg bg-gray-200 mb-1 sm:mb-2"></div>
-    <div className="flex-1">
+  <div className="flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden animate-pulse">
+    <div className="w-full aspect-square bg-gray-200"></div>
+    <div className="p-2">
       <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
       <div className="h-2 bg-gray-200 rounded w-1/2"></div>
     </div>
@@ -67,7 +68,7 @@ export function TopProvidersSlider() {
         const ids = providers.map(p => p.id);
         const { data: profiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, lat, lng, avatar_url, full_name, lga_name, is_verified')
+          .select('id, avatar_url, full_name, lga_name, is_verified')
           .in('id', ids);
 
         if (profileError) throw profileError;
@@ -98,7 +99,7 @@ export function TopProvidersSlider() {
         <div className="inline-block bg-[#008751] text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-3">
           Top Providers
         </div>
-        <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+        <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2">
           {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
         </div>
       </div>
@@ -114,7 +115,7 @@ export function TopProvidersSlider() {
         Top Providers
         {isOffline && <span className="ml-2 text-xs text-white/80">(Offline mode)</span>}
       </div>
-      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
+      <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
         {displayData.map(provider => {
           const prof = (provider as any).profile || {};
           const location = prof.lga_name ? prof.lga_name : 'Location not set';
@@ -125,11 +126,12 @@ export function TopProvidersSlider() {
             <Link
               key={provider.id}
               to={`/provider/${provider.id}`}
-              className={`flex-shrink-0 w-36 sm:w-[30%] lg:w-[22%] snap-start bg-white rounded-xl border-2 p-2 hover:shadow-md transition flex flex-col ${
-                isBoosted ? 'border-green-700' : 'border-gray-200'
+              className={`flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden flex flex-col ${
+                isBoosted ? 'border-2 border-amber-500' : ''
               }`}
             >
-              <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-gray-100 mb-1 sm:mb-2">
+              {/* Image – full width, no padding */}
+              <div className="relative w-full aspect-square bg-gray-100">
                 {prof.avatar_url ? (
                   <OptimizedImage 
                     src={prof.avatar_url} 
@@ -142,12 +144,14 @@ export function TopProvidersSlider() {
                   </div>
                 )}
 
+                {/* Verified badge */}
                 {isVerified && (
                   <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-sm z-10">
                     <img src="/verify.png" alt="Verified" className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
                 )}
 
+                {/* Boosted badge */}
                 {isBoosted && (
                   <div
                     className="absolute bottom-1 left-0 bg-amber-500 text-white rounded-r-md px-1 py-1 shadow-md z-10"
@@ -158,7 +162,8 @@ export function TopProvidersSlider() {
                 )}
               </div>
 
-              <div className="flex-1">
+              {/* Text section – compact padding */}
+              <div className="p-2">
                 <p className="font-semibold text-[11px] sm:text-sm text-gray-900 truncate">
                   {provider.business_name}
                 </p>

@@ -13,6 +13,7 @@ import {
   Home,
   Landmark,
   Phone,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { TIERS, getCategoriesByTier, getSubcategoriesByCategory } from '../../data/categories';
@@ -36,6 +37,7 @@ export default function ProviderSetup() {
   const { user, profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Location states
   const [states, setStates] = useState<State[]>([]);
@@ -48,7 +50,7 @@ export default function ProviderSetup() {
   // Address states
   const [streetAddress, setStreetAddress] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [addressArea, setAddressArea] = useState(''); // neighbourhood/village
+  const [addressArea, setAddressArea] = useState('');
 
   // Business states
   const [businessName, setBusinessName] = useState('');
@@ -73,6 +75,7 @@ export default function ProviderSetup() {
   const [mapLng, setMapLng] = useState<number>(7.4914);
   const [mapCenterLat, setMapCenterLat] = useState<number>(9.0556);
   const [mapCenterLng, setMapCenterLng] = useState<number>(7.4914);
+  const [hasMovedPin, setHasMovedPin] = useState(false);
 
   // ── Fetch all states on mount ──────────────────────
   useEffect(() => {
@@ -116,12 +119,12 @@ export default function ProviderSetup() {
       setMapCenterLat(lga.lat);
       setMapCenterLng(lga.lng);
       // Only move the marker if the user hasn't manually placed it yet
-      if (mapLat === 9.0556 && mapLng === 7.4914) {
+      if (!hasMovedPin) {
         setMapLat(lga.lat);
         setMapLng(lga.lng);
       }
     }
-  }, [selectedLga, lgas]);
+  }, [selectedLga, lgas, hasMovedPin]);
 
   // ── Load categories when tier changes ──────────────
   useEffect(() => {
@@ -190,6 +193,7 @@ export default function ProviderSetup() {
         if (profileData.lat && profileData.lng) {
           setMapLat(profileData.lat);
           setMapLng(profileData.lng);
+          setHasMovedPin(true);
         }
       }
 
@@ -227,12 +231,20 @@ export default function ProviderSetup() {
   const handleMarkerDrag = (lat: number, lng: number) => {
     setMapLat(lat);
     setMapLng(lng);
+    setHasMovedPin(true);
   };
 
-  // ── Submit ─────────────────────────────────────────
+  // ── Submit using RPC ────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
 
+    // Validations
+    if (!businessName.trim()) {
+      toast.error('Business name is required');
+      return;
+    }
+    if (!validatePhoneNumber(phoneNumber)) return;
     if (!selectedLga) {
       toast.error('Please select your LGA');
       return;
@@ -245,15 +257,10 @@ export default function ProviderSetup() {
       toast.error('Area / Neighbourhood is required');
       return;
     }
-    if (!businessName.trim()) {
-      toast.error('Business name is required');
+    if (!hasMovedPin) {
+      toast.error('Please drag the map pin to your exact location');
       return;
     }
-    if (!phoneNumber || phoneNumber.length !== 14) {
-      toast.error('Please enter a valid phone number');
-      return;
-    }
-    if (!validatePhoneNumber(phoneNumber)) return;
     if (!selectedTier || !selectedCategory || !selectedSubcategoryId) {
       toast.error('Please complete service category selection');
       return;
@@ -265,47 +272,32 @@ export default function ProviderSetup() {
 
     setLoading(true);
     try {
-      const selectedLgaData = lgas.find(
-        l => l.lga_id.toString() === selectedLga
-      );
+      const { data, error } = await supabase.rpc('complete_provider_setup', {
+        p_user_id: user!.id,
+        p_business_name: businessName,
+        p_phone: phoneNumber,
+        p_street_address: streetAddress,
+        p_address_area: addressArea,
+        p_landmark: landmark || null,
+        p_lga_id: parseInt(selectedLga),
+        p_lat: mapLat,
+        p_lng: mapLng,
+        p_description: description || null,
+        p_selected_tier_slug: selectedTier,
+        p_selected_category_slug: selectedCategory,
+        p_selected_subcategory_id: parseInt(selectedSubcategoryId),
+      });
 
-      // Update profile with exact coordinates from the map
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          lga_id: parseInt(selectedLga),
-          lga_name: selectedLgaData?.lga_name,
-          lat: mapLat,
-          lng: mapLng,
-          street_address: streetAddress,
-          landmark: landmark || null,
-          address_area: addressArea,
-          phone: phoneNumber,
-          is_complete: true,
-        })
-        .eq('id', user!.id);
-
-      if (profileError) throw profileError;
-
-      // Update provider business info
-      const { error: providerError } = await supabase
-        .from('providers')
-        .update({
-          business_name: businessName,
-          description,
-          selected_tier_slug: selectedTier,
-          selected_category_slug: selectedCategory,
-          selected_subcategory_id: parseInt(selectedSubcategoryId),
-        })
-        .eq('id', user!.id);
-
-      if (providerError) throw providerError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
 
       await refreshProfile();
-      toast.success('Profile setup complete! You are now visible to customers.');
-      navigate('/provider/dashboard');
-    } catch (error: any) {
-      toast.error(error.message);
+      toast.success('Profile setup complete! Please upload a profile picture and set your password.');
+      navigate('/provider/profile');
+    } catch (err: any) {
+      console.error('Setup error:', err);
+      setSubmitError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -331,8 +323,7 @@ export default function ProviderSetup() {
       <p className="text-sm text-amber-600 mb-6 flex items-start gap-1">
         <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
         <span>
-          Your full name and address must match your official ID document for
-          verification purposes.
+          Your full name must match your official ID document for verification purposes.
         </span>
       </p>
 
@@ -640,15 +631,38 @@ export default function ProviderSetup() {
           </label>
         </div>
 
+        {/* Error Banner & Retry */}
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800 text-sm">{submitError}</p>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="mt-2 text-sm text-red-600 underline font-medium"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* ── Submit ──────────────────────────────────── */}
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !hasMovedPin || !termsAccepted}
             className="bg-primary-600 text-white px-6 py-3 rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
           >
-            <Save className="h-5 w-5" />
-            {loading ? 'Saving...' : 'Complete Setup'}
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Setting up...
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                Complete Setup
+              </>
+            )}
           </button>
         </div>
       </form>

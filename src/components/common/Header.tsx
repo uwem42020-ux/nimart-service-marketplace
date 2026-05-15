@@ -21,10 +21,6 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { OptimizedImage } from './OptimizedImage';
-import { CustomAvatarIcon } from '../icons/CustomAvatarIcon';
-import { CustomBellIcon } from '../icons/CustomBellIcon';
-import { CustomMessageIcon } from '../icons/CustomMessageIcon';
-import { CustomBookingIcon } from '../icons/CustomBookingIcon';
 import logo from '/logo.png';
 import toast from 'react-hot-toast';
 
@@ -41,6 +37,7 @@ export function Header() {
 
   const isOnMessagesPage = location.pathname.includes('/messages');
   const showMessagesBadge = !isOnMessagesPage && counts.messages > 0;
+  const role = profile?.role || 'customer';
 
   const handleSignOut = async () => {
     await signOut();
@@ -50,30 +47,14 @@ export function Header() {
     setMobileView('main');
   };
 
-  const getDashboardLink = () => {
-    if (!profile) return '/';
-    return profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard';
-  };
-
-  const getBookingsLink = () => {
-    if (!profile) return '/auth/signin';
-    return profile.role === 'provider' ? '/provider/bookings' : '/customer/bookings';
-  };
-
-  const getMessagesLink = () => {
-    if (!profile) return '/auth/signin';
-    return profile.role === 'provider' ? '/provider/messages' : '/customer/messages';
-  };
-
-  const getNotificationsLink = () => {
-    if (!profile) return '/auth/signin';
-    return profile.role === 'provider' ? '/provider/notifications' : '/customer/notifications';
-  };
-
-  const getProfileLink = () => {
-    if (!profile) return '/auth/signin';
-    return profile.role === 'provider' ? '/provider/profile' : '/customer/profile';
-  };
+  const getDashboardLink = () => (role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+  const getBookingsLink = () => (role === 'provider' ? '/provider/bookings' : '/customer/bookings');
+  const getMessagesLink = () => (role === 'provider' ? '/provider/messages' : '/customer/messages');
+  const getNotificationsLink = () => (role === 'provider' ? '/provider/notifications' : '/customer/notifications');
+  const getProfileLink = () => (role === 'provider' ? '/provider/profile' : '/customer/profile');
+  const getPortfolioLink = () => (role === 'provider' ? '/provider/portfolio' : null);
+  const getServicesLink = () => (role === 'provider' ? '/provider/services' : null);
+  const getVerificationLink = () => (role === 'provider' ? '/provider/verification' : null);
 
   const handleBookingsClick = async () => {
     if (!user) {
@@ -103,18 +84,13 @@ export function Header() {
   };
 
   const handleMouseEnter = () => {
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
     if (user) setIsUserMenuOpen(true);
   };
 
   const handleMouseLeave = () => {
     if (!user) return;
-    closeTimeoutRef.current = setTimeout(() => {
-      setIsUserMenuOpen(false);
-    }, 150);
+    closeTimeoutRef.current = setTimeout(() => setIsUserMenuOpen(false), 150);
   };
 
   useEffect(() => {
@@ -123,84 +99,29 @@ export function Header() {
     };
   }, []);
 
-  // Mobile main menu items – includes Messages
+  // Mobile menu items (unchanged – uses Lucide icons)
   const mobileMainItems = [
-    {
-      label: 'Dashboard',
-      icon: <LayoutDashboard className="h-5 w-5" />,
-      to: getDashboardLink(),
-      disabled: false,
-    },
-    {
-      label: 'Messages',
-      icon: <MessageCircle className="h-5 w-5" />,
-      to: getMessagesLink(),
-      disabled: false,
-    },
-    {
-      label: 'My Bookings',
-      icon: <Calendar className="h-5 w-5" />,
-      to: getBookingsLink(),
-      disabled: false,
-    },
-    {
-      label: 'Portfolio',
-      icon: <Image className="h-5 w-5" />,
-      to: '/provider/portfolio',
-      disabled: false,
-    },
-    {
-      label: 'Set Prices',
-      icon: <Package className="h-5 w-5" />,
-      to: '/provider/services',
-      disabled: false,
-    },
-    {
-      label: 'Get Verified',
-      icon: <Shield className="h-5 w-5" />,
-      to: '/provider/verification',
-      disabled: profile?.is_verified,
-    },
-    {
-      label: 'Settings',
-      icon: <Settings className="h-5 w-5" />,
-      action: () => setMobileView('settings'),
-      disabled: false,
-    },
+    { label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, to: getDashboardLink(), disabled: false },
+    { label: 'Messages', icon: <MessageCircle className="h-5 w-5" />, to: getMessagesLink(), disabled: false },
+    { label: 'My Bookings', icon: <Calendar className="h-5 w-5" />, to: getBookingsLink(), disabled: false },
+    ...(role === 'provider' ? [
+      { label: 'Portfolio', icon: <Image className="h-5 w-5" />, to: getPortfolioLink()!, disabled: false },
+      { label: 'Set Prices', icon: <Package className="h-5 w-5" />, to: getServicesLink()!, disabled: false },
+      { label: 'Get Verified', icon: <Shield className="h-5 w-5" />, to: getVerificationLink()!, disabled: profile?.is_verified === true },
+    ] : []),
+    { label: 'Settings', icon: <Settings className="h-5 w-5" />, action: () => setMobileView('settings'), disabled: false },
   ];
 
-  // Mobile settings sub‑menu items (unchanged)
   const mobileSettingsItems = [
-    {
-      label: 'Profile Setup',
-      icon: <Settings className="h-5 w-5" />,
-      to: getProfileLink(),
-    },
-    {
-      label: 'Change Phone/Email',
-      icon: <Phone className="h-5 w-5" />,
-      to: getProfileLink(),
-    },
-    {
-      label: 'Change Language',
-      icon: <Globe className="h-5 w-5" />,
-      action: () => toast.success('Language selector coming soon'),
-    },
-    {
-      label: 'Change Password',
-      icon: <Lock className="h-5 w-5" />,
-      to: '/auth/reset-password',
-    },
-    {
-      label: 'Delete My Account',
-      icon: <Trash2 className="h-5 w-5 text-red-500" />,
-      action: () => {
-        if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-          toast.error('Account deletion is not yet implemented.');
-        }
-      },
-      danger: true,
-    },
+    { label: 'Profile Setup', icon: <Settings className="h-5 w-5" />, to: getProfileLink() },
+    { label: 'Change Phone/Email', icon: <Phone className="h-5 w-5" />, to: getProfileLink() },
+    { label: 'Change Language', icon: <Globe className="h-5 w-5" />, action: () => toast.success('Language selector coming soon') },
+    { label: 'Change Password', icon: <Lock className="h-5 w-5" />, to: '/auth/reset-password' },
+    { label: 'Delete My Account', icon: <Trash2 className="h-5 w-5 text-red-500" />, action: () => {
+      if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+        toast.error('Account deletion is not yet implemented.');
+      }
+    }, danger: true },
   ];
 
   const handleMobileProfileClick = () => {
@@ -222,56 +143,72 @@ export function Header() {
       <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-md border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
             <Link to="/" className="flex items-center">
               <img src={logo} alt="Nimart" className="h-10 w-auto" />
             </Link>
 
-            {/* Right navigation – desktop: all icons; mobile: only Profile */}
             <div className="flex items-center space-x-1 sm:space-x-2">
-              {/* Desktop only: Bookings */}
+              {/* Bookings icon – Nimart dark green icon, light gray circle */}
               <button
                 onClick={handleBookingsClick}
                 title="Bookings"
+                aria-label="Bookings"
                 className="relative hidden md:block"
               >
-                <CustomBookingIcon />
-                {counts.bookings > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full min-w-[18px]">
-                    {counts.bookings > 9 ? '9+' : counts.bookings}
-                  </span>
-                )}
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
+                <span className="relative flex items-center justify-center w-9 h-9">
+                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
+                    <use href="/icons/sprite.svg#booking" />
+                  </svg>
+                  {counts.bookings > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
+                      {counts.bookings > 9 ? '9+' : counts.bookings}
+                    </span>
+                  )}
+                </span>
               </button>
 
-              {/* Desktop only: Messages */}
+              {/* Messages icon – Nimart dark green */}
               <button
                 onClick={handleMessagesClick}
                 title="Messages"
+                aria-label="Messages"
                 className="relative hidden md:block"
               >
-                <CustomMessageIcon />
-                {showMessagesBadge && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full min-w-[18px]">
-                    {counts.messages > 9 ? '9+' : counts.messages}
-                  </span>
-                )}
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
+                <span className="relative flex items-center justify-center w-9 h-9">
+                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
+                    <use href="/icons/sprite.svg#message" />
+                  </svg>
+                  {showMessagesBadge && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
+                      {counts.messages > 9 ? '9+' : counts.messages}
+                    </span>
+                  )}
+                </span>
               </button>
 
-              {/* Desktop only: Notifications */}
+              {/* Notifications icon – Nimart dark green */}
               <button
                 onClick={handleNotificationsClick}
                 title="Notifications"
+                aria-label="Notifications"
                 className="relative hidden md:block"
               >
-                <CustomBellIcon />
-                {counts.system > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full min-w-[18px]">
-                    {counts.system > 9 ? '9+' : counts.system}
-                  </span>
-                )}
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
+                <span className="relative flex items-center justify-center w-9 h-9">
+                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
+                    <use href="/icons/sprite.svg#bell" />
+                  </svg>
+                  {counts.system > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
+                      {counts.system > 9 ? '9+' : counts.system}
+                    </span>
+                  )}
+                </span>
               </button>
 
-              {/* User Menu – desktop dropdown, mobile full panel */}
+              {/* Avatar / Profile – dark green circle, white icon (reverse) */}
               <div
                 className="relative"
                 ref={userMenuRef}
@@ -280,28 +217,31 @@ export function Header() {
               >
                 <button
                   title={user ? "Account" : "Sign In"}
+                  aria-label={user ? "Account" : "Sign In"}
                   onClick={() => {
-                    if (!user) {
-                      navigate('/auth/signin');
-                    } else {
-                      handleMobileProfileClick();
-                    }
+                    if (!user) navigate('/auth/signin');
+                    else handleMobileProfileClick();
                   }}
                   className="flex items-center space-x-1 p-1"
                 >
-                  {user && profile?.avatar_url ? (
-                    <OptimizedImage
-                      src={profile.avatar_url}
-                      alt={profile.full_name || 'User'}
-                      className="h-8 w-8 rounded-full object-cover ring-2 ring-white"
-                    />
-                  ) : (
-                    <CustomAvatarIcon />
-                  )}
+                  <span className="relative flex items-center justify-center w-9 h-9">
+                    {/* Dark green circle background */}
+                    <span className="absolute inset-0 rounded-full bg-[#008751]" />
+                    {user && profile?.avatar_url ? (
+                      <OptimizedImage
+                        src={profile.avatar_url}
+                        alt={profile.full_name || 'User'}
+                        className="relative w-8 h-8 rounded-full object-cover ring-2 ring-white"
+                      />
+                    ) : (
+                      <svg className="relative w-5 h-5 text-white" aria-hidden="true">
+                        <use href="/icons/sprite.svg#avatar" />
+                      </svg>
+                    )}
+                  </span>
                   {user && <ChevronDown className="h-4 w-4 text-gray-500 hidden md:block" />}
                 </button>
 
-                {/* Desktop dropdown */}
                 {user && isUserMenuOpen && (
                   <div
                     className="absolute right-0 pt-2 z-10 hidden md:block"
@@ -318,7 +258,7 @@ export function Header() {
                         Dashboard
                       </Link>
                       <Link
-                        to={profile?.role === 'provider' ? '/provider/profile' : '/customer/profile'}
+                        to={getProfileLink()}
                         className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                         onClick={() => setIsUserMenuOpen(false)}
                       >
@@ -342,20 +282,17 @@ export function Header() {
         </div>
       </header>
 
-      {/* Mobile full‑screen profile panel */}
+      {/* Mobile full‑screen profile panel (unchanged) */}
       {mobileProfileOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex flex-col bg-white">
-          {/* Header with back button */}
           <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-200">
             <button
               onClick={() => {
-                if (mobileView === 'settings') {
-                  setMobileView('main');
-                } else {
-                  closeMobileProfile();
-                }
+                if (mobileView === 'settings') setMobileView('main');
+                else closeMobileProfile();
               }}
               className="p-1 hover:bg-gray-100 rounded-full"
+              aria-label="Back"
             >
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
@@ -363,8 +300,6 @@ export function Header() {
               {mobileView === 'settings' ? 'Settings' : 'Profile'}
             </h2>
           </div>
-
-          {/* Content */}
           <div className="flex-1 overflow-y-auto px-4 py-6">
             {mobileView === 'main' ? (
               <div className="grid grid-cols-2 gap-4">
@@ -373,12 +308,14 @@ export function Header() {
                     <button
                       key={item.label}
                       onClick={item.action}
+                      disabled={item.disabled}
                       className={cn(
                         'flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 bg-gray-50 transition',
                         item.disabled
                           ? 'opacity-40 pointer-events-none'
                           : 'hover:bg-primary-50 hover:border-primary-200'
                       )}
+                      aria-label={item.label}
                     >
                       <div className={cn('mb-2', item.disabled ? 'text-gray-400' : 'text-primary-600')}>
                         {item.icon}
@@ -408,11 +345,10 @@ export function Header() {
                     </Link>
                   )
                 )}
-
-                {/* Sign Out */}
                 <button
                   onClick={handleSignOut}
                   className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 bg-gray-50 hover:bg-red-50 hover:border-red-200 transition group"
+                  aria-label="Sign Out"
                 >
                   <LogOut className="h-5 w-5 text-red-500 group-hover:text-red-600 mb-2" />
                   <span className="text-xs font-medium text-red-500 group-hover:text-red-600">Sign Out</span>
@@ -429,6 +365,7 @@ export function Header() {
                         'flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 bg-gray-50 transition hover:bg-primary-50 hover:border-primary-200',
                         item.danger && 'hover:bg-red-50 hover:border-red-200'
                       )}
+                      aria-label={item.label}
                     >
                       <div className={cn('mb-2', item.danger ? 'text-red-500' : 'text-primary-600')}>
                         {item.icon}

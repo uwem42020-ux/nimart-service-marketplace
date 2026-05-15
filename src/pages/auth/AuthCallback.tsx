@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { User, Briefcase, CheckCircle } from 'lucide-react';
+import { User, Briefcase, CheckCircle, ArrowLeft } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function AuthCallback() {
@@ -33,7 +33,7 @@ export default function AuthCallback() {
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('role, full_name')
+          .select('role, full_name, is_complete')
           .eq('id', currentUser.id)
           .single();
 
@@ -41,13 +41,21 @@ export default function AuthCallback() {
           throw profileError;
         }
 
+        // If profile already has a role
         if (profile?.role) {
           await refreshProfile();
-          navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard', { replace: true });
-        } else {
-          setFullName(profile?.full_name || currentUser.user_metadata?.full_name || '');
-          setNeedsRole(true);
+          // If provider and not complete, go to setup
+          if (profile.role === 'provider' && !profile.is_complete) {
+            navigate('/provider/setup', { replace: true });
+          } else {
+            navigate(profile.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard', { replace: true });
+          }
+          return;
         }
+
+        // No role yet – show role selection
+        setFullName(profile?.full_name || currentUser.user_metadata?.full_name || '');
+        setNeedsRole(true);
       } catch (err: any) {
         console.error('Auth callback error:', err);
         toast.error('Authentication failed. Please try again.');
@@ -69,62 +77,36 @@ export default function AuthCallback() {
     if (!user) return;
     setSubmitting(true);
     try {
-      // Update profile with role
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          role,
-          is_complete: role === 'customer',
-        })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      if (role === 'provider') {
-        // Small delay for database trigger
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Get default subcategory
-        const { data: defaultSub } = await supabase
-          .from('subcategories')
-          .select('id')
-          .or('name.ilike.%vehicle%,name.ilike.%mechanic%')
-          .limit(1)
-          .maybeSingle();
-
-        // Upsert provider row
-        const { error: providerError } = await supabase
-          .from('providers')
-          .upsert({
-            id: user.id,
-            business_name: fullName,
-            description: 'Professional service provider',
-            selected_tier_slug: 'automotive',
-            selected_category_slug: 'vehicle-mechanics',
-            selected_subcategory_id: defaultSub?.id || null,
-            is_available: true,
-            status: 'available',
-          }, {
-            onConflict: 'id',
-            ignoreDuplicates: false,
-          });
-
-        if (providerError) {
-          console.error('Provider upsert error:', providerError);
-        }
-
-        // Mark as incomplete to force setup
-        await supabase
+      if (role === 'customer') {
+        // Simple profile update
+        const { error: profileError } = await supabase
           .from('profiles')
-          .update({ is_complete: false })
+          .update({
+            full_name: fullName,
+            role,
+            is_complete: true,
+          })
           .eq('id', user.id);
 
-        toast.success('Account created! Please complete your business profile.');
-        navigate('/provider/setup', { replace: true });
-      } else {
+        if (profileError) throw profileError;
+        await refreshProfile();
         toast.success('Welcome to Nimart!');
         navigate('/customer/dashboard', { replace: true });
+      } else {
+        // Provider: set role and mark incomplete – trigger will create provider row
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            role,
+            is_complete: false,
+          })
+          .eq('id', user.id);
+
+        if (profileError) throw profileError;
+        await refreshProfile();
+        toast.success('Account created! Please complete your business profile.');
+        navigate('/provider/setup', { replace: true });
       }
     } catch (error: any) {
       console.error('Profile completion error:', error);
@@ -146,6 +128,13 @@ export default function AuthCallback() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
         <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 w-full max-w-md">
+          <div className="flex justify-center mb-2">
+            <img
+              src="https://qootzfndochmcoijnwxf.supabase.co/storage/v1/object/public/logo/logo.png"
+              alt="Nimart"
+              className="h-10 w-auto"
+            />
+          </div>
           <h2 className="text-2xl font-bold text-center mb-2">Welcome to Nimart!</h2>
           <p className="text-gray-600 text-center mb-6">Just one more step to get started.</p>
           <form onSubmit={completeProfile} className="space-y-4">
@@ -156,7 +145,8 @@ export default function AuthCallback() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="John Doe"
               />
             </div>
             <div>
@@ -165,7 +155,7 @@ export default function AuthCallback() {
                 <button
                   type="button"
                   onClick={() => setRole('customer')}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center ${
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center transition-all ${
                     role === 'customer' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
                   }`}
                 >
@@ -175,7 +165,7 @@ export default function AuthCallback() {
                 <button
                   type="button"
                   onClick={() => setRole('provider')}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center ${
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center transition-all ${
                     role === 'provider' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
                   }`}
                 >
@@ -187,7 +177,7 @@ export default function AuthCallback() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 flex items-center justify-center gap-2"
+              className="w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 flex items-center justify-center gap-2 transition"
             >
               <CheckCircle className="h-5 w-5" />
               {submitting ? 'Saving...' : 'Continue'}

@@ -24,13 +24,22 @@ export default function SignIn() {
       if (error) throw error;
       toast.success('Signed in successfully');
 
+      const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id)
+        .select('role, is_complete')
+        .eq('id', user?.id)
         .single();
 
-      navigate(profile?.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+      if (profile?.role === 'provider') {
+        if (!profile.is_complete) {
+          navigate('/provider/setup');
+        } else {
+          navigate('/provider/dashboard');
+        }
+      } else {
+        navigate('/customer/dashboard');
+      }
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -61,13 +70,22 @@ export default function SignIn() {
       if (error) throw error;
       toast.success('Signed in successfully');
 
+      const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id)
+        .select('role, is_complete')
+        .eq('id', user?.id)
         .single();
 
-      navigate(profile?.role === 'provider' ? '/provider/dashboard' : '/customer/dashboard');
+      if (profile?.role === 'provider') {
+        if (!profile.is_complete) {
+          navigate('/provider/setup');
+        } else {
+          navigate('/provider/dashboard');
+        }
+      } else {
+        navigate('/customer/dashboard');
+      }
     } catch (error: any) {
       toast.error(error.message);
     } finally {
