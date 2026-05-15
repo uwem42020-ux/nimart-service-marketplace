@@ -6,26 +6,6 @@ import { MapPin } from 'lucide-react';
 import { OptimizedImage } from './OptimizedImage';
 import { useEffect, useState } from 'react';
 
-// Cache helpers (24 hour expiry)
-const saveToCache = (key: string, data: any) => {
-  try {
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch (e) {}
-};
-
-const loadFromCache = (key: string, maxAge = 1000 * 60 * 60 * 24) => {
-  try {
-    const cached = localStorage.getItem(key);
-    if (!cached) return null;
-    const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp > maxAge) return null;
-    return data;
-  } catch {
-    return null;
-  }
-};
-
-// Skeleton card – image full width, no border
 const SkeletonCard = () => (
   <div className="flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden animate-pulse">
     <div className="w-full aspect-square bg-gray-200"></div>
@@ -51,46 +31,36 @@ export function TopProvidersSlider() {
   }, []);
 
   const { data: topProviders, isLoading } = useQuery({
-    queryKey: ['top-providers'],
+    queryKey: ['top-providers', 'v2'], // New key – busts old cache
     queryFn: async () => {
-      try {
-        const { data: providers, error: providerError } = await supabase
-          .from('providers')
-          .select('id, business_name, top_placement_until, boost_until')
-          .gte('top_placement_until', new Date().toISOString())
-          .eq('is_available', true)
-          .order('top_placement_until', { ascending: false })
-          .limit(3);
+      const { data: providers, error: providerError } = await supabase
+        .from('providers')
+        .select('id, business_name, top_placement_until, boost_until')
+        .gte('top_placement_until', new Date().toISOString())
+        .eq('is_available', true)
+        .order('top_placement_until', { ascending: false })
+        .limit(5); // Show up to 5 providers
 
-        if (providerError) throw providerError;
-        if (!providers || providers.length === 0) return [];
+      if (providerError) throw providerError;
+      if (!providers || providers.length === 0) return [];
 
-        const ids = providers.map(p => p.id);
-        const { data: profiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, avatar_url, full_name, lga_name, is_verified')
-          .in('id', ids);
+      const ids = providers.map(p => p.id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, avatar_url, full_name, lga_name, is_verified')
+        .in('id', ids);
 
-        if (profileError) throw profileError;
+      if (profileError) throw profileError;
 
-        const merged = providers.map(provider => ({
-          ...provider,
-          profile: profiles?.find(p => p.id === provider.id) ?? null,
-          isBoosted: provider.boost_until ? new Date(provider.boost_until) > new Date() : false,
-        }));
-
-        saveToCache('top-providers-cache', merged);
-        return merged;
-      } catch (err) {
-        const cached = loadFromCache('top-providers-cache');
-        if (cached) return cached;
-        throw err;
-      }
+      return providers.map(provider => ({
+        ...provider,
+        profile: profiles?.find(p => p.id === provider.id) ?? null,
+        isBoosted: provider.boost_until ? new Date(provider.boost_until) > new Date() : false,
+      }));
     },
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 60 * 24,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 60,   // 1 hour
     retry: 1,
-    placeholderData: loadFromCache('top-providers-cache'),
   });
 
   if (isLoading && !topProviders) {
@@ -100,7 +70,7 @@ export function TopProvidersSlider() {
           Top Providers
         </div>
         <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2">
-          {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+          {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
         </div>
       </div>
     );
@@ -117,20 +87,21 @@ export function TopProvidersSlider() {
       </div>
       <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
         {displayData.map(provider => {
-          const prof = (provider as any).profile || {};
-          const location = prof.lga_name ? prof.lga_name : 'Location not set';
+          const prof = provider.profile || {};
+          const location = prof.lga_name || 'Location not set';
           const isVerified = prof.is_verified;
-          const isBoosted = (provider as any).isBoosted;
+          const isBoosted = provider.isBoosted;
 
           return (
             <Link
               key={provider.id}
               to={`/provider/${provider.id}`}
               className={`flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden flex flex-col ${
-                isBoosted ? 'border-2 border-amber-500' : ''
+                isBoosted
+                  ? 'border-2 border-amber-500'      // Boosted – gold border
+                  : 'border border-gray-200'          // Non‑boosted – light gray outline
               }`}
             >
-              {/* Image – full width, no padding */}
               <div className="relative w-full aspect-square bg-gray-100">
                 {prof.avatar_url ? (
                   <OptimizedImage 
@@ -144,14 +115,12 @@ export function TopProvidersSlider() {
                   </div>
                 )}
 
-                {/* Verified badge */}
                 {isVerified && (
                   <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-sm z-10">
                     <img src="/verify.png" alt="Verified" className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
                 )}
 
-                {/* Boosted badge */}
                 {isBoosted && (
                   <div
                     className="absolute bottom-1 left-0 bg-amber-500 text-white rounded-r-md px-1 py-1 shadow-md z-10"
@@ -162,7 +131,6 @@ export function TopProvidersSlider() {
                 )}
               </div>
 
-              {/* Text section – compact padding */}
               <div className="p-2">
                 <p className="font-semibold text-[11px] sm:text-sm text-gray-900 truncate">
                   {provider.business_name}
