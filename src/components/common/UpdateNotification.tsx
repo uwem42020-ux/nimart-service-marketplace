@@ -1,5 +1,5 @@
 // src/components/common/UpdateNotification.tsx
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -11,11 +11,15 @@ export function UpdateNotification() {
   } = useRegisterSW({
     onRegisteredSW(swUrl, r) {
       console.log('Service Worker registered:', swUrl);
+      // Check for updates every hour
+      r && setInterval(() => r.update(), 3600000);
     },
     onRegisterError(error) {
       console.error('SW registration error:', error);
     },
   });
+
+  const reloadTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (offlineReady) {
@@ -25,38 +29,30 @@ export function UpdateNotification() {
 
   useEffect(() => {
     if (needRefresh) {
-      toast(
+      // Clear any existing timer
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+
+      // Show a toast that will auto‑reload after 5 seconds
+      const toastId = toast(
         (t) => (
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">New version available!</span>
-            <button
-              className="bg-primary-600 text-white px-3 py-1 rounded-md text-sm"
-              onClick={() => {
-                updateServiceWorker(true);
-                toast.dismiss(t.id);
-                window.location.reload();
-              }}
-            >
-              Refresh
-            </button>
-            <button
-              className="text-gray-500 hover:text-gray-700 text-sm"
-              onClick={() => {
-                setNeedRefresh(false);
-                toast.dismiss(t.id);
-              }}
-            >
-              Dismiss
-            </button>
+            <span className="text-sm font-medium">New version available – reloading in 5 seconds</span>
           </div>
         ),
-        {
-          duration: Infinity,
-          id: 'sw-update',
-        }
+        { duration: 5000, id: 'sw-update' }
       );
+
+      // Set timer to reload
+      reloadTimerRef.current = setTimeout(() => {
+        updateServiceWorker(true);
+        // No need to manually reload; updateServiceWorker(true) will reload
+      }, 5000);
     }
-  }, [needRefresh, updateServiceWorker, setNeedRefresh]);
+
+    return () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    };
+  }, [needRefresh, updateServiceWorker]);
 
   return null;
 }
