@@ -4,19 +4,20 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SetPasswordForm } from '../../components/profile/SetPasswordForm';
+import { LocationPickerModal } from '../../components/provider/LocationPickerModal';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import toast from 'react-hot-toast';
 import {
   User, Phone, Store, FileText, Save, Camera, AlertCircle,
   Home, Landmark, Image, Languages, GraduationCap, Calendar,
-  CheckCircle, Loader2
+  CheckCircle, Loader2, MapPin
 } from 'lucide-react';
 
 export default function ProviderProfile() {
   const navigate = useNavigate();
   const { user, profile, updateProfile, refreshProfile } = useAuth();
 
-  // --- Setup‑filled fields (read‑only) ---
+  // --- Setup-filled fields (read-only) ---
   const [businessName, setBusinessName] = useState('');
   const [phone, setPhone] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
@@ -24,8 +25,12 @@ export default function ProviderProfile() {
   const [addressArea, setAddressArea] = useState('');
   const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
+  const [lgaName, setLgaName] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
-  // --- Profile‑specific fields (editable) ---
+  // --- Profile-specific fields (editable) ---
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
   const [gender, setGender] = useState('');
@@ -39,21 +44,34 @@ export default function ProviderProfile() {
   const [saving, setSaving] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-  
-  // Check localStorage for password completion
+  const [isSetupComplete, setIsSetupComplete] = useState(true);
+
+  // --- Location change modal & cooldown ---
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<any>(null);
+  const [cooldownTimer, setCooldownTimer] = useState<string>('');
+  const [changingLocation, setChangingLocation] = useState(false);
+
+  // Password completion state (from localStorage)
   const [passwordCompleted, setPasswordCompleted] = useState(() => {
     if (!user?.id) return false;
     return localStorage.getItem(`nimart_password_set_${user.id}`) === 'true';
   });
-  
-  const [isSetupComplete, setIsSetupComplete] = useState(true);
 
-  // Fetch provider data
+  // --- Helper: fetch location change status ---
+  const fetchLocationStatus = async () => {
+    if (!user) return;
+    const { data, error } = await supabase.rpc('get_location_change_status', { p_provider_id: user.id });
+    if (error) console.error(error);
+    else setLocationStatus(data);
+  };
+
+  // --- Fetch provider data on mount ---
   useEffect(() => {
     if (!user) return;
 
     const fetchData = async () => {
-      // Get provider business info
+      // Provider business info
       const { data: providerData } = await supabase
         .from('providers')
         .select('business_name, description')
@@ -64,7 +82,7 @@ export default function ProviderProfile() {
         setDescription(providerData.description || '');
       }
 
-      // Get profile data
+      // Profile data
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -82,6 +100,20 @@ export default function ProviderProfile() {
         setAge(profileData.age ? String(profileData.age) : '');
         setEducation(profileData.education || '');
         setLanguages(profileData.languages || '');
+        setLgaName(profileData.lga_name || '');
+        setLat(profileData.lat);
+        setLng(profileData.lng);
+        // Get state name from lga_centers if not directly stored
+        if (profileData.lga_id && !profileData.state_name) {
+          const { data: lgaInfo } = await supabase
+            .from('lga_centers')
+            .select('state_name')
+            .eq('lga_id', profileData.lga_id)
+            .single();
+          if (lgaInfo) setStateName(lgaInfo.state_name);
+        } else {
+          setStateName(profileData.state_name || '');
+        }
       }
 
       // Check if setup is incomplete
@@ -91,25 +123,49 @@ export default function ProviderProfile() {
 
       setInitialDataLoaded(true);
     };
+
     fetchData();
+    fetchLocationStatus();
   }, [user]);
+
+  // --- Cooldown timer effect ---
+  useEffect(() => {
+    if (!locationStatus || locationStatus.free_available) {
+      setCooldownTimer('');
+      return;
+    }
+    const interval = setInterval(() => {
+      const nextDate = new Date(locationStatus.next_free_date);
+      const now = new Date();
+      const diff = nextDate.getTime() - now.getTime();
+      if (diff <= 0) {
+        setCooldownTimer('Available now');
+        fetchLocationStatus();
+        clearInterval(interval);
+      } else {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (86400000)) / 3600000);
+        setCooldownTimer(`${days}d ${hours}h`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [locationStatus]);
 
   // --- Phone validation ---
   const validatePhoneNumber = (phoneNumber: string): boolean => {
-    const localNumber = phoneNumber.replace('+234', '');
-    const isValid = /^\d{10}$/.test(localNumber);
-    if (!isValid) setPhoneError('Enter a valid 10-digit Nigerian phone number');
-    else setPhoneError('');
+    const local = phoneNumber.replace('+234', '');
+    const isValid = /^\d{10}$/.test(local);
+    setPhoneError(isValid ? '' : 'Enter a valid 10-digit Nigerian phone number');
     return isValid;
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    if (!value.startsWith('+234')) value = '+234' + value.replace(/\D/g, '');
-    const digits = value.slice(4).replace(/\D/g, '').slice(0, 10);
-    const finalValue = '+234' + digits;
-    setPhone(finalValue);
-    if (digits.length === 10) validatePhoneNumber(finalValue);
+    let val = e.target.value;
+    if (!val.startsWith('+234')) val = '+234' + val.replace(/\D/g, '');
+    const digits = val.slice(4).replace(/\D/g, '').slice(0, 10);
+    const final = '+234' + digits;
+    setPhone(final);
+    if (digits.length === 10) validatePhoneNumber(final);
     else setPhoneError('');
   };
 
@@ -121,14 +177,11 @@ export default function ProviderProfile() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user!.id}/avatar-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file);
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file);
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      const newAvatarUrl = urlData.publicUrl;
-      await updateProfile({ avatar_url: newAvatarUrl });
-      setAvatarUrl(newAvatarUrl);
+      await updateProfile({ avatar_url: urlData.publicUrl });
+      setAvatarUrl(urlData.publicUrl);
       toast.success('Profile picture uploaded');
     } catch (error: any) {
       toast.error('Upload failed: ' + error.message);
@@ -137,7 +190,7 @@ export default function ProviderProfile() {
     }
   };
 
-  // --- Cover photo ---
+  // --- Cover photo upload ---
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -145,14 +198,11 @@ export default function ProviderProfile() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user!.id}/cover-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file);
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file);
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      const newCoverUrl = urlData.publicUrl;
-      await updateProfile({ cover_photo: newCoverUrl });
-      setCoverPhoto(newCoverUrl);
+      await updateProfile({ cover_photo: urlData.publicUrl });
+      setCoverPhoto(urlData.publicUrl);
       toast.success('Cover photo updated');
     } catch (error: any) {
       toast.error(error.message);
@@ -161,22 +211,14 @@ export default function ProviderProfile() {
     }
   };
 
-  // --- Final submit ---
+  // --- Final save (profile completion) ---
   const handleFinalSubmit = async () => {
-    if (!initialDataLoaded) {
-      toast.error('Please wait, your profile is still loading.');
-      return;
-    }
     if (!avatarUrl) {
       toast.error('Please upload a profile picture before continuing.');
       return;
     }
     if (!passwordCompleted) {
       toast.error('Please set a password for your account.');
-      return;
-    }
-    if (uploadingAvatar) {
-      toast.error('Please wait for the profile picture to finish uploading.');
       return;
     }
 
@@ -190,6 +232,58 @@ export default function ProviderProfile() {
       toast.error(error.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // --- Location change handler (called after modal confirms) ---
+  const handleLocationChange = async (data: {
+    lat: number;
+    lng: number;
+    lgaId: number;
+    lgaName: string;
+    stateName: string;
+    area: string;
+  }) => {
+    setChangingLocation(true);
+    try {
+      // Determine if free or paid
+      let rpcName: string;
+      let params: any = {
+        p_provider_id: user!.id,
+        p_new_lat: data.lat,
+        p_new_lng: data.lng,
+        p_new_lga_id: data.lgaId,
+        p_new_lga_name: data.lgaName,
+        p_new_address_area: data.area,
+      };
+
+      if (locationStatus?.free_available) {
+        rpcName = 'change_location_free';
+      } else if (locationStatus?.paid_possible) {
+        rpcName = 'change_location_paid';
+        params.p_cost = 5000;
+      } else {
+        toast.error('No change option available. Please check your cooldown or Nicoin balance.');
+        return;
+      }
+
+      const { data: result, error } = await supabase.rpc(rpcName, params);
+      if (error) throw error;
+      if (!result.success) throw new Error(result.error);
+
+      toast.success(rpcName === 'change_location_free' ? 'Location updated (free)' : 'Location updated (5000 Nicoin deducted)');
+      await refreshProfile();
+      fetchLocationStatus();
+      // Update local state to reflect new location
+      setLgaName(data.lgaName);
+      setStateName(data.stateName);
+      setAddressArea(data.area);
+      setLat(data.lat);
+      setLng(data.lng);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setChangingLocation(false);
     }
   };
 
@@ -237,7 +331,7 @@ export default function ProviderProfile() {
       {/* Business Information (read‑only) */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Business Information (from setup)</h2>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label><input type="text" value={businessName} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg" /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label><input type="tel" value={phone} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg" /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" value={fullName} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg" /></div>
@@ -247,7 +341,44 @@ export default function ProviderProfile() {
         </div>
       </div>
 
-      {/* Profile Picture */}
+      {/* Service Location (with change option) */}
+      <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <MapPin className="h-5 w-5 text-primary-600" />
+          Service Location
+        </h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Current location:</p>
+              <p className="font-medium">{lgaName}, {stateName}</p>
+              <p className="text-sm text-gray-500">{addressArea}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {locationStatus?.free_available ? (
+                  <span className="text-green-600">✅ Free change available</span>
+                ) : (
+                  <span className="text-amber-600">⏳ Next free change in {cooldownTimer}</span>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowLocationPicker(true)}
+              disabled={changingLocation}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm disabled:opacity-50"
+            >
+              {changingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Change Location'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            You can change your location once every 30 days for free, or pay 5000 Nicoin to change anytime.
+            {!locationStatus?.free_available && !locationStatus?.paid_possible && (
+              <span className="block text-red-600 mt-1">Insufficient Nicoin to change now. Earn more by completing bookings.</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Profile Picture (mandatory) */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Profile Picture *</h2>
         <div className="flex items-center gap-6">
@@ -292,7 +423,7 @@ export default function ProviderProfile() {
         </div>
       </div>
 
-      {/* Cover Photo */}
+      {/* Cover Photo (optional) */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Cover Photo (optional)</h2>
         <div className="relative h-32 bg-gray-100 rounded-lg overflow-hidden">
@@ -304,16 +435,25 @@ export default function ProviderProfile() {
         </div>
       </div>
 
-      {/* Final Button */}
+      {/* Final button: Complete & go to dashboard */}
       <div className="flex justify-end">
         <button
           onClick={handleFinalSubmit}
-          disabled={saving || !avatarUrl || !passwordCompleted || uploadingAvatar || !initialDataLoaded}
+          disabled={saving || !avatarUrl || !passwordCompleted}
           className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
         >
           {saving ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving...</> : <><Save className="h-5 w-5" /> Complete & Go to Dashboard</>}
         </button>
       </div>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onLocationSelected={handleLocationChange}
+        currentLat={lat || 9.0556}
+        currentLng={lng || 7.4914}
+      />
     </div>
   );
 }
