@@ -24,6 +24,25 @@ import { OptimizedImage } from './OptimizedImage';
 import logo from '/logo.png';
 import toast from 'react-hot-toast';
 
+// Solid icons (filled) for booking, message, notification
+const SolidBookingIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V9h14v10zM7 11h4v4H7v-4z"/>
+  </svg>
+);
+
+const SolidMessageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+  </svg>
+);
+
+const SolidBellIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm7-5h-1v-4c0-3.3-2.7-6-6-6s-6 2.7-6 6v4H5v2h14v-2z"/>
+  </svg>
+);
+
 export function Header() {
   const { user, profile, signOut } = useAuth();
   const { counts, markBookingsAsSeen, markMessagesAsSeen, markSystemAsSeen } = useNotifications();
@@ -148,7 +167,7 @@ export function Header() {
             </Link>
 
             <div className="flex items-center space-x-1 sm:space-x-2">
-              {/* Bookings icon – Nimart dark green icon, light gray circle */}
+              {/* Bookings icon – solid calendar */}
               <button
                 onClick={handleBookingsClick}
                 title="Bookings"
@@ -157,9 +176,7 @@ export function Header() {
               >
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
                 <span className="relative flex items-center justify-center w-9 h-9">
-                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
-                    <use href="/icons/sprite.svg#booking" />
-                  </svg>
+                  <SolidBookingIcon className="w-5 h-5 text-[#008751] transition-colors" />
                   {counts.bookings > 0 && (
                     <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
                       {counts.bookings > 9 ? '9+' : counts.bookings}
@@ -168,7 +185,7 @@ export function Header() {
                 </span>
               </button>
 
-              {/* Messages icon – Nimart dark green */}
+              {/* Messages icon – solid message */}
               <button
                 onClick={handleMessagesClick}
                 title="Messages"
@@ -177,9 +194,7 @@ export function Header() {
               >
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
                 <span className="relative flex items-center justify-center w-9 h-9">
-                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
-                    <use href="/icons/sprite.svg#message" />
-                  </svg>
+                  <SolidMessageIcon className="w-5 h-5 text-[#008751] transition-colors" />
                   {showMessagesBadge && (
                     <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
                       {counts.messages > 9 ? '9+' : counts.messages}
@@ -188,7 +203,7 @@ export function Header() {
                 </span>
               </button>
 
-              {/* Notifications icon – Nimart dark green */}
+              {/* Notifications icon – solid bell */}
               <button
                 onClick={handleNotificationsClick}
                 title="Notifications"
@@ -197,9 +212,7 @@ export function Header() {
               >
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gray-100" />
                 <span className="relative flex items-center justify-center w-9 h-9">
-                  <svg className="w-5 h-5 text-[#008751] transition-colors" aria-hidden="true">
-                    <use href="/icons/sprite.svg#bell" />
-                  </svg>
+                  <SolidBellIcon className="w-5 h-5 text-[#008751] transition-colors" />
                   {counts.system > 0 && (
                     <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
                       {counts.system > 9 ? '9+' : counts.system}

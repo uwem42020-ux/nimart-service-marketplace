@@ -5,13 +5,32 @@ import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
 import { OptimizedImage } from './OptimizedImage';
 import { useEffect, useState } from 'react';
+import { cn } from '../../lib/utils';
+
+const saveToCache = (key: string, data: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (e) {}
+};
+
+const loadFromCache = (key: string, maxAge = 1000 * 60 * 60 * 24) => {
+  try {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp > maxAge) return null;
+    return data;
+  } catch {
+    return null;
+  }
+};
 
 const SkeletonCard = () => (
-  <div className="flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden animate-pulse">
-    <div className="w-full aspect-square bg-gray-200"></div>
-    <div className="p-2">
-      <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
-      <div className="h-2 bg-gray-200 rounded w-1/2"></div>
+  <div className="flex-shrink-0 w-32 sm:w-36 md:w-44 lg:w-48 snap-start rounded-xl overflow-hidden animate-pulse bg-gray-200">
+    <div className="w-full aspect-[4/5] bg-gray-300" />
+    <div className="p-2 space-y-1">
+      <div className="h-3 bg-gray-300 rounded w-3/4" />
+      <div className="h-2 bg-gray-300 rounded w-1/2" />
     </div>
   </div>
 );
@@ -31,45 +50,55 @@ export function TopProvidersSlider() {
   }, []);
 
   const { data: topProviders, isLoading } = useQuery({
-    queryKey: ['top-providers', 'v2'], // New key – busts old cache
+    queryKey: ['top-providers', 'final-no-hover'],
     queryFn: async () => {
-      const { data: providers, error: providerError } = await supabase
-        .from('providers')
-        .select('id, business_name, top_placement_until, boost_until')
-        .gte('top_placement_until', new Date().toISOString())
-        .eq('is_available', true)
-        .order('top_placement_until', { ascending: false })
-        .limit(5); // Show up to 5 providers
+      try {
+        const { data: providers, error: providerError } = await supabase
+          .from('providers')
+          .select('id, business_name, top_placement_until, boost_until')
+          .gte('top_placement_until', new Date().toISOString())
+          .eq('is_available', true)
+          .order('top_placement_until', { ascending: false })
+          .limit(5);
 
-      if (providerError) throw providerError;
-      if (!providers || providers.length === 0) return [];
+        if (providerError) throw providerError;
+        if (!providers || providers.length === 0) return [];
 
-      const ids = providers.map(p => p.id);
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, full_name, lga_name, is_verified')
-        .in('id', ids);
+        const ids = providers.map(p => p.id);
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, avatar_url, full_name, lga_name, is_verified')
+          .in('id', ids);
 
-      if (profileError) throw profileError;
+        if (profileError) throw profileError;
 
-      return providers.map(provider => ({
-        ...provider,
-        profile: profiles?.find(p => p.id === provider.id) ?? null,
-        isBoosted: provider.boost_until ? new Date(provider.boost_until) > new Date() : false,
-      }));
+        const merged = providers.map(provider => ({
+          ...provider,
+          profile: profiles?.find(p => p.id === provider.id) ?? null,
+          isBoosted: provider.boost_until ? new Date(provider.boost_until) > new Date() : false,
+        }));
+
+        saveToCache('top-providers-cache', merged);
+        return merged;
+      } catch (err) {
+        const cached = loadFromCache('top-providers-cache');
+        if (cached) return cached;
+        throw err;
+      }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 60,   // 1 hour
+    staleTime: 1000 * 60 * 60 * 6,
+    gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
+    placeholderData: loadFromCache('top-providers-cache'),
   });
 
   if (isLoading && !topProviders) {
     return (
-      <div className="mb-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+      <div className="mb-6 px-2 sm:px-6 lg:px-8">
         <div className="inline-block bg-[#008751] text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-3">
           Top Providers
         </div>
-        <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
           {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
         </div>
       </div>
@@ -80,65 +109,60 @@ export function TopProvidersSlider() {
   if (displayData.length === 0) return null;
 
   return (
-    <div className="mb-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+    <div className="mb-6 px-2 sm:px-6 lg:px-8">
       <div className="inline-block bg-[#008751] text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-3">
         Top Providers
         {isOffline && <span className="ml-2 text-xs text-white/80">(Offline mode)</span>}
       </div>
-      <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
+      <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
         {displayData.map(provider => {
           const prof = provider.profile || {};
           const location = prof.lga_name || 'Location not set';
           const isVerified = prof.is_verified;
           const isBoosted = provider.isBoosted;
+          const bgImage = prof.avatar_url || null;
 
           return (
             <Link
               key={provider.id}
               to={`/provider/${provider.id}`}
-              className={`flex-shrink-0 w-36 sm:w-40 snap-start bg-white rounded-xl overflow-hidden flex flex-col ${
-                isBoosted
-                  ? 'border-2 border-amber-500'      // Boosted – gold border
-                  : 'border border-gray-200'          // Non‑boosted – light gray outline
-              }`}
+              className={cn(
+                'flex-shrink-0 w-32 sm:w-36 md:w-44 lg:w-48 snap-start rounded-xl',
+                isBoosted && 'border-2 border-amber-500'
+              )}
             >
-              <div className="relative w-full aspect-square bg-gray-100">
-                {prof.avatar_url ? (
-                  <OptimizedImage 
-                    src={prof.avatar_url} 
-                    alt={provider.business_name} 
-                    className="w-full h-full object-cover" 
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xl sm:text-2xl font-bold text-primary-600 bg-primary-50">
-                    {(provider.business_name || 'P')[0]}
+              <div className="rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="relative w-full aspect-[4/5] bg-gray-100">
+                  {bgImage ? (
+                    <OptimizedImage
+                      src={bgImage}
+                      alt={provider.business_name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary-100 to-primary-200" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  {isVerified && (
+                    <div className="absolute top-2 right-2 bg-white rounded-full p-0.5 shadow-sm z-10">
+                      <img src="/verify.png" alt="Verified" className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </div>
+                  )}
+                  {isBoosted && (
+                    <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm z-10">
+                      BOOSTED
+                    </div>
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="font-semibold text-xs sm:text-sm text-gray-900 truncate">
+                    {provider.business_name}
                   </div>
-                )}
-
-                {isVerified && (
-                  <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-sm z-10">
-                    <img src="/verify.png" alt="Verified" className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <div className="flex items-center gap-0.5 text-[10px] sm:text-xs text-gray-500 truncate mt-0.5">
+                    <MapPin className="h-2.5 w-2.5 flex-shrink-0" />
+                    <span className="truncate">{location}</span>
                   </div>
-                )}
-
-                {isBoosted && (
-                  <div
-                    className="absolute bottom-1 left-0 bg-amber-500 text-white rounded-r-md px-1 py-1 shadow-md z-10"
-                    style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                  >
-                    <span className="text-[8px] sm:text-[10px] font-black tracking-wide">BOOSTED</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-2">
-                <p className="font-semibold text-[11px] sm:text-sm text-gray-900 truncate">
-                  {provider.business_name}
-                </p>
-                <p className="text-[9px] sm:text-xs text-gray-500 flex items-center gap-0.5 sm:gap-1 mt-0.5">
-                  <MapPin className="h-2 w-2 sm:h-3 sm:w-3 flex-shrink-0" /> 
-                  <span className="truncate">{location}</span>
-                </p>
+                </div>
               </div>
             </Link>
           );

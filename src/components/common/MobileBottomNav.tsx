@@ -1,43 +1,42 @@
 // src/components/common/MobileBottomNav.tsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { cn } from '../../lib/utils';
+import { CalendarDays } from 'lucide-react';
+
+// Solid SVG icons (message & bell)
+const SolidMessageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+  </svg>
+);
+
+const SolidBellIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm7-5h-1v-4c0-3.3-2.7-6-6-6s-6 2.7-6 6v4H5v2h14v-2z"/>
+  </svg>
+);
 
 interface NavItem {
   id: string;
   label: string;
-  iconId: string;      // sprite symbol id
+  icon: React.ReactNode;
   onClick: () => Promise<void> | void;
-  badgeCount?: number;
-  showBadge?: boolean;
 }
 
 export function MobileBottomNav() {
-  const { user, profile } = useAuth();
-  const { counts, markBookingsAsSeen, markMessagesAsSeen, markSystemAsSeen } = useNotifications();
+  const { profile } = useAuth();
+  const { markBookingsAsSeen, markMessagesAsSeen, markSystemAsSeen } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Local optimistic badge counts
-  const [localBookings, setLocalBookings] = useState(counts.bookings);
-  const [localMessages, setLocalMessages] = useState(counts.messages);
-  const [localSystem, setLocalSystem] = useState(counts.system);
   
   const [visible, setVisible] = useState(true);
   const [tierPanelOpen, setTierPanelOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const footerObserverRef = useRef<IntersectionObserver | null>(null);
   
-  // Sync remote counts to local
-  useEffect(() => {
-    setLocalBookings(counts.bookings);
-    setLocalMessages(counts.messages);
-    setLocalSystem(counts.system);
-  }, [counts.bookings, counts.messages, counts.system]);
-  
-  // Watch for tier panel events (from MobileCategoryPanel)
   useEffect(() => {
     const handlePanelOpen = () => setTierPanelOpen(true);
     const handlePanelClose = () => setTierPanelOpen(false);
@@ -49,7 +48,6 @@ export function MobileBottomNav() {
     };
   }, []);
   
-  // Hide nav when footer enters viewport
   useEffect(() => {
     const footer = document.querySelector('footer');
     if (!footer) return;
@@ -64,19 +62,14 @@ export function MobileBottomNav() {
   const handleNavigation = async (
     id: string,
     navigateTo: string,
-    markAsSeen?: () => Promise<void>,
-    optimisticSetter?: (setter: React.Dispatch<React.SetStateAction<number>>) => void
+    markAsSeen?: () => Promise<void>
   ) => {
     if (loadingId) return;
     setLoadingId(id);
-    
-    if (optimisticSetter) optimisticSetter(() => 0);
     navigate(navigateTo);
-    
     if (markAsSeen) {
       markAsSeen().catch(console.error);
     }
-    
     setTimeout(() => setLoadingId(null), 500);
   };
   
@@ -91,52 +84,39 @@ export function MobileBottomNav() {
     {
       id: 'home',
       label: 'Home',
-      iconId: 'home',
+      icon: (
+        <svg className="w-6 h-6" aria-hidden="true">
+          <use href="/icons/sprite.svg#home" />
+        </svg>
+      ),
       onClick: () => navigate('/'),
     },
     {
       id: 'bookings',
       label: 'Bookings',
-      iconId: 'booking',
-      onClick: () => handleNavigation(
-        'bookings',
-        getLink('bookings'),
-        markBookingsAsSeen,
-        setLocalBookings
-      ),
-      badgeCount: localBookings,
-      showBadge: localBookings > 0,
+      icon: <CalendarDays className="w-6 h-6" />,
+      onClick: () => handleNavigation('bookings', getLink('bookings'), markBookingsAsSeen),
     },
     {
       id: 'messages',
       label: 'Messages',
-      iconId: 'message',
-      onClick: () => handleNavigation(
-        'messages',
-        getLink('messages'),
-        markMessagesAsSeen,
-        setLocalMessages
-      ),
-      badgeCount: localMessages,
-      showBadge: localMessages > 0 && !location.pathname.includes('/messages'),
+      icon: <SolidMessageIcon className="w-6 h-6" />,
+      onClick: () => handleNavigation('messages', getLink('messages'), markMessagesAsSeen),
     },
     {
       id: 'alerts',
       label: 'Alerts',
-      iconId: 'bell',
-      onClick: () => handleNavigation(
-        'alerts',
-        getLink('notifications'),
-        markSystemAsSeen,
-        setLocalSystem
-      ),
-      badgeCount: localSystem,
-      showBadge: localSystem > 0,
+      icon: <SolidBellIcon className="w-6 h-6" />,
+      onClick: () => handleNavigation('alerts', getLink('notifications'), markSystemAsSeen),
     },
     {
       id: 'map',
       label: 'Map',
-      iconId: 'map',
+      icon: (
+        <svg className="w-6 h-6" aria-hidden="true">
+          <use href="/icons/sprite.svg#map" />
+        </svg>
+      ),
       onClick: () => navigate('/map'),
     },
   ];
@@ -176,14 +156,8 @@ export function MobileBottomNav() {
               )}
             >
               <div className="relative">
-                <svg className="w-6 h-6" aria-hidden="true">
-                  <use href={`/icons/sprite.svg#${item.iconId}`} />
-                </svg>
-                {item.showBadge && (
-                  <span className="absolute -top-1 -right-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
-                    {item.badgeCount && item.badgeCount > 9 ? '9+' : item.badgeCount}
-                  </span>
-                )}
+                {item.icon}
+                {/* No badges */}
               </div>
               <span className="text-[10px] mt-1 leading-tight">{item.label}</span>
             </button>
