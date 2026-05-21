@@ -1,14 +1,13 @@
-// src/pages/auth/SignIn.tsx
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function SignIn() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'password' | 'otp'>('otp');
+  const [mode, setMode] = useState<'password' | 'otp'>('password');   // ← password first
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -109,32 +108,30 @@ export default function SignIn() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
         <NimartSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen">
-      <div
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url("/loginbg.jpg")' }}
-      />
-      <div className="fixed inset-0 bg-black/40" />
-
+    <div className="relative min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex flex-col">
+      {/* Back button */}
       <Link
         to="/"
-        className="fixed top-6 left-6 z-20 p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition"
+        className="absolute top-6 left-6 z-20 p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-600 hover:text-primary-600 hover:bg-white shadow-sm transition"
         aria-label="Back to home"
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      <div className="relative z-10 flex min-h-screen items-start justify-center px-4 pt-4 pb-8">
+      {/* Centered card */}
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white/85 backdrop-blur-md rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/20">
-            <div className="flex justify-center mb-4">
+          {/* Card */}
+          <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8">
+            {/* Logo */}
+            <div className="flex justify-center mb-6">
               <img
                 src="https://qootzfndochmcoijnwxf.supabase.co/storage/v1/object/public/logo/logo.png"
                 alt="Nimart"
@@ -142,15 +139,32 @@ export default function SignIn() {
               />
             </div>
 
-            <h2 className="text-xl font-semibold text-gray-800 text-center mb-4">
-              Sign in to your account
+            <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+              Welcome back
             </h2>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              Sign in to your Nimart account
+            </p>
 
-            <div className="flex mb-6 border-b border-gray-200">
+            {/* Mode switcher – Password first */}
+            <div className="flex mb-6 bg-gray-100 rounded-xl p-1">
               <button
-                className={`flex-1 py-2 text-sm font-medium transition ${
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                  mode === 'password'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => setMode('password')}
+              >
+                <span className="flex items-center justify-center gap-1.5">
+                  <Lock className="h-4 w-4" />
+                  Password
+                </span>
+              </button>
+              <button
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
                   mode === 'otp'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    ? 'bg-white text-primary-600 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
                 onClick={() => {
@@ -158,32 +172,26 @@ export default function SignIn() {
                   setStep('email');
                 }}
               >
-                Sign in with OTP
-              </button>
-              <button
-                className={`flex-1 py-2 text-sm font-medium transition ${
-                  mode === 'password'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setMode('password')}
-              >
-                Sign in with Password
+                <span className="flex items-center justify-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" />
+                  OTP
+                </span>
               </button>
             </div>
 
-            {mode === 'password' ? (
+            {/* Password form */}
+            {mode === 'password' && (
               <form onSubmit={handlePasswordSignIn} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                       placeholder="you@example.com"
                     />
                   </div>
@@ -191,19 +199,19 @@ export default function SignIn() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-12 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full pl-12 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                       placeholder="••••••••"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -212,7 +220,7 @@ export default function SignIn() {
                 <div className="text-right">
                   <Link
                     to="/auth/reset-password"
-                    className="text-sm text-primary-600 hover:underline"
+                    className="text-sm text-primary-600 hover:underline font-medium"
                   >
                     Forgot password?
                   </Link>
@@ -220,25 +228,28 @@ export default function SignIn() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                 >
                   Sign In
                 </button>
               </form>
-            ) : (
+            )}
+
+            {/* OTP form */}
+            {mode === 'otp' && (
               <>
                 {step === 'email' ? (
                   <form onSubmit={sendOTP} className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                         <input
                           type="email"
                           required
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                           placeholder="you@example.com"
                         />
                       </div>
@@ -246,7 +257,7 @@ export default function SignIn() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                      className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                     >
                       Send OTP
                     </button>
@@ -262,18 +273,18 @@ export default function SignIn() {
                         required
                         value={otp}
                         onChange={(e) => setOtp(e.target.value)}
-                        className="w-full px-3 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-center text-2xl tracking-widest font-mono"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-center text-2xl tracking-[0.3em] font-mono font-bold"
                         placeholder="00000000"
                         maxLength={8}
                       />
-                      <p className="mt-2 text-xs text-gray-600 text-center">
-                        We sent an 8‑digit code to <span className="font-medium">{email}</span>
+                      <p className="mt-2 text-xs text-gray-500 text-center">
+                        We sent an 8‑digit code to <span className="font-medium text-gray-700">{email}</span>
                       </p>
                     </div>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                      className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                     >
                       Verify & Sign In
                     </button>
@@ -290,18 +301,20 @@ export default function SignIn() {
               </>
             )}
 
-            <div className="relative my-4">
+            {/* Divider */}
+            <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t border-gray-200"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white/50 backdrop-blur-sm text-gray-500">or</span>
+                <span className="px-3 bg-white text-gray-400 font-medium">or</span>
               </div>
             </div>
 
+            {/* Google */}
             <button
               onClick={handleGoogleSignIn}
-              className="w-full flex items-center justify-center gap-3 bg-white/70 backdrop-blur-sm border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-white/90 transition font-medium"
+              className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition font-medium shadow-sm"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -324,9 +337,10 @@ export default function SignIn() {
               Continue with Google
             </button>
 
-            <p className="mt-6 text-sm text-center text-gray-600">
+            {/* Footer link */}
+            <p className="mt-6 text-sm text-center text-gray-500">
               Don't have an account?{' '}
-              <Link to="/auth/signup" className="text-primary-600 hover:underline font-medium">
+              <Link to="/auth/signup" className="text-primary-600 hover:underline font-semibold">
                 Sign up
               </Link>
             </p>

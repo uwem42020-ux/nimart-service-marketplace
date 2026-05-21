@@ -1,10 +1,9 @@
-// src/pages/auth/SignUp.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { User, Briefcase, Mail, CheckCircle, ArrowLeft } from 'lucide-react';
+import { User, Briefcase, Mail, CheckCircle, ArrowLeft, Sparkles } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 type Step = 'email' | 'otp' | 'profile';
@@ -75,7 +74,6 @@ export default function SignUp() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Check if profile already has a role (should not happen, but safe)
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('role')
@@ -89,7 +87,6 @@ export default function SignUp() {
         return;
       }
 
-      // For customers: simple profile update, done.
       if (role === 'customer') {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -106,9 +103,6 @@ export default function SignUp() {
         return;
       }
 
-      // For providers: only set role, full name, and mark as incomplete.
-      // The database trigger 'ensure_complete_provider' will automatically
-      // create a minimal providers row with safe defaults.
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -147,32 +141,26 @@ export default function SignUp() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
         <NimartSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen">
-      <div
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url("/loginbg.jpg")' }}
-      />
-      <div className="fixed inset-0 bg-black/40" />
-
+    <div className="relative min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex flex-col">
       <Link
         to="/"
-        className="fixed top-6 left-6 z-20 p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition"
+        className="absolute top-6 left-6 z-20 p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-600 hover:text-primary-600 hover:bg-white shadow-sm transition"
         aria-label="Back to home"
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      <div className="relative z-10 flex min-h-screen items-start justify-center px-4 pt-4 pb-8">
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white/85 backdrop-blur-md rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/20">
-            <div className="flex justify-center mb-4">
+          <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8">
+            <div className="flex justify-center mb-6">
               <img
                 src="https://qootzfndochmcoijnwxf.supabase.co/storage/v1/object/public/logo/logo.png"
                 alt="Nimart"
@@ -180,21 +168,27 @@ export default function SignUp() {
               />
             </div>
 
+            {/* Step email */}
             {step === 'email' && (
               <>
+                <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+                  Create your account
+                </h2>
+                <p className="text-sm text-gray-500 text-center mb-6">
+                  Join Nigeria’s trusted service marketplace
+                </p>
+
                 <form onSubmit={sendOTP} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email address
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <input
                         type="email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                         placeholder="you@example.com"
                       />
                     </div>
@@ -202,24 +196,24 @@ export default function SignUp() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                    className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                   >
-                    Send OTP
+                    Continue with Email
                   </button>
                 </form>
 
-                <div className="relative my-4">
+                <div className="relative my-6">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300"></div>
+                    <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white/50 backdrop-blur-sm text-gray-500">or</span>
+                    <span className="px-3 bg-white text-gray-400 font-medium">or</span>
                   </div>
                 </div>
 
                 <button
                   onClick={handleGoogleSignIn}
-                  className="w-full flex items-center justify-center gap-3 bg-white/70 backdrop-blur-sm border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-white/90 transition font-medium"
+                  className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition font-medium shadow-sm"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
                     <path
@@ -242,38 +236,39 @@ export default function SignUp() {
                   Continue with Google
                 </button>
 
-                <p className="mt-6 text-sm text-center text-gray-600">
+                <p className="mt-6 text-sm text-center text-gray-500">
                   Already have an account?{' '}
-                  <Link to="/auth/signin" className="text-primary-600 hover:underline font-medium">
+                  <Link to="/auth/signin" className="text-primary-600 hover:underline font-semibold">
                     Sign in
                   </Link>
                 </p>
               </>
             )}
 
+            {/* Step OTP */}
             {step === 'otp' && (
               <form onSubmit={verifyOTP} className="space-y-5">
+                <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+                  Check your email
+                </h2>
+                <p className="text-sm text-gray-500 text-center mb-6">
+                  We sent an 8‑digit code to <span className="font-medium text-gray-700">{email}</span>
+                </p>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Verification Code
-                  </label>
                   <input
                     type="text"
                     required
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
-                    className="w-full px-3 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-center text-2xl tracking-widest font-mono"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-center text-2xl tracking-[0.3em] font-mono font-bold"
                     placeholder="00000000"
                     maxLength={8}
                   />
-                  <p className="mt-2 text-xs text-gray-600 text-center">
-                    We sent an 8‑digit code to <span className="font-medium">{email}</span>
-                  </p>
                 </div>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                 >
                   Verify & Continue
                 </button>
@@ -288,61 +283,62 @@ export default function SignUp() {
               </form>
             )}
 
+            {/* Step profile */}
             {step === 'profile' && (
               <form onSubmit={completeProfile} className="space-y-5">
+                <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+                  Complete your profile
+                </h2>
+                <p className="text-sm text-gray-500 text-center mb-6">
+                  Just a few more details
+                </p>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Full Name
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="text"
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white/70 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                       placeholder="John Doe"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
                     I want to...
                   </label>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setRole('customer')}
-                      className={`p-5 border-2 rounded-2xl flex flex-col items-center transition-all ${
+                      className={`p-4 border-2 rounded-2xl flex flex-col items-center transition-all ${
                         role === 'customer'
-                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-md scale-[1.02]'
-                          : 'border-gray-200 bg-white/50 backdrop-blur-sm hover:border-gray-300'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-md scale-[1.02]'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}
                     >
-                      <User className="h-10 w-10 mb-3" />
-                      <span className="font-semibold text-lg">I need a service</span>
-                      <span className="text-sm text-gray-500 mt-1">I'm a customer</span>
-                      <p className="text-xs text-gray-400 mt-2 text-center">
-                        Find and book trusted professionals
-                      </p>
+                      <User className="h-8 w-8 mb-2" />
+                      <span className="font-semibold text-sm">Find services</span>
+                      <span className="text-xs text-gray-500 mt-1">I'm a customer</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setRole('provider')}
-                      className={`p-5 border-2 rounded-2xl flex flex-col items-center transition-all ${
+                      className={`p-4 border-2 rounded-2xl flex flex-col items-center transition-all ${
                         role === 'provider'
-                          ? 'border-primary-500 bg-primary-50/80 backdrop-blur-sm text-primary-700 shadow-md scale-[1.02]'
-                          : 'border-gray-200 bg-white/50 backdrop-blur-sm hover:border-gray-300'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-md scale-[1.02]'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}
                     >
-                      <Briefcase className="h-10 w-10 mb-3" />
-                      <span className="font-semibold text-lg">I offer services</span>
-                      <span className="text-sm text-gray-500 mt-1">I'm a provider</span>
-                      <p className="text-xs text-gray-400 mt-2 text-center">
-                        Get hired and grow your business
-                      </p>
+                      <Briefcase className="h-8 w-8 mb-2" />
+                      <span className="font-semibold text-sm">Offer services</span>
+                      <span className="text-xs text-gray-500 mt-1">I'm a provider</span>
                     </button>
                   </div>
                 </div>
@@ -350,7 +346,7 @@ export default function SignUp() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium flex items-center justify-center gap-2"
+                  className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-600/20"
                 >
                   <CheckCircle className="h-5 w-5" />
                   Complete Sign Up

@@ -1,4 +1,3 @@
-// src/routes.tsx
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
@@ -44,6 +43,7 @@ const Safety = lazy(() => import('./pages/shared/Safety'));
 const Help = lazy(() => import('./pages/shared/Help'));
 const Report = lazy(() => import('./pages/shared/Report'));
 const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
+const Careers = lazy(() => import('./pages/shared/Careers'));   // <-- NEW
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -78,6 +78,7 @@ export const router = createBrowserRouter([
       { path: 'help', element: <Suspense fallback={<LoadingSkeleton />}><Help /></Suspense> },
       { path: 'report', element: <Suspense fallback={<LoadingSkeleton />}><Report /></Suspense> },
       { path: 'nimart-vs-nimart', element: <Suspense fallback={<LoadingSkeleton />}><NimartVsNimart /></Suspense> },
+      { path: 'careers', element: <Suspense fallback={<LoadingSkeleton />}><Careers /></Suspense> },   // <-- NEW
     ],
   },
   {
