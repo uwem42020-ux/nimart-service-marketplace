@@ -4,33 +4,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
-import {
-  MapPin,
-  Store,
-  ChevronDown,
-  Save,
-  AlertCircle,
-  Home,
-  Landmark,
-  Phone,
-  Loader2,
-} from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { MapPin, Store, Save, AlertCircle, Home, Landmark, Phone, Loader2, Info } from 'lucide-react';
 import { TIERS, getCategoriesByTier, getSubcategoriesByCategory } from '../../data/categories';
 import { LocationPickerModal } from '../../components/provider/LocationPickerModal';
 import type { Category, Subcategory } from '../../data/categories';
 
-interface State {
-  state_id: number;
-  state_name: string;
-}
-
-interface LGA {
-  lga_id: number;
-  lga_name: string;
-  lat: number | null;
-  lng: number | null;
-}
+// localStorage key for draft persistence
+const STORAGE_KEY = 'nimart_provider_setup';
 
 export default function ProviderSetup() {
   const navigate = useNavigate();
@@ -46,10 +26,9 @@ export default function ProviderSetup() {
   const [selectedLgaId, setSelectedLgaId] = useState<string>('');
   const [selectedLgaName, setSelectedLgaName] = useState<string>('');
   const [selectedStateName, setSelectedStateName] = useState<string>('');
-  const [selectedStateId, setSelectedStateId] = useState<string>('');
   const [mapLat, setMapLat] = useState<number>(9.0556);
   const [mapLng, setMapLng] = useState<number>(7.4914);
-  const [detectedArea, setDetectedArea] = useState<string>('');      // from map (read-only)
+  const [detectedArea, setDetectedArea] = useState<string>('');
   const [hasLocation, setHasLocation] = useState<boolean>(false);
 
   // Manual address fields
@@ -74,34 +53,61 @@ export default function ProviderSetup() {
   // Terms
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // States and LGAs for dropdowns (only used to map state_id from name)
-  const [states, setStates] = useState<State[]>([]);
-  const [lgas, setLgas] = useState<LGA[]>([]);
+  // States and LGAs for reference (only used to map state_id from name)
+  const [states, setStates] = useState<{ state_id: number; state_name: string }[]>([]);
 
-  // Fetch states on mount
+  // ---- LocalStorage persistence (draft) ----
+  useEffect(() => {
+    if (!initialLoading) return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setBusinessName(data.businessName || '');
+        setDescription(data.description || '');
+        setPhoneNumber(data.phoneNumber || '');
+        setStreetAddress(data.streetAddress || '');
+        setLandmark(data.landmark || '');
+        setSelectedTier(data.selectedTier || 'automotive');
+        setSelectedCategory(data.selectedCategory || '');
+        setSelectedSubcategoryId(data.selectedSubcategoryId || '');
+        setTermsAccepted(data.termsAccepted || false);
+        if (data.hasLocation) {
+          setSelectedLgaId(data.selectedLgaId || '');
+          setSelectedLgaName(data.selectedLgaName || '');
+          setSelectedStateName(data.selectedStateName || '');
+          setMapLat(data.mapLat || 9.0556);
+          setMapLng(data.mapLng || 7.4914);
+          setDetectedArea(data.detectedArea || '');
+          setHasLocation(data.hasLocation);
+        }
+      } catch (e) { console.error('Failed to load saved data', e); }
+    }
+  }, [initialLoading]);
+
+  useEffect(() => {
+    if (initialLoading) return;
+    const toSave = {
+      businessName, description, phoneNumber, streetAddress, landmark,
+      selectedTier, selectedCategory, selectedSubcategoryId, termsAccepted,
+      selectedLgaId, selectedLgaName, selectedStateName, mapLat, mapLng, detectedArea, hasLocation
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  }, [businessName, description, phoneNumber, streetAddress, landmark, selectedTier, selectedCategory, selectedSubcategoryId, termsAccepted, selectedLgaId, selectedLgaName, selectedStateName, mapLat, mapLng, detectedArea, hasLocation, initialLoading]);
+
+  // ---- Fetch states (for mapping state_id from name) ----
   useEffect(() => {
     async function fetchStates() {
-      const { data } = await supabase
-        .from('lga_centers')
-        .select('state_id, state_name')
-        .order('state_name');
-      const unique = data?.filter((v,i,a)=>a.findIndex(t=>t.state_id===v.state_id)===i) || [];
-      setStates(unique);
+      const { data } = await supabase.from('lga_centers').select('state_id, state_name').order('state_name');
+      if (data) {
+        const unique = data.filter((v,i,a)=>a.findIndex(t=>t.state_id===v.state_id)===i);
+        setStates(unique);
+      }
     }
     fetchStates();
   }, []);
 
-  // When LGA changes, load its coordinates (for fallback)
-  useEffect(() => {
-    if (!selectedLgaId) return;
-    const lga = lgas.find(l => l.lga_id.toString() === selectedLgaId);
-    if (lga?.lat && lga?.lng && !hasLocation) {
-      setMapLat(lga.lat);
-      setMapLng(lga.lng);
-    }
-  }, [selectedLgaId, lgas, hasLocation]);
-
-  // Fetch categories when tier changes
+  // Category effects
   useEffect(() => {
     setCategories(getCategoriesByTier(selectedTier));
     setSelectedCategory('');
@@ -116,10 +122,9 @@ export default function ProviderSetup() {
     }
   }, [selectedCategory]);
 
-  // Pre-fill existing data (if any)
+  // Pre‑fill existing data (if provider already has partial data)
   useEffect(() => {
     if (!user) return;
-
     async function fetchExisting() {
       const { data: provider } = await supabase
         .from('providers')
@@ -133,7 +138,6 @@ export default function ProviderSetup() {
         if (provider.selected_category_slug) setSelectedCategory(provider.selected_category_slug);
         if (provider.selected_subcategory_id) setSelectedSubcategoryId(provider.selected_subcategory_id.toString());
       }
-
       const { data: profileData } = await supabase
         .from('profiles')
         .select('lga_id, lga_name, street_address, landmark, phone, address_area, lat, lng')
@@ -143,12 +147,7 @@ export default function ProviderSetup() {
         if (profileData.lga_id) {
           setSelectedLgaId(profileData.lga_id.toString());
           setSelectedLgaName(profileData.lga_name || '');
-          // Also get state name from lga_centers
-          const { data: lgaInfo } = await supabase
-            .from('lga_centers')
-            .select('state_name')
-            .eq('lga_id', profileData.lga_id)
-            .single();
+          const { data: lgaInfo } = await supabase.from('lga_centers').select('state_name').eq('lga_id', profileData.lga_id).single();
           if (lgaInfo) setSelectedStateName(lgaInfo.state_name);
         }
         setStreetAddress(profileData.street_address || '');
@@ -184,11 +183,9 @@ export default function ProviderSetup() {
     else setPhoneError('');
   };
 
-  // Final submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
-
     if (!businessName.trim()) { toast.error('Business name required'); return; }
     if (!validatePhoneNumber(phoneNumber)) return;
     if (!selectedLgaId) { toast.error('Please set your location on the map'); return; }
@@ -202,13 +199,12 @@ export default function ProviderSetup() {
 
     setLoading(true);
     try {
-      // Call the atomic RPC (make sure it accepts address_area)
       const { data, error } = await supabase.rpc('complete_provider_setup', {
         p_user_id: user!.id,
         p_business_name: businessName,
         p_phone: phoneNumber,
         p_street_address: streetAddress,
-        p_address_area: detectedArea,          // 👈 area from map
+        p_address_area: detectedArea,
         p_landmark: landmark || null,
         p_lga_id: parseInt(selectedLgaId),
         p_lat: mapLat,
@@ -218,11 +214,10 @@ export default function ProviderSetup() {
         p_selected_category_slug: selectedCategory,
         p_selected_subcategory_id: parseInt(selectedSubcategoryId),
       });
-
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
-
       await refreshProfile();
+      localStorage.removeItem(STORAGE_KEY);
       toast.success('Profile setup complete! Please upload a profile picture and set a password.');
       navigate('/provider/profile');
     } catch (err: any) {
@@ -244,7 +239,7 @@ export default function ProviderSetup() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Provider Profile</h1>
-      <p className="text-gray-600 mb-2">Help customers find and trust you.</p>
+      <p className="text-gray-600 mb-2">This information helps customers find and trust you.</p>
       <p className="text-sm text-amber-600 mb-6 flex items-start gap-1">
         <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
         <span>Your full name must match your official ID for verification.</span>
@@ -253,12 +248,10 @@ export default function ProviderSetup() {
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* ===== LOCATION SECTION ===== */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 mr-2 text-primary-600" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary-600" />
             Service Location
           </h2>
-
-          {/* Map picker button */}
           <div className="mb-4">
             <button
               type="button"
@@ -274,14 +267,17 @@ export default function ProviderSetup() {
               <div className="mt-3 text-sm text-gray-700 space-y-1">
                 <p>📍 LGA: {selectedLgaName}, {selectedStateName}</p>
                 <p>🏘️ Area: {detectedArea || 'Detecting...'}</p>
+                <div className="flex items-start gap-1 mt-2 p-2 bg-amber-50 rounded-md text-xs text-amber-700">
+                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  <span>Your location will be locked after setup. You can change it once every 30 days for free, or pay 5000 Nicoin to change earlier. Make sure this is your exact service address.</span>
+                </div>
               </div>
             )}
             <p className="text-xs text-gray-500 mt-2">
-              Open the map, drag the pin to your exact workshop/office, then confirm. The system will detect your LGA, state, and local area.
+              Open the map, drag the pin to your exact workshop/office, then confirm. Use the "Use my current location" button to center on your GPS.
             </p>
           </div>
 
-          {/* Manual street address */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Home className="inline h-4 w-4 mr-1" />
@@ -297,7 +293,6 @@ export default function ProviderSetup() {
             />
           </div>
 
-          {/* Landmark (optional) */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Landmark className="inline h-4 w-4 mr-1" />
@@ -315,8 +310,8 @@ export default function ProviderSetup() {
 
         {/* ===== CONTACT ===== */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Phone className="h-5 w-5 mr-2 text-primary-600" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Phone className="h-5 w-5 text-primary-600" />
             Contact Information
           </h2>
           <div>
@@ -337,8 +332,8 @@ export default function ProviderSetup() {
 
         {/* ===== BUSINESS INFO ===== */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Store className="h-5 w-5 mr-2 text-primary-600" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Store className="h-5 w-5 text-primary-600" />
             Business Information
           </h2>
           <div className="space-y-4">
@@ -364,7 +359,6 @@ export default function ProviderSetup() {
               />
             </div>
 
-            {/* Category selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Service Tier *</label>
               <select
@@ -424,7 +418,6 @@ export default function ProviderSetup() {
           </label>
         </div>
 
-        {/* Error & Retry */}
         {submitError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800 text-sm">{submitError}</p>
@@ -432,7 +425,6 @@ export default function ProviderSetup() {
           </div>
         )}
 
-        {/* Submit */}
         <div className="flex justify-end">
           <button
             type="submit"
@@ -444,7 +436,6 @@ export default function ProviderSetup() {
         </div>
       </form>
 
-      {/* Location Picker Modal */}
       <LocationPickerModal
         isOpen={showLocationPicker}
         onClose={() => setShowLocationPicker(false)}
@@ -456,11 +447,11 @@ export default function ProviderSetup() {
           setMapLng(data.lng);
           setDetectedArea(data.area);
           setHasLocation(true);
-          toast.success(`Location set to ${data.lgaName}, ${data.stateName}${data.area ? `, ${data.area}` : ''}`);
-          // Optionally, we could auto‑fill state_id by matching state_name
           const stateMatch = states.find(s => s.state_name === data.stateName);
-          if (stateMatch) setSelectedStateId(stateMatch.state_id.toString());
-          // Also fetch LGAs for that state if needed (optional)
+          if (stateMatch) {
+            // optional: store state_id if needed
+          }
+          toast.success(`Location set to ${data.lgaName}, ${data.stateName}${data.area ? `, ${data.area}` : ''}`);
         }}
         currentLat={mapLat}
         currentLng={mapLng}

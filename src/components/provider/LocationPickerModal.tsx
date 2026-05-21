@@ -3,11 +3,10 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
-import { MapPin, X } from 'lucide-react';
+import { MapPin, X, LocateFixed, Loader2 } from 'lucide-react';
 import { NimartSpinner } from '../common/NimartSpinner';
 import L from 'leaflet';
 
-// Fix Leaflet icon paths
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -19,6 +18,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// Blue dot icon for user's current location (reference only)
+const blueDotIcon = L.divIcon({
+  html: `<div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 2px rgba(59,130,246,0.5);"></div>`,
+  className: '',
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+});
+
 interface LocationPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,38 +35,26 @@ interface LocationPickerModalProps {
     lgaId: number;
     lgaName: string;
     stateName: string;
-    area: string;          // nearest village/neighbourhood
+    area: string;
   }) => void;
   currentLat: number;
   currentLng: number;
 }
 
-// Helper: reverse geocode area using OpenStreetMap Nominatim
 async function reverseGeocodeArea(lat: number, lng: number): Promise<string> {
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
     );
     const data = await response.json();
-    const area = data.address?.suburb ||
-                 data.address?.village ||
-                 data.address?.neighbourhood ||
-                 data.address?.city_district ||
-                 data.address?.town ||
-                 '';
-    return area;
-  } catch (err) {
-    console.error('OSM reverse geocode error:', err);
+    return data.address?.suburb || data.address?.village || data.address?.neighbourhood || data.address?.city_district || data.address?.town || '';
+  } catch {
     return '';
   }
 }
 
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
-    },
-  });
+  useMapEvents({ click(e) { onMapClick(e.latlng.lat, e.latlng.lng); } });
   return null;
 }
 
@@ -75,18 +70,16 @@ export function LocationPickerModal({
   const [lgaInfo, setLgaInfo] = useState<{ lga_id: number; lga_name: string; state_name: string } | null>(null);
   const [area, setArea] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
-  // Fetch LGA and area whenever marker moves
+  // Fetch LGA and area when marker moves
   useEffect(() => {
     if (!selectedLat || !selectedLng) return;
     const fetchDetails = async () => {
       setLoading(true);
       try {
-        // 1. Get LGA/state from your Supabase function
-        const { data, error } = await supabase.rpc('find_nearest_lga', {
-          user_lat: selectedLat,
-          user_lng: selectedLng,
-        });
+        const { data, error } = await supabase.rpc('find_nearest_lga', { user_lat: selectedLat, user_lng: selectedLng });
         if (error) throw error;
         if (data && data.length > 0) {
           setLgaInfo({
@@ -94,36 +87,56 @@ export function LocationPickerModal({
             lga_name: data[0].lga_name,
             state_name: data[0].state_name,
           });
-        } else {
-          setLgaInfo(null);
-        }
-
-        // 2. Get area (village/neighbourhood) from OpenStreetMap
+        } else setLgaInfo(null);
         const osmArea = await reverseGeocodeArea(selectedLat, selectedLng);
         setArea(osmArea);
-      } catch (err) {
-        console.error('Location fetch error:', err);
-        toast.error('Could not detect location details');
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
     };
     fetchDetails();
   }, [selectedLat, selectedLng]);
 
-  const handleConfirm = () => {
-    if (!lgaInfo) {
-      toast.error('Please select a valid location on the map');
+  // On modal open, get user's current location for blue dot reference
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!navigator.geolocation) return;
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+        setGettingLocation(false);
+      },
+      () => setGettingLocation(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [isOpen]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation not supported');
       return;
     }
-    onLocationSelected({
-      lat: selectedLat,
-      lng: selectedLng,
-      lgaId: lgaInfo.lga_id,
-      lgaName: lgaInfo.lga_name,
-      stateName: lgaInfo.state_name,
-      area: area,
-    });
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setSelectedLat(latitude);
+        setSelectedLng(longitude);
+        setUserLocation([latitude, longitude]);
+        setGettingLocation(false);
+        toast.success('Map centered on your location');
+      },
+      () => {
+        toast.error('Unable to get your location');
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleConfirm = () => {
+    if (!lgaInfo) { toast.error('Please select a valid location'); return; }
+    onLocationSelected({ lat: selectedLat, lng: selectedLng, lgaId: lgaInfo.lga_id, lgaName: lgaInfo.lga_name, stateName: lgaInfo.state_name, area });
     onClose();
   };
 
@@ -132,90 +145,53 @@ export function LocationPickerModal({
   return (
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">Set Your Exact Location</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X className="h-5 w-5" />
-          </button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded"><X className="h-5 w-5" /></button>
         </div>
-
-        {/* Map */}
         <div className="flex-1 relative">
-          <MapContainer
-            center={[selectedLat, selectedLng]}
-            zoom={16}
-            className="w-full h-full"
-          >
-            <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            />
+          <MapContainer center={[selectedLat, selectedLng]} zoom={16} className="w-full h-full">
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
+            {/* Draggable marker (the one the user moves) */}
             <Marker
               position={[selectedLat, selectedLng]}
               draggable={true}
-              eventHandlers={{
-                dragend: (e) => {
-                  const marker = e.target;
-                  const pos = marker.getLatLng();
-                  setSelectedLat(pos.lat);
-                  setSelectedLng(pos.lng);
-                },
-              }}
+              eventHandlers={{ dragend: (e) => {
+                const pos = e.target.getLatLng();
+                setSelectedLat(pos.lat);
+                setSelectedLng(pos.lng);
+              } }}
             />
-            <MapClickHandler onMapClick={(lat, lng) => {
-              setSelectedLat(lat);
-              setSelectedLng(lng);
-            }} />
+            {/* Reference blue dot – user's actual location (non‑draggable) */}
+            {userLocation && (
+              <Marker position={userLocation} icon={blueDotIcon} interactive={false} />
+            )}
+            <MapClickHandler onMapClick={(lat, lng) => { setSelectedLat(lat); setSelectedLng(lng); }} />
           </MapContainer>
 
-          {/* Loading overlay while fetching LGA/area */}
-          {loading && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-              <NimartSpinner size="md" />
-            </div>
-          )}
-
-          {/* Info panel */}
           <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 space-y-1">
-            {lgaInfo ? (
+            {loading ? <div className="flex justify-center py-2"><NimartSpinner size="sm" /></div> : lgaInfo ? (
               <>
-                <p className="text-sm font-medium text-gray-900">
-                  {lgaInfo.lga_name}, {lgaInfo.state_name}
-                </p>
-                {area && (
-                  <p className="text-sm text-gray-700">
-                    🏘️ Area: {area}
-                  </p>
-                )}
-                <p className="text-xs text-gray-500">
-                  Drag the pin or click on the map to adjust
-                </p>
+                <p className="text-sm font-medium text-gray-900">{lgaInfo.lga_name}, {lgaInfo.state_name}</p>
+                {area && <p className="text-sm text-gray-700">📍 Area: {area}</p>}
+                <p className="text-xs text-gray-500">Drag the pin to match your exact location</p>
               </>
-            ) : (
-              <p className="text-sm text-gray-500">
-                Click on the map to select a location
-              </p>
-            )}
+            ) : <p className="text-sm text-gray-500">Click or drag the pin on the map</p>}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t flex justify-end gap-3">
+        <div className="p-4 border-t flex justify-between items-center gap-3">
           <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            onClick={handleUseCurrentLocation}
+            disabled={gettingLocation}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100"
           >
-            Cancel
+            {gettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
+            Use my current location
           </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!lgaInfo}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <MapPin className="h-4 w-4" />
-            Use this location
-          </button>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            <button onClick={handleConfirm} disabled={!lgaInfo} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50">Use this location</button>
+          </div>
         </div>
       </div>
     </div>

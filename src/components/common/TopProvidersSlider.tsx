@@ -7,6 +7,7 @@ import { OptimizedImage } from './OptimizedImage';
 import { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 
+/* ---------- local storage helpers ---------- */
 const saveToCache = (key: string, data: any) => {
   try {
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
@@ -25,8 +26,40 @@ const loadFromCache = (key: string, maxAge = 1000 * 60 * 60 * 24) => {
   }
 };
 
+/* ---------- LGA map cache ---------- */
+let lgaMapPromise: Promise<Map<number, { lga_name: string; state_name: string }>> | null = null;
+
+const getLgaMap = async () => {
+  if (lgaMapPromise) return lgaMapPromise;
+
+  lgaMapPromise = (async () => {
+    const map = new Map<number, { lga_name: string; state_name: string }>();
+    const { data, error } = await supabase
+      .from('lga_centers')
+      .select('lga_id, lga_name, state_name');
+
+    if (error || !data) {
+      console.warn('Failed to load LGA map', error);
+      return map;
+    }
+
+    data.forEach(lga => {
+      if (lga.lga_id != null) {
+        map.set(lga.lga_id, {
+          lga_name: lga.lga_name,
+          state_name: lga.state_name,
+        });
+      }
+    });
+    return map;
+  })();
+
+  return lgaMapPromise;
+};
+
+/* ---------- skeleton ---------- */
 const SkeletonCard = () => (
-  <div className="flex-shrink-0 w-32 sm:w-36 md:w-44 lg:w-48 snap-start rounded-xl overflow-hidden animate-pulse bg-gray-200">
+  <div className="flex-shrink-0 w-28 sm:w-32 md:w-36 lg:w-40 snap-start rounded-xl overflow-hidden animate-pulse bg-gray-200">
     <div className="w-full aspect-[4/5] bg-gray-300" />
     <div className="p-2 space-y-1">
       <div className="h-3 bg-gray-300 rounded w-3/4" />
@@ -35,6 +68,7 @@ const SkeletonCard = () => (
   </div>
 );
 
+/* ---------- component ---------- */
 export function TopProvidersSlider() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -50,7 +84,7 @@ export function TopProvidersSlider() {
   }, []);
 
   const { data: topProviders, isLoading } = useQuery({
-    queryKey: ['top-providers', 'final-no-hover'],
+    queryKey: ['top-providers', 'with-state'],
     queryFn: async () => {
       try {
         const { data: providers, error: providerError } = await supabase
@@ -65,18 +99,35 @@ export function TopProvidersSlider() {
         if (!providers || providers.length === 0) return [];
 
         const ids = providers.map(p => p.id);
+
         const { data: profiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, avatar_url, full_name, lga_name, is_verified')
+          .select('id, avatar_url, full_name, lga_id, is_verified')
           .in('id', ids);
 
         if (profileError) throw profileError;
+        const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
-        const merged = providers.map(provider => ({
-          ...provider,
-          profile: profiles?.find(p => p.id === provider.id) ?? null,
-          isBoosted: provider.boost_until ? new Date(provider.boost_until) > new Date() : false,
-        }));
+        const lgaMap = await getLgaMap();
+
+        const merged = providers.map(provider => {
+          const prof = profileMap.get(provider.id);
+          const lgaInfo = prof?.lga_id != null ? lgaMap.get(prof.lga_id) : undefined;
+
+          return {
+            ...provider,
+            profile: prof
+              ? {
+                  ...prof,
+                  lga_name: lgaInfo?.lga_name ?? null,
+                  state_name: lgaInfo?.state_name ?? null,
+                }
+              : null,
+            isBoosted: provider.boost_until
+              ? new Date(provider.boost_until) > new Date()
+              : false,
+          };
+        });
 
         saveToCache('top-providers-cache', merged);
         return merged;
@@ -99,7 +150,9 @@ export function TopProvidersSlider() {
           Top Providers
         </div>
         <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
-          {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
+          {[1, 2, 3, 4, 5].map(i => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       </div>
     );
@@ -117,7 +170,6 @@ export function TopProvidersSlider() {
       <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
         {displayData.map(provider => {
           const prof = provider.profile || {};
-          const location = prof.lga_name || 'Location not set';
           const isVerified = prof.is_verified;
           const isBoosted = provider.isBoosted;
           const bgImage = prof.avatar_url || null;
@@ -127,7 +179,7 @@ export function TopProvidersSlider() {
               key={provider.id}
               to={`/provider/${provider.id}`}
               className={cn(
-                'flex-shrink-0 w-32 sm:w-36 md:w-44 lg:w-48 snap-start rounded-xl',
+                'flex-shrink-0 w-28 sm:w-32 md:w-36 lg:w-40 snap-start rounded-xl',
                 isBoosted && 'border-2 border-amber-500'
               )}
             >
@@ -145,22 +197,32 @@ export function TopProvidersSlider() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   {isVerified && (
                     <div className="absolute top-2 right-2 bg-white rounded-full p-0.5 shadow-sm z-10">
-                      <img src="/verify.png" alt="Verified" className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <img src="/verify.png" alt="Verified" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
                   )}
                   {isBoosted && (
-                    <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm z-10">
+                    <div className="absolute top-2 left-2 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">
                       BOOSTED
                     </div>
                   )}
                 </div>
                 <div className="p-2">
-                  <div className="font-semibold text-xs sm:text-sm text-gray-900 truncate">
+                  <div className="font-semibold text-[10px] sm:text-xs text-gray-900 truncate">
                     {provider.business_name}
                   </div>
-                  <div className="flex items-center gap-0.5 text-[10px] sm:text-xs text-gray-500 truncate mt-0.5">
-                    <MapPin className="h-2.5 w-2.5 flex-shrink-0" />
-                    <span className="truncate">{location}</span>
+                  {/* ---- Location with separate LGA and state lines ---- */}
+                  <div className="mt-0.5 space-y-0.5">
+                    {/* LGA line */}
+                    <div className="flex items-center gap-0.5 text-[8px] sm:text-[10px] text-gray-500 truncate">
+                      <MapPin className="h-2 w-2 flex-shrink-0" />
+                      <span className="truncate">{prof.lga_name || 'LGA not set'}</span>
+                    </div>
+                    {/* State line – a little bigger */}
+                    {prof.state_name && (
+                      <div className="text-[10px] sm:text-xs text-gray-600 font-medium truncate">
+                        {prof.state_name}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
