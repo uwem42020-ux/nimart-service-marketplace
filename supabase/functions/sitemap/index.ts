@@ -1,4 +1,3 @@
-// supabase/functions/sitemap/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -16,6 +15,7 @@ serve(async (_req) => {
     const staticUrls = [
       { loc: "/", priority: "1.0", changefreq: "daily" },
       { loc: "/search", priority: "0.9", changefreq: "daily" },
+      { loc: "/blog", priority: "0.9", changefreq: "daily" },          // <-- NEW
       { loc: "/auth/signup", priority: "0.8", changefreq: "weekly" },
       { loc: "/auth/signup?role=provider", priority: "0.8", changefreq: "weekly" },
       { loc: "/auth/signin", priority: "0.7", changefreq: "weekly" },
@@ -26,6 +26,7 @@ serve(async (_req) => {
       { loc: "/cookies", priority: "0.3", changefreq: "yearly" },
       { loc: "/report", priority: "0.4", changefreq: "monthly" },
       { loc: "/nimart-vs-nimart", priority: "0.4", changefreq: "monthly" },
+      { loc: "/careers", priority: "0.5", changefreq: "weekly" },       // <-- NEW
     ];
 
     // ----------------------------------------------------------------
@@ -51,7 +52,6 @@ serve(async (_req) => {
     // ----------------------------------------------------------------
     // 3. Service‑Location landing pages (category + LGA)
     // ----------------------------------------------------------------
-    // Fetch all distinct (category_slug, lga_id) pairs that have active providers
     const { data: catLgaPairs, error: pairError } = await supabase
       .from("providers")
       .select("selected_category_slug, profiles!inner(lga_id)")
@@ -60,7 +60,7 @@ serve(async (_req) => {
     const pairs = new Set<string>();
     if (!pairError && catLgaPairs) {
       catLgaPairs.forEach((row: any) => {
-        const lgaId = row.profiles?.lga_id;   // profiles is a single object (inner join)
+        const lgaId = row.profiles?.lga_id;
         if (row.selected_category_slug && lgaId) {
           pairs.add(`${row.selected_category_slug}__${lgaId}`);
         }
@@ -78,7 +78,27 @@ serve(async (_req) => {
     });
 
     // ----------------------------------------------------------------
-    // 4. Build the full URL set
+    // 4. Blog posts
+    // ----------------------------------------------------------------
+    const { data: blogPosts, error: blogError } = await supabase
+      .from("blog_posts")
+      .select("slug, updated_at")
+      .eq("published", true)
+      .order("updated_at", { ascending: false });
+
+    if (blogError) throw blogError;
+
+    const blogUrls = (blogPosts || []).map((p) => ({
+      loc: `${baseUrl}/blog/${p.slug}`,
+      lastmod: p.updated_at
+        ? p.updated_at.split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      changefreq: "monthly",
+      priority: "0.6",
+    }));
+
+    // ----------------------------------------------------------------
+    // 5. Build the full URL set
     // ----------------------------------------------------------------
     const urlset = [
       ...staticUrls.map((u) => ({
@@ -89,10 +109,11 @@ serve(async (_req) => {
       })),
       ...providerUrls,
       ...serviceLocationUrls,
+      ...blogUrls,    // <-- NEW
     ];
 
     // ----------------------------------------------------------------
-    // 5. Generate XML
+    // 6. Generate XML
     // ----------------------------------------------------------------
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

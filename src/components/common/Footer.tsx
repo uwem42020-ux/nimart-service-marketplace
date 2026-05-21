@@ -67,6 +67,7 @@ export function Footer() {
               <li><Link to="/search" className="hover:text-white transition-colors">Find Services</Link></li>
               <li><Link to="/auth/signup?role=provider" className="hover:text-white transition-colors">Become a Provider</Link></li>
               <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li>   {/* ← NEW */}
+              <li><Link to="/blog" className="hover:text-white transition-colors">Blog</Link></li>
             </ul>
           </div>
 

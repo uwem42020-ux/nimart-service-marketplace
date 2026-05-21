@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { DashboardLayout } from './components/layout/DashboardLayout';
@@ -43,7 +43,10 @@ const Safety = lazy(() => import('./pages/shared/Safety'));
 const Help = lazy(() => import('./pages/shared/Help'));
 const Report = lazy(() => import('./pages/shared/Report'));
 const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
-const Careers = lazy(() => import('./pages/shared/Careers'));   // <-- NEW
+const Careers = lazy(() => import('./pages/shared/Careers'));
+const Blog = lazy(() => import('./pages/Blog'));
+const BlogPost = lazy(() => import('./pages/BlogPost'));
+const NotFound = lazy(() => import('./pages/shared/NotFound'));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -54,8 +57,9 @@ const AdminVerifications = lazy(() => import('./pages/admin/Verifications'));
 const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const AdminCoins = lazy(() => import('./pages/admin/Coins'));
 const AdminPayments = lazy(() => import('./pages/admin/Payments'));
+const AdminBlog = lazy(() => import('./pages/admin/Blog'));
 
-// NEW: Provider portfolio page (customer view)
+// Provider portfolio page (customer view)
 const CustomerProviderPortfolio = lazy(() => import('./pages/customer/ProviderPortfolio'));
 
 export const router = createBrowserRouter([
@@ -69,8 +73,10 @@ export const router = createBrowserRouter([
       { path: 'category/:tierSlug', element: <Suspense fallback={<LoadingSkeleton />}><CategoryPage /></Suspense> },
       { path: 'services/:categorySlug/in/:lgaId', element: <Suspense fallback={<LoadingSkeleton />}><ServiceLocationPage /></Suspense> },
       { path: 'provider/:id', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderProfile /></Suspense> },
-      // NEW: provider portfolio page (customer view)
       { path: 'provider/:id/portfolio', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderPortfolio /></Suspense> },
+      { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><Blog /></Suspense> },
+      { path: 'blog/:slug', element: <Suspense fallback={<LoadingSkeleton />}><BlogPost /></Suspense> },
+      { path: 'careers', element: <Suspense fallback={<LoadingSkeleton />}><Careers /></Suspense> },
       { path: 'terms', element: <Suspense fallback={<LoadingSkeleton />}><Terms /></Suspense> },
       { path: 'privacy', element: <Suspense fallback={<LoadingSkeleton />}><Privacy /></Suspense> },
       { path: 'cookies', element: <Suspense fallback={<LoadingSkeleton />}><Cookies /></Suspense> },
@@ -78,7 +84,7 @@ export const router = createBrowserRouter([
       { path: 'help', element: <Suspense fallback={<LoadingSkeleton />}><Help /></Suspense> },
       { path: 'report', element: <Suspense fallback={<LoadingSkeleton />}><Report /></Suspense> },
       { path: 'nimart-vs-nimart', element: <Suspense fallback={<LoadingSkeleton />}><NimartVsNimart /></Suspense> },
-      { path: 'careers', element: <Suspense fallback={<LoadingSkeleton />}><Careers /></Suspense> },   // <-- NEW
+      { path: '*', element: <Suspense fallback={<LoadingSkeleton />}><NotFound /></Suspense> },
     ],
   },
   {
@@ -144,10 +150,7 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <Suspense fallback={<LoadingSkeleton />}><AdminReports /></Suspense> },
       { path: 'coins', element: <Suspense fallback={<LoadingSkeleton />}><AdminCoins /></Suspense> },
       { path: 'payments', element: <Suspense fallback={<LoadingSkeleton />}><AdminPayments /></Suspense> },
+      { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><AdminBlog /></Suspense> },
     ],
-  },
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
   },
 ]);
