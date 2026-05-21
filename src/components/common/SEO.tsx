@@ -6,7 +6,8 @@ interface SEOProps {
   image?: string;
   url?: string;
   type?: 'website' | 'profile' | 'article';
-  schema?: object;
+  /** Schema can now be a single object or an array of objects */
+  schema?: object | object[];
 }
 
 export function SEO({
@@ -19,6 +20,13 @@ export function SEO({
 }: SEOProps) {
   const fullTitle = title.includes('Nimart') ? title : `${title} | Nimart`;
   const imageUrl = image.startsWith('http') ? image : `https://nimart.ng${image}`;
+
+  // Normalize schema to an array for easier rendering
+  const schemas = schema
+    ? Array.isArray(schema)
+      ? schema
+      : [schema]
+    : [];
 
   return (
     <Helmet>
@@ -45,12 +53,12 @@ export function SEO({
       <meta name="twitter:image" content={imageUrl} />
       <meta name="twitter:site" content="@nimartng" />
 
-      {/* Structured Data (JSON-LD) */}
-      {schema && (
-        <script type="application/ld+json">
-          {JSON.stringify(schema)}
+      {/* Structured Data (JSON-LD) – supports multiple schemas */}
+      {schemas.map((s, i) => (
+        <script key={i} type="application/ld+json">
+          {JSON.stringify(s)}
         </script>
-      )}
+      ))}
     </Helmet>
   );
 }

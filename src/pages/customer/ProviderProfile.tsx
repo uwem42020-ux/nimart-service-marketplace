@@ -1,5 +1,3 @@
-// src/pages/customer/ProviderProfile.tsx
-
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -423,6 +421,19 @@ export default function ProviderProfile() {
     { label: providerName },
   ];
 
+  // ===== NEW: BreadcrumbList structured data =====
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": breadcrumbItems.map((item, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": item.label,
+      "item": item.to ? `https://nimart.ng${item.to}` : undefined,
+    })),
+  };
+  // ===============================================
+
   const providerSchema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
@@ -474,7 +485,7 @@ export default function ProviderProfile() {
         image={provider.profile?.avatar_url || '/og-image.png'}
         url={`https://nimart.ng/provider/${id}`}
         type="profile"
-        schema={providerSchema}
+        schema={[providerSchema, breadcrumbSchema]}   // <-- NOW AN ARRAY
       />
 
       {/* ============== MODERN MOBILE LAYOUT ============== */}
@@ -968,7 +979,7 @@ export default function ProviderProfile() {
         )}
       </div>
 
-      {/* ============== MODALS & CHAT WIDGET (rendered normally) ============== */}
+      {/* ============== MODALS & CHAT WIDGET ============== */}
       <BookingFormModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}

@@ -1,4 +1,3 @@
-// src/pages/customer/Home.tsx
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -35,7 +34,9 @@ export interface ProviderWithProfile extends ProviderRow {
   lastSignInAt?: string | null;
 }
 
-// Homepage structured data
+// ========== STRUCTURED DATA SCHEMAS ==========
+
+/** WebSite schema – tells Google this is a site with a search function */
 const homeSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
@@ -48,19 +49,44 @@ const homeSchema = {
   }
 };
 
-const orgSchema = {
+/**
+ * SiteNavigationElement – the most direct way to earn sitelinks.
+ * List exactly the pages you want to appear beneath your brand result.
+ * Google cross‑checks these URLs with the actual <nav> on the page.
+ */
+const siteNavSchema = {
   "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": "Nimart",
+  "@type": "SiteNavigationElement",
+  "name": "Main Navigation",
   "url": "https://nimart.ng",
-  "logo": "https://nimart.ng/logo.png",
-  "sameAs": [
-    "https://www.tiktok.com/@nimart.ng",
-    "https://www.instagram.com/nimartng",
-    "https://x.com/nimartng",
-    "https://web.facebook.com/people/Nimart/61551209078955/"
+  "hasPart": [
+    {
+      "@type": "SiteNavigationElement",
+      "name": "Home",
+      "url": "https://nimart.ng/"
+    },
+    {
+      "@type": "SiteNavigationElement",
+      "name": "Search Providers",
+      "url": "https://nimart.ng/search"
+    },
+    {
+      "@type": "SiteNavigationElement",
+      "name": "Map",
+      "url": "https://nimart.ng/map"
+    },
+    {
+      "@type": "SiteNavigationElement",
+      "name": "Sign Up as Provider",
+      "url": "https://nimart.ng/auth/signup?role=provider"
+    }
+    // You can add your top category pages here when ready, e.g.:
+    // { "@type": "SiteNavigationElement", "name": "Auto Services", "url": "https://nimart.ng/category/auto" },
+    // { "@type": "SiteNavigationElement", "name": "Home Services", "url": "https://nimart.ng/category/home" },
   ]
 };
+
+// =============================================
 
 export default function Home() {
   const { profile } = useAuth();
@@ -440,15 +466,17 @@ export default function Home() {
 
   return (
     <>
+      {/* ===== SEO – only structured data, no visible text ===== */}
+      <SEO
+        title="Nimart - Nigeria's Trusted Service Marketplace"
+        description="Connect with verified professionals across Nigeria. Book trusted services for home, auto, beauty, and more."
+        url="https://nimart.ng"
+        schema={[homeSchema, siteNavSchema]}   // WebSite + SiteNavigationElement
+      />
+
       {/* Hero section – grey background matching page, white card for location/search */}
       <section className="w-full bg-gray-50 py-6 md:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SEO
-            title="Nimart - Nigeria's Trusted Service Marketplace"
-            description="Connect with verified professionals across Nigeria. Book trusted services for home, auto, beauty, and more."
-            url="https://nimart.ng"
-            schema={{ ...homeSchema, ...orgSchema }}
-          />
           <p className="text-base md:text-lg text-[#008751] text-center mb-4 font-medium">
             Connect with professionals near you
           </p>
