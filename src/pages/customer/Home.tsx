@@ -36,7 +36,6 @@ export interface ProviderWithProfile extends ProviderRow {
 
 // ========== STRUCTURED DATA SCHEMAS ==========
 
-/** WebSite schema – tells Google this is a site with a search function */
 const homeSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
@@ -49,11 +48,6 @@ const homeSchema = {
   }
 };
 
-/**
- * SiteNavigationElement – the most direct way to earn sitelinks.
- * List exactly the pages you want to appear beneath your brand result.
- * Google cross‑checks these URLs with the actual <nav> on the page.
- */
 const siteNavSchema = {
   "@context": "https://schema.org",
   "@type": "SiteNavigationElement",
@@ -80,9 +74,6 @@ const siteNavSchema = {
       "name": "Sign Up as Provider",
       "url": "https://nimart.ng/auth/signup?role=provider"
     }
-    // You can add your top category pages here when ready, e.g.:
-    // { "@type": "SiteNavigationElement", "name": "Auto Services", "url": "https://nimart.ng/category/auto" },
-    // { "@type": "SiteNavigationElement", "name": "Home Services", "url": "https://nimart.ng/category/home" },
   ]
 };
 
@@ -102,6 +93,7 @@ export default function Home() {
   const [radarOpen, setRadarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const locationButtonRef = useRef<HTMLButtonElement>(null);
   const autoLocationApplied = useRef(false);
   const isOffline = useOffline();
 
@@ -481,12 +473,13 @@ export default function Home() {
             Connect with professionals near you
           </p>
 
-          {/* White card with shadow, like the category sidebar */}
+          {/* White card with shadow */}
           <div className="bg-white/80 backdrop-blur-md rounded-lg shadow-sm border border-gray-200/50 p-4 max-w-3xl mx-auto">
             <div className="flex flex-row justify-center md:justify-start gap-3">
               {/* Location button */}
               <div className="relative flex-1 md:w-auto">
                 <button
+                  ref={locationButtonRef}
                   onClick={() => setShowLocationDropdown(!showLocationDropdown)}
                   className="w-full bg-white text-[#008751] border border-[#008751]/30 rounded-lg px-3 md:px-4 py-3 flex items-center justify-between gap-1 md:gap-2 hover:bg-green-50 transition"
                 >
@@ -504,6 +497,7 @@ export default function Home() {
                     onClose={() => setShowLocationDropdown(false)}
                     preloadedStates={states}
                     preloadedLgas={preloadedLgas}
+                    triggerRef={locationButtonRef}
                   />
                 )}
               </div>

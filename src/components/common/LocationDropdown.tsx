@@ -1,5 +1,5 @@
-// src/components/common/LocationDropdown.tsx
-import { useState } from 'react';
+import { useState, useEffect, RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, X, ChevronRight } from 'lucide-react';
 
 interface State {
@@ -19,6 +19,7 @@ interface LocationDropdownProps {
   onClose: () => void;
   preloadedStates: State[];
   preloadedLgas: Record<string, LGA[]>;
+  triggerRef?: RefObject<HTMLElement | null>;   // <-- changed to triggerRef (the button)
 }
 
 export function LocationDropdown({
@@ -28,14 +29,26 @@ export function LocationDropdown({
   onClose,
   preloadedStates,
   preloadedLgas,
+  triggerRef,
 }: LocationDropdownProps) {
   const [selectedStateId, setSelectedStateId] = useState<string>('');
   const [showLgas, setShowLgas] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  // Recalculate position whenever the dropdown opens
+  useEffect(() => {
+    if (preloadedStates.length === 0) return;
+
+    const element = triggerRef?.current;
+    if (element) {
+      const box = element.getBoundingClientRect();
+      setRect(box);
+    }
+  }, [preloadedStates, triggerRef]);
 
   const handleStateClick = (stateId: string, stateName: string) => {
     setSelectedStateId(stateId);
     setShowLgas(true);
-    // Do NOT call onSelectState here – we wait until the user picks an LGA
   };
 
   const handleLgaClick = (lgaId: string, lgaName: string) => {
@@ -63,8 +76,22 @@ export function LocationDropdown({
 
   const currentLgas = preloadedLgas[selectedStateId] || [];
 
-  return (
-    <div className="absolute right-0 mt-2 w-full sm:w-72 bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden">
+  if (!rect) return null;  // wait for position
+
+  const top = rect.bottom + window.scrollY + 6;
+  const left = rect.left + window.scrollX;
+  const buttonWidth = rect.width;
+
+  const dropdown = (
+    <div
+      className="fixed bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-200 overflow-hidden w-full sm:w-72"
+      style={{
+        top,
+        left,
+        // On mobile use full button width, on desktop let w-72 class override but keep left aligned
+        width: window.innerWidth < 640 ? buttonWidth : undefined,
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-700">
@@ -78,9 +105,7 @@ export function LocationDropdown({
       {/* Content */}
       <div className="max-h-60 overflow-y-auto">
         {!showLgas ? (
-          // States list
           <div>
-            {/* All Nigeria option */}
             <button
               onClick={handleSelectAllNigeria}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-green-50/80 transition-colors"
@@ -100,7 +125,6 @@ export function LocationDropdown({
             ))}
           </div>
         ) : (
-          // LGA list
           <div>
             <button
               onClick={handleBack}
@@ -131,5 +155,14 @@ export function LocationDropdown({
         )}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-[9998]" onClick={onClose} />
+      {/* Portal */}
+      {createPortal(dropdown, document.body)}
+    </>
   );
 }

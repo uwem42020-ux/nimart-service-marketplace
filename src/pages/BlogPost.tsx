@@ -1,20 +1,43 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';                         // ← fixed
-import { SEO } from '../components/common/SEO';                    // ← fixed
-import { NimartSpinner } from '../components/common/NimartSpinner'; // ← fixed
-import { Breadcrumbs } from '../components/common/Breadcrumbs';    // ← fixed
-import { Calendar, User, Tag, ArrowLeft, Share2, MessageCircle } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';          // ← added
+import { SEO } from '../components/common/SEO';
+import { NimartSpinner } from '../components/common/NimartSpinner';
+import { Breadcrumbs } from '../components/common/Breadcrumbs';
+import { Calendar, User, Tag, ArrowLeft, Share2, MessageCircle, Trash2, Send, CornerDownRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
+import { useState } from 'react';
+
+// ---------- Types for comments ----------
+interface Comment {
+  id: number;
+  blog_post_id: number;
+  user_id: string;
+  parent_id: number | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  profile: {
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
 
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();            // to detect admin
+  const queryClient = useQueryClient();
+  const [newComment, setNewComment] = useState('');
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyContent, setReplyContent] = useState('');
 
+  // Fetch the post
   const { data: post, isLoading } = useQuery({
     queryKey: ['blog-post', slug],
     queryFn: async () => {
@@ -31,6 +54,23 @@ export default function BlogPost() {
     enabled: !!slug,
   });
 
+  // Fetch comments for this post
+  const { data: comments, isLoading: commentsLoading } = useQuery({
+    queryKey: ['blog-comments', post?.id],
+    queryFn: async () => {
+      if (!post?.id) return [];
+      const { data, error } = await supabase
+        .from('blog_comments')
+        .select('*, profile:user_id (full_name, avatar_url)')
+        .eq('blog_post_id', post.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data as Comment[];
+    },
+    enabled: !!post?.id,
+  });
+
+  // Related posts
   const { data: relatedPosts } = useQuery({
     queryKey: ['related-posts', post?.category, post?.id],
     queryFn: async () => {
@@ -61,6 +101,69 @@ export default function BlogPost() {
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl).then(() => toast.success('Link copied!'));
   };
+
+  // ---------- Comment actions ----------
+  const submitComment = async () => {
+    if (!user) {
+      toast.error('Please sign in to comment');
+      navigate('/auth/signin');
+      return;
+    }
+    if (!newComment.trim()) return;
+    const { error } = await supabase.from('blog_comments').insert({
+      blog_post_id: post.id,
+      user_id: user.id,
+      content: newComment.trim(),
+      parent_id: null,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Comment added');
+      setNewComment('');
+      queryClient.invalidateQueries({ queryKey: ['blog-comments', post.id] });
+    }
+  };
+
+  const submitReply = async (parentId: number) => {
+    if (!user) {
+      toast.error('Please sign in to reply');
+      navigate('/auth/signin');
+      return;
+    }
+    if (!replyContent.trim()) return;
+    const { error } = await supabase.from('blog_comments').insert({
+      blog_post_id: post.id,
+      user_id: user.id,
+      content: replyContent.trim(),
+      parent_id: parentId,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Reply added');
+      setReplyContent('');
+      setReplyingTo(null);
+      queryClient.invalidateQueries({ queryKey: ['blog-comments', post.id] });
+    }
+  };
+
+  const deleteComment = async (commentId: number) => {
+    if (!confirm('Delete this comment?')) return;
+    const { error } = await supabase.from('blog_comments').delete().eq('id', commentId);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Comment deleted');
+      queryClient.invalidateQueries({ queryKey: ['blog-comments', post.id] });
+    }
+  };
+
+  // Organise comments: top-level vs replies
+  const topLevelComments = comments?.filter(c => !c.parent_id) || [];
+  const getReplies = (parentId: number) => comments?.filter(c => c.parent_id === parentId) || [];
+
+  const isAdmin = profile?.role === 'admin';
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><NimartSpinner size="lg" /></div>;
@@ -124,7 +227,6 @@ export default function BlogPost() {
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumbs */}
         <Breadcrumbs
           items={[
             { label: 'Home', to: '/' },
@@ -160,7 +262,6 @@ export default function BlogPost() {
               )}
             </div>
 
-            {/* Featured image */}
             {post.featured_image && (
               <img
                 src={post.featured_image}
@@ -218,6 +319,147 @@ export default function BlogPost() {
             </a>
           </div>
         </article>
+
+        {/* ===== COMMENTS SECTION ===== */}
+        <section className="mt-12 pt-10 border-t border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Comments</h2>
+
+          {/* Comment form */}
+          {user ? (
+            <div className="mb-8">
+              <textarea
+                rows={3}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Share your thoughts..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
+              />
+              <button
+                onClick={submitComment}
+                className="mt-2 flex items-center gap-2 bg-primary-600 text-white px-5 py-2 rounded-xl hover:bg-primary-700 transition font-medium"
+              >
+                <Send className="h-4 w-4" /> Post Comment
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl p-4 mb-8 text-center">
+              <p className="text-gray-600">Please <Link to="/auth/signin" className="text-primary-600 font-medium">sign in</Link> to leave a comment.</p>
+            </div>
+          )}
+
+          {/* Comments list */}
+          {commentsLoading ? (
+            <div className="flex justify-center py-8"><NimartSpinner size="sm" /></div>
+          ) : (
+            <div className="space-y-6">
+              {topLevelComments.map((comment) => (
+                <div key={comment.id}>
+                  {/* Top-level comment */}
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold flex-shrink-0">
+                      {comment.profile?.full_name?.[0] || 'U'}
+                    </div>
+                    <div className="flex-1">
+                      <div className="bg-gray-50 rounded-2xl p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-gray-900 text-sm">
+                            {comment.profile?.full_name || 'Anonymous'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => deleteComment(comment.id)}
+                                className="text-gray-400 hover:text-red-500 transition"
+                                title="Delete comment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{comment.content}</p>
+                      </div>
+                      <div className="ml-2 mt-1">
+                        <button
+                          onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                          className="text-xs text-primary-600 font-medium hover:underline flex items-center gap-1"
+                        >
+                          <CornerDownRight className="h-3 w-3" /> Reply
+                        </button>
+                      </div>
+
+                      {/* Reply form */}
+                      {replyingTo === comment.id && (
+                        <div className="mt-3 ml-4">
+                          <textarea
+                            rows={2}
+                            value={replyContent}
+                            onChange={(e) => setReplyContent(e.target.value)}
+                            placeholder="Write a reply..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
+                          />
+                          <div className="flex gap-2 mt-1">
+                            <button
+                              onClick={() => submitReply(comment.id)}
+                              className="text-xs bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700"
+                            >
+                              Reply
+                            </button>
+                            <button
+                              onClick={() => setReplyingTo(null)}
+                              className="text-xs text-gray-500 hover:underline"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Replies */}
+                      {getReplies(comment.id).map((reply) => (
+                        <div key={reply.id} className="ml-8 mt-3 flex gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold flex-shrink-0">
+                            {reply.profile?.full_name?.[0] || 'U'}
+                          </div>
+                          <div className="flex-1">
+                            <div className="bg-gray-100 rounded-2xl p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-gray-900 text-sm">
+                                  {reply.profile?.full_name || 'Anonymous'}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(reply.created_at).toLocaleDateString()}
+                                  </span>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteComment(reply.id)}
+                                      className="text-gray-400 hover:text-red-500 transition"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-gray-700 text-sm whitespace-pre-wrap">{reply.content}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {topLevelComments.length === 0 && !commentsLoading && (
+                <p className="text-gray-500 text-center py-8">No comments yet. Be the first to share your thoughts!</p>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* Related Posts */}
         {relatedPosts && relatedPosts.length > 0 && (

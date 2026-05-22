@@ -28,15 +28,16 @@ interface NavItem {
 
 export function MobileBottomNav() {
   const { profile } = useAuth();
-  const { markBookingsAsSeen, markMessagesAsSeen, markSystemAsSeen } = useNotifications();
+  const { counts, markBookingsAsSeen, markMessagesAsSeen, markSystemAsSeen } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [visible, setVisible] = useState(true);
   const [tierPanelOpen, setTierPanelOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const footerObserverRef = useRef<IntersectionObserver | null>(null);
-  
+
+  // Listen for tier panel open/close
   useEffect(() => {
     const handlePanelOpen = () => setTierPanelOpen(true);
     const handlePanelClose = () => setTierPanelOpen(false);
@@ -47,7 +48,8 @@ export function MobileBottomNav() {
       window.removeEventListener('tierPanelClosed', handlePanelClose);
     };
   }, []);
-  
+
+  // Hide when footer is visible
   useEffect(() => {
     const footer = document.querySelector('footer');
     if (!footer) return;
@@ -58,7 +60,7 @@ export function MobileBottomNav() {
     footerObserverRef.current.observe(footer);
     return () => footerObserverRef.current?.disconnect();
   }, []);
-  
+
   const handleNavigation = async (
     id: string,
     navigateTo: string,
@@ -72,14 +74,20 @@ export function MobileBottomNav() {
     }
     setTimeout(() => setLoadingId(null), 500);
   };
-  
+
   const getLink = (roleSuffix: string) => {
     if (!profile) return '/auth/signin';
     return profile.role === 'provider' ? `/provider/${roleSuffix}` : `/customer/${roleSuffix}`;
   };
-  
+
   const isActive = (path: string) => location.pathname.startsWith(path);
-  
+
+  // Compute badge visibility (same logic as Header)
+  const isOnMessagesPage = location.pathname.includes('/messages');
+  const showMessagesBadge = !isOnMessagesPage && counts.messages > 0;
+  const showBookingsBadge = counts.bookings > 0;   // always show if present
+  const showSystemBadge = counts.system > 0;
+
   const navItems: NavItem[] = [
     {
       id: 'home',
@@ -120,9 +128,9 @@ export function MobileBottomNav() {
       onClick: () => navigate('/map'),
     },
   ];
-  
+
   if (tierPanelOpen) return null;
-  
+
   return (
     <div
       className={cn(
@@ -140,6 +148,13 @@ export function MobileBottomNav() {
             item.id === 'map' ? '/map' :
             `/${profile?.role}/${item.id}`
           );
+
+          // Determine badge count for this item
+          const badge = item.id === 'bookings' && showBookingsBadge ? counts.bookings
+                     : item.id === 'messages' && showMessagesBadge ? counts.messages
+                     : item.id === 'alerts' && showSystemBadge ? counts.system
+                     : null;
+
           return (
             <button
               key={item.id}
@@ -157,7 +172,11 @@ export function MobileBottomNav() {
             >
               <div className="relative">
                 {item.icon}
-                {/* No badges */}
+                {badge !== null && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
               </div>
               <span className="text-[10px] mt-1 leading-tight">{item.label}</span>
             </button>
