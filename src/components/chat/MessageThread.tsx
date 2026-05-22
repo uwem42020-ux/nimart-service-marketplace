@@ -89,7 +89,10 @@ export function MessageThread() {
     enabled: !!threadId && !!user,
   });
 
-  useEffect(() => { scrollToBottom(); }, [data?.messages, typingUser]);
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [data?.messages, typingUser]);
 
   const startFakeProgress = () => {
     setUploadProgress(0);
@@ -102,7 +105,7 @@ export function MessageThread() {
     setTimeout(() => setUploadProgress(0), 500);
   };
 
-  // Realtime
+  // Realtime subscriptions
   useEffect(() => {
     if (!threadId) return;
     const channel = supabase
@@ -142,6 +145,7 @@ export function MessageThread() {
     };
   }, [threadId, user?.id]);
 
+  // Typing broadcast
   useEffect(() => {
     if (!threadId || !newMessage.trim()) return;
     const channel = supabase.channel(`typing-${threadId}`);
@@ -158,7 +162,10 @@ export function MessageThread() {
       .upload(fileName, attachment);
     stopFakeProgress();
     setUploading(false);
-    if (error) { toast.error('Upload failed'); return null; }
+    if (error) {
+      toast.error('Upload failed');
+      return null;
+    }
     const { data: publicUrl } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
     return publicUrl.publicUrl;
   };
@@ -198,7 +205,11 @@ export function MessageThread() {
       queryClient.invalidateQueries({ queryKey: ['customer-threads', data.thread.customer_id] });
       await refetch();
       scrollToBottom();
-    } catch (err) { console.error(err); } finally { setSending(false); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
   };
 
   const deleteMessage = async (msgId: string) => {
@@ -235,25 +246,40 @@ export function MessageThread() {
     e.currentTarget.addEventListener('touchmove', () => clearTimeout(timer), { once: true });
   };
 
-  // Header actions
+  // Safely extract other participant details
   const otherRole = data?.otherParticipant?.role;
-  const otherId = data?.thread.provider_id === user?.id ? data.thread.customer_id : data.thread.provider_id;
+  const otherId = data?.thread?.provider_id === user?.id
+    ? data?.thread?.customer_id
+    : data?.thread?.provider_id;
 
   const bookAction = () => {
-    if (otherRole === 'provider') window.open(`/provider/${otherId}?book=true`, '_blank');
+    if (otherRole === 'provider' && otherId) window.open(`/provider/${otherId}?book=true`, '_blank');
     setHeaderMenuOpen(false);
   };
   const reportAction = () => {
-    navigate(`/report?target=${otherId}`);
+    if (otherId) navigate(`/report?target=${otherId}`);
     setHeaderMenuOpen(false);
   };
   const rateAction = () => {
-    if (otherRole === 'provider') window.open(`/provider/${otherId}?review=true`, '_blank');
+    if (otherRole === 'provider' && otherId) window.open(`/provider/${otherId}?review=true`, '_blank');
     setHeaderMenuOpen(false);
   };
 
-  if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin h-10 w-10 border-2 border-primary-600 border-t-transparent rounded-full" /></div>;
-  if (!data) return <div className="text-center py-8 text-gray-500">Conversation not found.</div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin h-10 w-10 border-2 border-primary-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!data || !data.thread) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        Conversation not found.
+      </div>
+    );
+  }
 
   const { otherParticipant, messages } = data;
 
@@ -314,7 +340,10 @@ export function MessageThread() {
               className={cn('flex group items-start', msg.sender_id === user?.id ? 'justify-end' : 'justify-start')}
               onTouchStart={(e) => handleTouchStart(e, msg)}
             >
-              <button className="hidden md:inline-flex opacity-0 group-hover:opacity-100 transition p-0.5 hover:bg-gray-200 rounded-full self-center" onClick={(e) => openContextMenu(e, msg)}>
+              <button
+                className="hidden md:inline-flex opacity-0 group-hover:opacity-100 transition p-0.5 hover:bg-gray-200 rounded-full self-center"
+                onClick={(e) => openContextMenu(e, msg)}
+              >
                 <MoreVertical className="h-4 w-4 text-gray-500" />
               </button>
 
@@ -366,6 +395,7 @@ export function MessageThread() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Attachment preview */}
       {attachment && (
         <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-t-xl mt-2">
           <Image className="h-5 w-5 text-gray-500" />
@@ -375,17 +405,32 @@ export function MessageThread() {
               <div className="h-full bg-primary-500 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
             </div>
           )}
-          <button onClick={() => setAttachment(null)} className="text-gray-400 hover:text-red-500"><XCircle className="h-5 w-5" /></button>
+          <button onClick={() => setAttachment(null)} className="text-gray-400 hover:text-red-500">
+            <XCircle className="h-5 w-5" />
+          </button>
         </div>
       )}
 
+      {/* Permanent respectful‑use notice */}
       <div className="px-4 py-1 text-[10px] text-gray-400 text-center">
         Be respectful. No abusive language.
       </div>
 
+      {/* Input */}
       <form onSubmit={sendMessage} className="mt-1 flex items-center gap-2">
-        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={(e) => setAttachment(e.target.files?.[0] || null)} />
-        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:text-primary-600 rounded-full hover:bg-gray-100 transition" title="Attach">
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*,.pdf,.doc,.docx"
+          onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2 text-gray-500 hover:text-primary-600 rounded-full hover:bg-gray-100 transition"
+          title="Attach"
+        >
           <Paperclip className="h-5 w-5" />
         </button>
         <input
@@ -396,13 +441,18 @@ export function MessageThread() {
           className="flex-1 px-4 py-3 bg-gray-100 border-0 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           disabled={sending || uploading}
         />
-        <button type="submit" disabled={sending || uploading || (!newMessage.trim() && !attachment)} className="p-3 bg-primary-600 text-white rounded-full hover:bg-primary-700 disabled:opacity-50 transition">
+        <button
+          type="submit"
+          disabled={sending || uploading || (!newMessage.trim() && !attachment)}
+          className="p-3 bg-primary-600 text-white rounded-full hover:bg-primary-700 disabled:opacity-50 transition"
+        >
           <Send className="h-5 w-5" />
         </button>
       </form>
 
+      {/* Context menu */}
       {contextMenu && (
-        <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)}>
+        <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} onContextMenu={(e) => e.preventDefault()}>
           <div className="absolute bg-white rounded-xl shadow-lg border py-2 min-w-[120px]" style={{ left: contextMenu.x, top: contextMenu.y }}>
             {contextMenu.message.sender_id === user?.id && !contextMenu.message.deleted_at && (
               <>
@@ -417,12 +467,15 @@ export function MessageThread() {
         </div>
       )}
 
+      {/* Full‑screen image viewer */}
       {selectedImage && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setSelectedImage(null)}>
           <img src={selectedImage} alt="full" className="max-w-full max-h-full object-contain" />
-          <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 p-2 bg-white/20 rounded-full text-white hover:bg-white/40"><X className="h-6 w-6" /></button>
+          <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 p-2 bg-white/20 rounded-full text-white hover:bg-white/40">
+            <X className="h-6 w-6" />
+          </button>
         </div>
       )}
     </div>
   );
-};
+}
