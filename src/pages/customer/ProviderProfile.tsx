@@ -985,6 +985,7 @@ export default function ProviderProfile() {
         onClose={() => setShowBookingModal(false)}
         providerId={id!}
         providerName={providerName}
+        providerVerified={provider?.profile?.is_verified || false}
       />
 
       {/* ChatWidget – always visible, its floating button controls open/close */}

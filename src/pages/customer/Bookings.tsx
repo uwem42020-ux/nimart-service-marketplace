@@ -5,7 +5,7 @@ import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
 import {
   Calendar, Clock, MapPin, Star, XCircle, MessageCircle,
   CheckCircle, AlertCircle, RefreshCw, ShieldAlert,
-  ChevronDown, ThumbsUp, ThumbsDown, Loader2
+  ChevronDown, ThumbsUp, ThumbsDown, Loader2, Flag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookingStatusTimeline } from '../../components/common/BookingStatusTimeline';
+import { FlagBookingModal } from '../../components/customer/FlagBookingModal';
 
 // Solid message icon (same as header)
 const SolidMessageIcon = ({ className }: { className?: string }) => (
@@ -68,6 +69,7 @@ export default function CustomerBookings() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [disputingId, setDisputingId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
+  const [flagBookingId, setFlagBookingId] = useState<string | null>(null); // <-- NEW
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['customer-bookings', user?.id, activeTab],
@@ -350,6 +352,13 @@ export default function CustomerBookings() {
                         <Star className="h-4 w-4" /> Review
                       </Link>
                     )}
+                    {/* Report Issue button */}
+                    <button
+                      onClick={() => setFlagBookingId(booking.id)}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-50 text-red-700 rounded-full hover:bg-red-100 text-sm font-medium transition active:scale-95"
+                    >
+                      <Flag className="h-4 w-4" /> Report Issue
+                    </button>
                     <Link to={`/customer/messages`}
                       className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 text-sm font-medium transition active:scale-95"
                     >
@@ -390,6 +399,15 @@ export default function CustomerBookings() {
             );
           })}
         </div>
+      )}
+
+      {/* Flag Booking Modal */}
+      {flagBookingId && (
+        <FlagBookingModal
+          isOpen={true}
+          onClose={() => setFlagBookingId(null)}
+          bookingId={flagBookingId}
+        />
       )}
     </div>
   );

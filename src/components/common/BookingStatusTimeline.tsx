@@ -1,5 +1,5 @@
 import { cn } from '../../lib/utils';
-import { Clock, CheckCircle, Loader2, Star, AlertTriangle, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, Loader2, Star, AlertTriangle, XCircle, ShieldCheck } from 'lucide-react';
 
 interface Step {
   key: string;
@@ -9,7 +9,7 @@ interface Step {
 
 const steps: Step[] = [
   { key: 'pending', label: 'Requested', icon: Clock },
-  { key: 'confirmed', label: 'Accepted', icon: CheckCircle },
+  { key: 'confirmed', label: 'Confirmed', icon: ShieldCheck },
   { key: 'in_progress', label: 'In Progress', icon: Loader2 },
   { key: 'completed', label: 'Completed', icon: CheckCircle },
   { key: 'rated', label: 'Rated', icon: Star },
@@ -89,7 +89,7 @@ export function BookingStatusTimeline({
             {idx < steps.length - 1 && (
               <div
                 className={cn(
-                  'flex-1 h-1 -mt-4', // align with circle center
+                  'flex-1 h-1 -mt-4',
                   isActive && idx < statusIndex ? 'bg-primary-500' : 'bg-gray-200'
                 )}
               />

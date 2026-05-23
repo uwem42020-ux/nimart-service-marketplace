@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Users, UserCheck, UserX, MessageCircle, Mail, Shield, Calendar } from 'lucide-react';
+import {
+  Users, UserCheck, UserX, MessageCircle, Mail, Shield, Calendar,
+  AlertTriangle, Flag, CheckCircle, XCircle
+} from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 interface Stats {
@@ -11,6 +14,10 @@ interface Stats {
   bannedUsers: number;
   openChats: number;
   totalBookings: number;
+  disputedBookings: number;
+  activeStrikes: number;
+  pendingVerifications: number;
+  flaggedBookings: number;
 }
 
 export default function AdminDashboard() {
@@ -21,6 +28,10 @@ export default function AdminDashboard() {
     bannedUsers: 0,
     openChats: 0,
     totalBookings: 0,
+    disputedBookings: 0,
+    activeStrikes: 0,
+    pendingVerifications: 0,
+    flaggedBookings: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -34,13 +45,21 @@ export default function AdminDashboard() {
       providersRes,
       bannedRes,
       chatsRes,
-      bookingsRes
+      bookingsRes,
+      disputedRes,
+      strikesRes,
+      verificationsRes,
+      flagsRes,
     ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('providers').select('id', { count: 'exact', head: true }),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_banned', true),
       supabase.from('support_chats').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-      supabase.from('bookings').select('id', { count: 'exact', head: true })
+      supabase.from('bookings').select('id', { count: 'exact', head: true }),
+      supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('customer_confirmation_status', 'disputed'),
+      supabase.from('provider_strikes').select('id', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()),
+      supabase.from('verification_documents').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('booking_flags').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
 
     setStats({
@@ -50,6 +69,10 @@ export default function AdminDashboard() {
       bannedUsers: bannedRes.count || 0,
       openChats: chatsRes.count || 0,
       totalBookings: bookingsRes.count || 0,
+      disputedBookings: disputedRes.count || 0,
+      activeStrikes: strikesRes.count || 0,
+      pendingVerifications: verificationsRes.count || 0,
+      flaggedBookings: flagsRes.count || 0,
     });
     setLoading(false);
   }
@@ -64,7 +87,7 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <>
-          {/* Stats Grid */}
+          {/* Stats Grid - Row 1 */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <Users className="h-8 w-8 text-primary-600 mb-2" />
@@ -98,8 +121,32 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Stats Grid - Row 2 (Trust & Safety) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <AlertTriangle className="h-8 w-8 text-orange-600 mb-2" />
+              <p className="text-2xl font-bold">{stats.disputedBookings}</p>
+              <p className="text-sm text-gray-500">Disputed</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <XCircle className="h-8 w-8 text-red-600 mb-2" />
+              <p className="text-2xl font-bold">{stats.activeStrikes}</p>
+              <p className="text-sm text-gray-500">Active Strikes</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <CheckCircle className="h-8 w-8 text-blue-600 mb-2" />
+              <p className="text-2xl font-bold">{stats.pendingVerifications}</p>
+              <p className="text-sm text-gray-500">Pending Verifications</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <Flag className="h-8 w-8 text-pink-600 mb-2" />
+              <p className="text-2xl font-bold">{stats.flaggedBookings}</p>
+              <p className="text-sm text-gray-500">Flagged Bookings</p>
+            </div>
+          </div>
+
           {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <Link to="/admin/users" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
               <Users className="h-8 w-8 text-primary-600 mb-4" />
               <h3 className="font-semibold text-gray-900">Manage Users</h3>
@@ -115,10 +162,25 @@ export default function AdminDashboard() {
               <h3 className="font-semibold text-gray-900">Bulk Email</h3>
               <p className="text-sm text-gray-500">Send emails to all users</p>
             </Link>
-            <Link to="/admin/settings" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
-              <Shield className="h-8 w-8 text-primary-600 mb-4" />
-              <h3 className="font-semibold text-gray-900">Settings</h3>
-              <p className="text-sm text-gray-500">Platform configuration</p>
+          </div>
+
+          {/* Trust & Safety Quick Actions */}
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Trust & Safety</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link to="/admin/reports" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+              <AlertTriangle className="h-8 w-8 text-orange-600 mb-4" />
+              <h3 className="font-semibold text-gray-900">Dispute Manager</h3>
+              <p className="text-sm text-gray-500">Resolve customer‑provider disputes</p>
+            </Link>
+            <Link to="/admin/verifications" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+              <Shield className="h-8 w-8 text-blue-600 mb-4" />
+              <h3 className="font-semibold text-gray-900">Verifications</h3>
+              <p className="text-sm text-gray-500">Review provider documents</p>
+            </Link>
+            <Link to="/admin/flags" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+              <Flag className="h-8 w-8 text-pink-600 mb-4" />
+              <h3 className="font-semibold text-gray-900">Booking Flags</h3>
+              <p className="text-sm text-gray-500">Review flagged bookings</p>
             </Link>
           </div>
         </>

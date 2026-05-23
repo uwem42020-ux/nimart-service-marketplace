@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { X, Calendar, Clock, MapPin, FileText, Loader2 } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, FileText, Loader2, Shield, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface BookingFormModalProps {
@@ -10,11 +10,14 @@ interface BookingFormModalProps {
   onClose: () => void;
   providerId: string;
   providerName: string;
+  providerVerified: boolean;
 }
 
-export function BookingFormModal({ isOpen, onClose, providerId, providerName }: BookingFormModalProps) {
+export function BookingFormModal({ isOpen, onClose, providerId, providerName, providerVerified }: BookingFormModalProps) {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsWarning, setGpsWarning] = useState(false);
   const [formData, setFormData] = useState({
     serviceName: '',
     bookingDate: format(new Date(), 'yyyy-MM-dd'),
@@ -23,6 +26,20 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
     location: profile?.lga_name || '',
     specialInstructions: '',
   });
+
+  // Get GPS location when modal opens
+  useEffect(() => {
+    if (isOpen && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          toast.error('Please enable location for safety verification');
+        }
+      );
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -33,8 +50,27 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
       return;
     }
 
+    // Check GPS vs claimed location
+    if (gpsCoords && formData.location) {
+      // Simple warning if GPS is available but location field differs from profile
+      if (formData.location !== profile?.lga_name && formData.location !== profile?.address_area) {
+        setGpsWarning(true);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
+      // Basic VPN check (you can enhance with ipapi.co or similar)
+      let vpnDetected = false;
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        const ipData = await ipRes.json();
+        vpnDetected = ipData?.proxy === true || ipData?.hosting === true || false;
+      } catch {}
+
+      const receiptToken = crypto.randomUUID();
+
       const { error } = await supabase.from('bookings').insert({
         customer_id: user.id,
         provider_id: providerId,
@@ -45,6 +81,10 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
         location: formData.location,
         special_instructions: formData.specialInstructions,
         status: 'pending',
+        customer_gps_lat: gpsCoords?.lat || null,
+        customer_gps_lng: gpsCoords?.lng || null,
+        vpn_detected: vpnDetected,
+        receipt_token: receiptToken,
       });
 
       if (error) throw error;
@@ -60,46 +100,74 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Book Service</h2>
             <p className="text-sm text-gray-500 mt-0.5">{providerName}</p>
+            {!providerVerified && (
+              <div className="flex items-center gap-1 mt-2 bg-blue-50 text-blue-700 text-xs px-3 py-1.5 rounded-lg">
+                <Shield className="h-3.5 w-3.5" />
+                Provider not yet verified — your booking is still protected
+              </div>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition"
-          >
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition">
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        {/* GPS Warning Modal */}
+        {gpsWarning && (
+          <div className="p-4 bg-yellow-50 border-b border-yellow-200">
+            <div className="flex items-start gap-2">
+              <Navigation className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-yellow-800">Location Mismatch</p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  Your current GPS location appears different from your booking location. 
+                  This is recorded for safety. Please confirm you're booking for the correct location.
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => { setGpsWarning(false); handleSubmit(new Event('submit') as any); }}
+                    className="px-3 py-1.5 bg-yellow-600 text-white text-xs rounded-lg hover:bg-yellow-700"
+                  >
+                    Confirm Location
+                  </button>
+                  <button
+                    onClick={() => setGpsWarning(false)}
+                    className="px-3 py-1.5 border border-yellow-300 text-xs rounded-lg hover:bg-yellow-100"
+                  >
+                    Edit Details
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Service Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Service Needed <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                required
-                value={formData.serviceName}
-                onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400"
-                placeholder="e.g., Engine repair, Hair styling..."
-              />
-            </div>
+            <input
+              type="text"
+              required
+              value={formData.serviceName}
+              onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400"
+              placeholder="e.g., Engine repair, Hair styling..."
+            />
           </div>
 
-          {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                Date
+                <Calendar className="inline h-4 w-4 mr-1" /> Date
               </label>
               <input
                 type="date"
@@ -112,8 +180,7 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <Clock className="inline h-4 w-4 mr-1" />
-                Time
+                <Clock className="inline h-4 w-4 mr-1" /> Time
               </label>
               <input
                 type="time"
@@ -125,11 +192,8 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
             </div>
           </div>
 
-          {/* Duration */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Duration
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Duration</label>
             <select
               value={formData.duration}
               onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
@@ -140,14 +204,14 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
               <option value={90}>1.5 hours</option>
               <option value={120}>2 hours</option>
               <option value={180}>3 hours</option>
+              <option value={300}>5 hours (multi-day)</option>
+              <option value={480}>8 hours (full day)</option>
             </select>
           </div>
 
-          {/* Location */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              <MapPin className="inline h-4 w-4 mr-1" />
-              Location <span className="text-red-500">*</span>
+              <MapPin className="inline h-4 w-4 mr-1" /> Location <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -157,13 +221,16 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400"
               placeholder="Your address or area"
             />
+            {gpsCoords && (
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <Navigation className="h-3 w-3" /> Location verified for safety
+              </p>
+            )}
           </div>
 
-          {/* Special Instructions */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              <FileText className="inline h-4 w-4 mr-1" />
-              Special Instructions
+              <FileText className="inline h-4 w-4 mr-1" /> Special Instructions
             </label>
             <textarea
               value={formData.specialInstructions}
@@ -174,7 +241,15 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
             />
           </div>
 
-          {/* Actions */}
+          {/* Safety notice */}
+          <div className="bg-yellow-50 rounded-xl p-3 flex items-start gap-2">
+            <Shield className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-yellow-800">
+              <strong>Safety tip:</strong> Do not pay in full before the work is done. 
+              For multi-day jobs, agree on milestone payments. If the provider demands full upfront payment, report it.
+            </p>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -202,4 +277,4 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
       </div>
     </div>
   );
-}
+};

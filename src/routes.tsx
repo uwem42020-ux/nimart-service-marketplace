@@ -46,6 +46,7 @@ const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
 const Careers = lazy(() => import('./pages/shared/Careers'));
 const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
+const BookingReceipt = lazy(() => import('./pages/shared/BookingReceipt'));
 const NotFound = lazy(() => import('./pages/shared/NotFound'));
 
 // Admin pages
@@ -58,6 +59,7 @@ const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const AdminCoins = lazy(() => import('./pages/admin/Coins'));
 const AdminPayments = lazy(() => import('./pages/admin/Payments'));
 const AdminBlog = lazy(() => import('./pages/admin/Blog'));
+const AdminFlags = lazy(() => import('./pages/admin/Flags'));   // ← NEW
 
 // Provider portfolio page (customer view)
 const CustomerProviderPortfolio = lazy(() => import('./pages/customer/ProviderPortfolio'));
@@ -77,6 +79,7 @@ export const router = createBrowserRouter([
       { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><Blog /></Suspense> },
       { path: 'blog/:slug', element: <Suspense fallback={<LoadingSkeleton />}><BlogPost /></Suspense> },
       { path: 'careers', element: <Suspense fallback={<LoadingSkeleton />}><Careers /></Suspense> },
+      { path: 'receipt/:token', element: <Suspense fallback={<LoadingSkeleton />}><BookingReceipt /></Suspense> },
       { path: 'terms', element: <Suspense fallback={<LoadingSkeleton />}><Terms /></Suspense> },
       { path: 'privacy', element: <Suspense fallback={<LoadingSkeleton />}><Privacy /></Suspense> },
       { path: 'cookies', element: <Suspense fallback={<LoadingSkeleton />}><Cookies /></Suspense> },
@@ -151,6 +154,7 @@ export const router = createBrowserRouter([
       { path: 'coins', element: <Suspense fallback={<LoadingSkeleton />}><AdminCoins /></Suspense> },
       { path: 'payments', element: <Suspense fallback={<LoadingSkeleton />}><AdminPayments /></Suspense> },
       { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><AdminBlog /></Suspense> },
+      { path: 'flags', element: <Suspense fallback={<LoadingSkeleton />}><AdminFlags /></Suspense> },   // ← NEW
     ],
   },
 ]);
