@@ -1,12 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { format } from 'date-fns';
-import { Calendar, Clock, MapPin, Star, XCircle } from 'lucide-react';
+import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
+import {
+  Calendar, Clock, MapPin, Star, XCircle, MessageCircle,
+  CheckCircle, AlertCircle, RefreshCw, ShieldAlert,
+  ChevronDown, ThumbsUp, ThumbsDown, Loader2
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { BookingStatusTimeline } from '../../components/common/BookingStatusTimeline';
+
+// Solid message icon (same as header)
+const SolidMessageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+  </svg>
+);
 
 interface Booking {
   id: string;
@@ -16,206 +29,366 @@ interface Booking {
   booking_date: string;
   booking_time: string;
   duration_minutes: number;
+  price: number | null;
   location: string;
   special_instructions: string | null;
   status: string;
   created_at: string;
-  provider?: {
-    business_name: string | null;
-    profile: {
-      full_name: string | null;
-    } | null;
-  };
+  provider_name: string | null;
+  provider_avatar: string | null;
+  provider_business: string | null;
+  customer_confirmation_status: string;
+  dispute_reason: string | null;
 }
+
+const tabs = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  confirmed: 'bg-blue-100 text-blue-800 border-blue-200',
+  in_progress: 'bg-purple-100 text-purple-800 border-purple-200',
+  completed: 'bg-green-100 text-green-800 border-green-200',
+  cancelled_by_customer: 'bg-red-100 text-red-800 border-red-200',
+  cancelled_by_provider: 'bg-red-100 text-red-800 border-red-200',
+  no_show: 'bg-gray-100 text-gray-800 border-gray-200',
+};
 
 export default function CustomerBookings() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('all');
+  const [expandedBooking, setExpandedBooking] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [disputingId, setDisputingId] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState('');
 
-  useEffect(() => {
-    if (user) fetchBookings();
-  }, [user, filterStatus]);
-
-  async function fetchBookings() {
-    setLoading(true);
-    try {
+  const { data: bookings, isLoading } = useQuery({
+    queryKey: ['customer-bookings', user?.id, activeTab],
+    queryFn: async () => {
+      if (!user) return [];
       let query = supabase
         .from('bookings')
         .select('*')
-        .eq('customer_id', user!.id)
+        .eq('customer_id', user.id)
         .order('booking_date', { ascending: true })
         .order('booking_time', { ascending: true });
 
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
+      if (activeTab === 'cancelled') {
+        query = query.in('status', ['cancelled_by_customer', 'cancelled_by_provider']);
+      } else if (activeTab !== 'all') {
+        query = query.eq('status', activeTab);
       }
 
       const { data: bookingsData, error } = await query;
-      if (error) throw error;
-      if (!bookingsData || bookingsData.length === 0) {
-        setBookings([]);
-        setLoading(false);
-        return;
-      }
+      if (error || !bookingsData?.length) return [];
 
-      // Get unique provider IDs
       const providerIds = [...new Set(bookingsData.map(b => b.provider_id))];
+      const [{ data: providers }, { data: profiles }] = await Promise.all([
+        supabase.from('providers').select('id, business_name').in('id', providerIds),
+        supabase.from('profiles').select('id, full_name, avatar_url').in('id', providerIds),
+      ]);
 
-      // Fetch provider details (two separate queries – no nested joins)
-      const { data: providers } = await supabase
-        .from('providers')
-        .select('id, business_name')
-        .in('id', providerIds);
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      const providerMap = new Map(providers?.map(p => [p.id, p]) || []);
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', providerIds);
-
-      // Create provider lookup map
-      const providerMap = new Map();
-      providers?.forEach(p => {
-        const profile = profiles?.find(prof => prof.id === p.id);
-        providerMap.set(p.id, {
-          business_name: p.business_name,
-          profile: { full_name: profile?.full_name || null },
-        });
-      });
-
-      // Combine
-      const bookingsWithProviders = bookingsData.map(booking => ({
+      return bookingsData.map(booking => ({
         ...booking,
-        provider: providerMap.get(booking.provider_id) || null,
-      }));
+        provider_name: profileMap.get(booking.provider_id)?.full_name || null,
+        provider_avatar: profileMap.get(booking.provider_id)?.avatar_url || null,
+        provider_business: providerMap.get(booking.provider_id)?.business_name || null,
+      })) as Booking[];
+    },
+    enabled: !!user,
+    staleTime: 1000 * 30,
+  });
 
-      setBookings(bookingsWithProviders);
-    } catch (error: any) {
-      console.error('Error fetching bookings:', error);
-      toast.error('Failed to load bookings');
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Real-time
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('customer-bookings-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `customer_id=eq.${user.id}` },
+        () => queryClient.invalidateQueries({ queryKey: ['customer-bookings', user.id] })
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel).catch(console.warn); };
+  }, [user, queryClient]);
 
-  async function cancelBooking(bookingId: string) {
-    if (!confirm('Are you sure you want to cancel this booking?')) return;
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled_by_customer' })
-        .eq('id', bookingId);
+  const counts = bookings ? {
+    all: bookings.length,
+    pending: bookings.filter(b => b.status === 'pending').length,
+    confirmed: bookings.filter(b => b.status === 'confirmed').length,
+    in_progress: bookings.filter(b => b.status === 'in_progress').length,
+    completed: bookings.filter(b => b.status === 'completed').length,
+    cancelled: bookings.filter(b => b.status.startsWith('cancelled')).length,
+  } : {};
 
-      if (error) throw error;
+  const handleCancel = async (bookingId: string) => {
+    if (!confirm('Cancel this booking?')) return;
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled_by_customer', cancelled_at: new Date().toISOString(), cancelled_by: user?.id })
+      .eq('id', bookingId);
+    if (error) toast.error(error.message);
+    else {
       toast.success('Booking cancelled');
-      fetchBookings();
-    } catch (error: any) {
-      toast.error(error.message);
+      queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
     }
-  }
-
-  const statusColors: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    in_progress: 'bg-purple-100 text-purple-800',
-    completed: 'bg-green-100 text-green-800',
-    cancelled_by_customer: 'bg-red-100 text-red-800',
-    cancelled_by_provider: 'bg-red-100 text-red-800',
-    no_show: 'bg-gray-100 text-gray-800',
   };
 
+  const handleConfirmCompletion = async (bookingId: string) => {
+    setConfirmingId(bookingId);
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        customer_confirmed_at: new Date().toISOString(),
+        customer_confirmation_status: 'confirmed'
+      })
+      .eq('id', bookingId);
+    setConfirmingId(null);
+    if (error) toast.error(error.message);
+    else {
+      toast.success('Thank you for confirming!');
+      queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
+    }
+  };
+
+  const handleDispute = async (bookingId: string) => {
+    if (!disputeReason.trim()) {
+      toast.error('Please provide a reason for the dispute');
+      return;
+    }
+    setDisputingId(bookingId);
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        customer_confirmation_status: 'disputed',
+        dispute_reason: disputeReason.trim()
+      })
+      .eq('id', bookingId);
+    setDisputingId(null);
+    setDisputeReason('');
+    if (error) toast.error(error.message);
+    else {
+      toast.success('Dispute submitted. We will review it shortly.');
+      queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
+    }
+  };
+
+  const formatBookingDate = (dateStr: string) => {
+    const date = parseISO(dateStr);
+    if (isToday(date)) return `Today, ${format(date, 'MMM d')}`;
+    if (isTomorrow(date)) return `Tomorrow, ${format(date, 'MMM d')}`;
+    if (isThisWeek(date, { weekStartsOn: 1 })) return format(date, 'EEEE, MMM d');
+    return format(date, 'MMM d, yyyy');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Bookings</h1>
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-4" />
+              <div className="h-6 bg-gray-200 rounded w-1/2 mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg"
-        >
-          <option value="all">All Bookings</option>
-          <option value="pending">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled_by_customer">Cancelled</option>
-        </select>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">My Bookings</h1>
+
+      {/* Pill‑shaped solid filter tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition',
+              activeTab === tab.key
+                ? 'bg-primary-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            )}
+          >
+            {tab.label}
+            {counts?.[tab.key as keyof typeof counts] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-white/20 text-white rounded-full">
+                {counts[tab.key as keyof typeof counts]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <NimartSpinner size="md" />
-        </div>
-      ) : bookings.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-gray-500">No bookings found.</p>
+      {!bookings?.length ? (
+        <div className="text-center py-16 bg-gray-50 rounded-2xl">
+          <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+          <h2 className="mt-4 text-lg font-semibold text-gray-700">No bookings found</h2>
+          <p className="mt-2 text-gray-500">Find a service provider and make your first booking</p>
+          <Link
+            to="/search"
+            className="mt-4 inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 transition font-medium"
+          >
+            Find Providers
+          </Link>
         </div>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking) => (
-            <div key={booking.id} className="bg-white rounded-lg shadow-sm border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-sm font-mono text-gray-500">{booking.booking_number}</span>
-                    <span className={cn('px-2 py-1 rounded-full text-xs font-medium', statusColors[booking.status])}>
-                      {booking.status.replace(/_/g, ' ')}
-                    </span>
+          {bookings.map(booking => {
+            const providerDisplayName = booking.provider_business || booking.provider_name || 'Unknown Provider';
+            const isPendingConfirmation = booking.status === 'completed' && booking.customer_confirmation_status === 'pending';
+            const isDisputed = booking.customer_confirmation_status === 'disputed';
+
+            return (
+              <div
+                key={booking.id}
+                className={cn(
+                  'bg-white rounded-2xl shadow-sm border p-5 hover:shadow-md transition',
+                  booking.status.startsWith('cancelled') && 'opacity-60'
+                )}
+              >
+                {/* Full‑width timeline */}
+                <BookingStatusTimeline
+                  currentStatus={booking.status}
+                  customerConfirmationStatus={booking.customer_confirmation_status}
+                  size="sm"
+                />
+
+                <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                  {/* Provider info */}
+                  <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
+                    {booking.provider_avatar ? (
+                      <img src={booking.provider_avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span className="text-primary-600 font-semibold text-lg">{providerDisplayName?.[0] || '?'}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <Link to={`/provider/${booking.provider_id}`} className="font-semibold text-gray-900 hover:text-primary-600 truncate block">
+                        {providerDisplayName}
+                      </Link>
+                      <p className="text-xs text-gray-500 truncate">{booking.service_name}</p>
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-lg">{booking.service_name}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm text-gray-600">with</span>
-                    <Link
-                      to={`/provider/${booking.provider_id}`}
-                      className="font-medium text-primary-600 hover:underline"
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-sm font-bold text-gray-800 font-mono tracking-wide">{booking.booking_number}</span>
+                      <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium border', statusColors[booking.status])}>
+                        {booking.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900">{booking.service_name}</h3>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-1"><Calendar className="h-4 w-4 text-primary-500" />{formatBookingDate(booking.booking_date)}</div>
+                      <div className="flex items-center gap-1"><Clock className="h-4 w-4 text-primary-500" />{booking.booking_time} ({booking.duration_minutes} min)</div>
+                      <div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-primary-500" />{booking.location}</div>
+                    </div>
+                    {booking.price && <p className="mt-2 text-sm font-semibold">₦{booking.price.toLocaleString()}</p>}
+                    {booking.special_instructions && (
+                      <button onClick={() => setExpandedBooking(expandedBooking === booking.id ? null : booking.id)}
+                        className="mt-2 flex items-center gap-1 text-sm text-primary-600 hover:underline">
+                        <ChevronDown className={cn('h-4 w-4 transition', expandedBooking === booking.id && 'rotate-180')} />
+                        {expandedBooking === booking.id ? 'Hide instructions' : 'View instructions'}
+                      </button>
+                    )}
+                    {expandedBooking === booking.id && booking.special_instructions && (
+                      <p className="mt-2 text-sm text-gray-500 italic bg-gray-50 rounded-lg px-3 py-1.5">"{booking.special_instructions}"</p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:w-40 flex-shrink-0">
+                    {booking.status === 'pending' && (
+                      <button onClick={() => handleCancel(booking.id)}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm font-medium transition active:scale-95">
+                        <XCircle className="h-4 w-4" /> Cancel
+                      </button>
+                    )}
+                    {isPendingConfirmation && (
+                      <>
+                        <button
+                          onClick={() => handleConfirmCompletion(booking.id)}
+                          disabled={confirmingId === booking.id}
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 disabled:opacity-50"
+                        >
+                          {confirmingId === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDisputingId(booking.id);
+                            setDisputeReason('');
+                          }}
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 text-sm font-medium transition active:scale-95"
+                        >
+                          <ThumbsDown className="h-4 w-4" /> Dispute
+                        </button>
+                      </>
+                    )}
+                    {booking.status === 'completed' && booking.customer_confirmation_status === 'confirmed' && (
+                      <Link to={`/provider/${booking.provider_id}?review=true`}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 text-sm font-medium transition active:scale-95">
+                        <Star className="h-4 w-4" /> Review
+                      </Link>
+                    )}
+                    <Link to={`/customer/messages`}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 text-sm font-medium transition active:scale-95"
                     >
-                      {booking.provider?.business_name || booking.provider?.profile?.full_name || 'Unknown Provider'}
+                      <SolidMessageIcon className="h-5 w-5" /> Chat
                     </Link>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {format(new Date(booking.booking_date), 'PPP')}
-                    </div>
-                    <div className="flex items-center">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {booking.booking_time} ({booking.duration_minutes} min)
-                    </div>
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {booking.location}
-                    </div>
-                  </div>
-                  {booking.special_instructions && (
-                    <p className="mt-2 text-sm text-gray-500 italic">"{booking.special_instructions}"</p>
-                  )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {booking.status === 'pending' && (
-                    <button
-                      onClick={() => cancelBooking(booking.id)}
-                      className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
-                      title="Cancel"
-                    >
-                      <XCircle className="h-5 w-5" />
-                    </button>
-                  )}
-                  {booking.status === 'completed' && (
-                    <Link
-                      to={`/provider/${booking.provider_id}?review=true`}
-                      className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 text-sm"
-                    >
-                      <Star className="h-4 w-4" />
-                      Leave Review
-                    </Link>
-                  )}
-                </div>
+                {/* Dispute modal inline */}
+                {disputingId === booking.id && (
+                  <div className="mt-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                    <h4 className="font-semibold text-orange-800 mb-2">Why are you disputing?</h4>
+                    <textarea
+                      rows={2}
+                      className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      placeholder="e.g., Provider did not show up, poor work quality..."
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleDispute(booking.id)}
+                        disabled={disputingId === booking.id}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-full text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+                      >
+                        Submit Dispute
+                      </button>
+                      <button
+                        onClick={() => setDisputingId(null)}
+                        className="px-4 py-2 border border-gray-300 rounded-full text-sm hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

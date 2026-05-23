@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { X, Calendar, Clock, MapPin, FileText } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface BookingFormModalProps {
@@ -59,31 +59,45 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Book {providerName}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Book Service</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{providerName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Service Name */}
           <div>
-            <label className="block text-sm font-medium mb-1">Service Needed</label>
-            <input
-              type="text"
-              required
-              value={formData.serviceName}
-              onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-              placeholder="e.g., Engine repair"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Service Needed <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={formData.serviceName}
+                onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400"
+                placeholder="e.g., Engine repair, Hair styling..."
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 <Calendar className="inline h-4 w-4 mr-1" />
                 Date
               </label>
@@ -93,11 +107,11 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
                 min={format(new Date(), 'yyyy-MM-dd')}
                 value={formData.bookingDate}
                 onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 <Clock className="inline h-4 w-4 mr-1" />
                 Time
               </label>
@@ -106,17 +120,20 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
                 required
                 value={formData.bookingTime}
                 onChange={(e) => setFormData({ ...formData, bookingTime: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900"
               />
             </div>
           </div>
 
+          {/* Duration */}
           <div>
-            <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Duration
+            </label>
             <select
               value={formData.duration}
               onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900"
             >
               <option value={30}>30 minutes</option>
               <option value={60}>1 hour</option>
@@ -126,49 +143,59 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName }: 
             </select>
           </div>
 
+          {/* Location */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <MapPin className="inline h-4 w-4 mr-1" />
-              Location
+              Location <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               required
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400"
               placeholder="Your address or area"
             />
           </div>
 
+          {/* Special Instructions */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <FileText className="inline h-4 w-4 mr-1" />
-              Special Instructions (optional)
+              Special Instructions
             </label>
             <textarea
               value={formData.specialInstructions}
               onChange={(e) => setFormData({ ...formData, specialInstructions: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition text-gray-900 placeholder-gray-400 resize-none"
               placeholder="Any additional details..."
             />
           </div>
 
+          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? 'Sending...' : 'Confirm Booking'}
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Booking...
+                </>
+              ) : (
+                'Confirm Booking'
+              )}
             </button>
           </div>
         </form>

@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { format } from 'date-fns';
-import { Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
+import {
+  Calendar, Clock, MapPin, CheckCircle, XCircle, MessageCircle, Phone,
+  AlertCircle, RefreshCw, ChevronDown, Loader2
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
+import { Link } from 'react-router-dom';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { BookingStatusTimeline } from '../../components/common/BookingStatusTimeline';
+
+// Solid message icon (same as header)
+const SolidMessageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+  </svg>
+);
 
 interface Booking {
   id: string;
@@ -15,182 +28,313 @@ interface Booking {
   booking_date: string;
   booking_time: string;
   duration_minutes: number;
+  price: number | null;
   location: string;
   special_instructions: string | null;
   status: string;
   created_at: string;
-  customer: {
-    full_name: string;
-    phone: string | null;
-    avatar_url: string | null;
-  };
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_avatar: string | null;
+  customer_confirmation_status: string;
+  dispute_reason: string | null;
 }
+
+const tabs = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  confirmed: 'bg-blue-100 text-blue-800 border-blue-200',
+  in_progress: 'bg-purple-100 text-purple-800 border-purple-200',
+  completed: 'bg-green-100 text-green-800 border-green-200',
+  cancelled_by_customer: 'bg-red-100 text-red-800 border-red-200',
+  cancelled_by_provider: 'bg-red-100 text-red-800 border-red-200',
+  no_show: 'bg-gray-100 text-gray-800 border-gray-200',
+};
 
 export default function ProviderBookings() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('all');
+  const [expandedBooking, setExpandedBooking] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) fetchBookings();
-  }, [user, filterStatus]);
-
-  async function fetchBookings() {
-    setLoading(true);
-    let query = supabase
-      .from('bookings')
-      .select(`
-        *,
-        customer:customer_id(full_name, phone, avatar_url)
-      `)
-      .eq('provider_id', user!.id)
-      .order('booking_date', { ascending: true })
-      .order('booking_time', { ascending: true });
-
-    if (filterStatus !== 'all') {
-      query = query.eq('status', filterStatus);
-    }
-
-    const { data } = await query;
-    setBookings(data || []);
-    setLoading(false);
-  }
-
-  async function updateBookingStatus(bookingId: string, newStatus: string) {
-    try {
-      const { error } = await supabase
+  const { data: bookings, isLoading } = useQuery({
+    queryKey: ['provider-bookings', user?.id, activeTab],
+    queryFn: async () => {
+      if (!user) return [];
+      let query = supabase
         .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', bookingId);
+        .select('*')
+        .eq('provider_id', user.id)
+        .order('booking_date', { ascending: true })
+        .order('booking_time', { ascending: true });
 
-      if (error) throw error;
-      toast.success(`Booking ${newStatus}`);
-      fetchBookings();
-    } catch (error: any) {
-      toast.error(error.message);
+      if (activeTab === 'cancelled') {
+        query = query.in('status', ['cancelled_by_customer', 'cancelled_by_provider']);
+      } else if (activeTab !== 'all') {
+        query = query.eq('status', activeTab);
+      }
+
+      const { data: bookingsData, error } = await query;
+      if (error || !bookingsData?.length) return [];
+
+      const customerIds = [...new Set(bookingsData.map(b => b.customer_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, avatar_url')
+        .in('id', customerIds);
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+      return bookingsData.map(booking => ({
+        ...booking,
+        customer_name: profileMap.get(booking.customer_id)?.full_name || null,
+        customer_phone: profileMap.get(booking.customer_id)?.phone || null,
+        customer_avatar: profileMap.get(booking.customer_id)?.avatar_url || null,
+      })) as Booking[];
+    },
+    enabled: !!user,
+    staleTime: 1000 * 30,
+  });
+
+  // Real-time
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('provider-bookings-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${user.id}` },
+        () => queryClient.invalidateQueries({ queryKey: ['provider-bookings', user.id] })
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel).catch(console.warn); };
+  }, [user, queryClient]);
+
+  const counts = bookings ? {
+    all: bookings.length,
+    pending: bookings.filter(b => b.status === 'pending').length,
+    confirmed: bookings.filter(b => b.status === 'confirmed').length,
+    in_progress: bookings.filter(b => b.status === 'in_progress').length,
+    completed: bookings.filter(b => b.status === 'completed').length,
+    cancelled: bookings.filter(b => b.status.startsWith('cancelled')).length,
+  } : {};
+
+  const updateStatus = async (bookingId: string, newStatus: string) => {
+    const updates: any = { status: newStatus };
+    if (newStatus === 'in_progress') updates.provider_started_at = new Date().toISOString();
+    if (newStatus === 'completed') updates.completed_at = new Date().toISOString();
+    if (newStatus.startsWith('cancelled')) {
+      updates.cancelled_at = new Date().toISOString();
+      updates.cancelled_by = user?.id;
     }
-  }
 
-  const statusColors: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    in_progress: 'bg-purple-100 text-purple-800',
-    completed: 'bg-green-100 text-green-800',
-    cancelled_by_customer: 'bg-red-100 text-red-800',
-    cancelled_by_provider: 'bg-red-100 text-red-800',
-    no_show: 'bg-gray-100 text-gray-800',
+    setActionLoading(bookingId);
+    const { error } = await supabase.from('bookings').update(updates).eq('id', bookingId);
+    setActionLoading(null);
+    if (error) toast.error(error.message);
+    else {
+      toast.success(`Booking ${newStatus.replace(/_/g, ' ')}`);
+      queryClient.invalidateQueries({ queryKey: ['provider-bookings', user?.id] });
+    }
   };
 
+  const formatBookingDate = (dateStr: string) => {
+    const date = parseISO(dateStr);
+    if (isToday(date)) return `Today, ${format(date, 'MMM d')}`;
+    if (isTomorrow(date)) return `Tomorrow, ${format(date, 'MMM d')}`;
+    if (isThisWeek(date, { weekStartsOn: 1 })) return format(date, 'EEEE, MMM d');
+    return format(date, 'MMM d, yyyy');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Manage Bookings</h1>
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-4" />
+              <div className="h-6 bg-gray-200 rounded w-1/2 mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Manage Bookings</h1>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg"
-        >
-          <option value="all">All Bookings</option>
-          <option value="pending">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled_by_customer">Cancelled by Customer</option>
-          <option value="cancelled_by_provider">Cancelled by Provider</option>
-        </select>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Manage Bookings</h1>
+
+      {/* Pill‑shaped solid filter tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition',
+              activeTab === tab.key
+                ? 'bg-primary-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            )}
+          >
+            {tab.label}
+            {counts?.[tab.key as keyof typeof counts] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-white/20 text-white rounded-full">
+                {counts[tab.key as keyof typeof counts]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <NimartSpinner size="md" />
-        </div>
-      ) : bookings.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-gray-500">No bookings found.</p>
+      {!bookings?.length ? (
+        <div className="text-center py-16 bg-gray-50 rounded-2xl">
+          <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+          <h2 className="mt-4 text-lg font-semibold text-gray-700">No bookings found</h2>
+          <p className="mt-2 text-gray-500">Make your profile attractive to get more bookings</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking) => (
-            <div key={booking.id} className="bg-white rounded-lg shadow-sm border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-sm font-mono text-gray-500">{booking.booking_number}</span>
-                    <span className={cn('px-2 py-1 rounded-full text-xs font-medium', statusColors[booking.status])}>
-                      {booking.status.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <h3 className="font-semibold text-lg">{booking.service_name}</h3>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {format(new Date(booking.booking_date), 'PPP')}
-                    </div>
-                    <div className="flex items-center">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {booking.booking_time} ({booking.duration_minutes} min)
-                    </div>
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {booking.location}
-                    </div>
-                  </div>
-                  {booking.special_instructions && (
-                    <p className="mt-2 text-sm text-gray-500">{booking.special_instructions}</p>
-                  )}
-                </div>
+          {bookings.map(booking => {
+            const isPendingConfirmation = booking.status === 'completed' && booking.customer_confirmation_status === 'pending';
+            const isDisputed = booking.customer_confirmation_status === 'disputed';
 
-                <div className="flex items-center gap-3">
-                  {/* Customer Info */}
-                  <div className="text-right">
-                    <p className="font-medium">{booking.customer?.full_name}</p>
-                    <p className="text-sm text-gray-500">{booking.customer?.phone}</p>
+            return (
+              <div
+                key={booking.id}
+                className={cn(
+                  'bg-white rounded-2xl shadow-sm border p-5 hover:shadow-md transition',
+                  booking.status.startsWith('cancelled') && 'opacity-60'
+                )}
+              >
+                {/* Full‑width timeline */}
+                <BookingStatusTimeline
+                  currentStatus={booking.status}
+                  customerConfirmationStatus={booking.customer_confirmation_status}
+                  size="sm"
+                />
+
+                <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                  {/* Customer info */}
+                  <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
+                    {booking.customer_avatar ? (
+                      <img src={booking.customer_avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span className="text-primary-600 font-semibold text-lg">{booking.customer_name?.[0] || '?'}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{booking.customer_name || 'Unknown'}</p>
+                      {booking.customer_phone && (
+                        <a href={`tel:${booking.customer_phone}`} className="text-xs text-primary-600 hover:underline">{booking.customer_phone}</a>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  {booking.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                        className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
-                        title="Accept"
-                      >
-                        <CheckCircle className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => updateBookingStatus(booking.id, 'cancelled_by_provider')}
-                        className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
-                        title="Decline"
-                      >
-                        <XCircle className="h-5 w-5" />
-                      </button>
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-sm font-bold text-gray-800 font-mono tracking-wide">{booking.booking_number}</span>
+                      <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium border', statusColors[booking.status])}>
+                        {booking.status.replace(/_/g, ' ')}
+                      </span>
                     </div>
-                  )}
-                  {booking.status === 'confirmed' && (
-                    <button
-                      onClick={() => updateBookingStatus(booking.id, 'in_progress')}
-                      className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm"
+                    <h3 className="font-semibold text-gray-900">{booking.service_name}</h3>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-1"><Calendar className="h-4 w-4 text-primary-500" />{formatBookingDate(booking.booking_date)}</div>
+                      <div className="flex items-center gap-1"><Clock className="h-4 w-4 text-primary-500" />{booking.booking_time} ({booking.duration_minutes} min)</div>
+                      <div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-primary-500" />{booking.location}</div>
+                    </div>
+                    {booking.price && <p className="mt-2 text-sm font-semibold">₦{booking.price.toLocaleString()}</p>}
+                    {booking.special_instructions && (
+                      <button onClick={() => setExpandedBooking(expandedBooking === booking.id ? null : booking.id)}
+                        className="mt-2 flex items-center gap-1 text-sm text-primary-600 hover:underline">
+                        <ChevronDown className={cn('h-4 w-4 transition', expandedBooking === booking.id && 'rotate-180')} />
+                        {expandedBooking === booking.id ? 'Hide instructions' : 'View instructions'}
+                      </button>
+                    )}
+                    {expandedBooking === booking.id && booking.special_instructions && (
+                      <p className="mt-2 text-sm text-gray-500 italic bg-gray-50 rounded-lg px-3 py-1.5">"{booking.special_instructions}"</p>
+                    )}
+                    {isDisputed && booking.dispute_reason && (
+                      <div className="mt-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <p className="text-sm font-medium text-orange-800">Dispute reason:</p>
+                        <p className="text-sm text-orange-700 mt-1">{booking.dispute_reason}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:w-40 flex-shrink-0">
+                    {booking.status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => updateStatus(booking.id, 'confirmed')}
+                          disabled={actionLoading === booking.id}
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 disabled:opacity-50"
+                        >
+                          {actionLoading === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => updateStatus(booking.id, 'cancelled_by_provider')}
+                          disabled={actionLoading === booking.id}
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm font-medium transition active:scale-95 disabled:opacity-50"
+                        >
+                          <XCircle className="h-4 w-4" /> Decline
+                        </button>
+                      </>
+                    )}
+                    {booking.status === 'confirmed' && (
+                      <button
+                        onClick={() => updateStatus(booking.id, 'in_progress')}
+                        disabled={actionLoading === booking.id}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 animate-pulse disabled:opacity-50"
+                      >
+                        {actionLoading === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        Start Service
+                      </button>
+                    )}
+                    {booking.status === 'in_progress' && (
+                      <button
+                        onClick={() => updateStatus(booking.id, 'completed')}
+                        disabled={actionLoading === booking.id}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 disabled:opacity-50"
+                      >
+                        {actionLoading === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                        Mark Complete
+                      </button>
+                    )}
+                    {booking.status === 'completed' && booking.customer_confirmation_status === 'confirmed' && (
+                      <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                        <CheckCircle className="h-4 w-4" /> Done & Confirmed
+                      </span>
+                    )}
+                    {isPendingConfirmation && (
+                      <div className="flex items-center gap-1 text-yellow-600 text-sm">
+                        <Clock className="h-4 w-4" /> Awaiting confirmation
+                      </div>
+                    )}
+                    <Link to={`/provider/messages`}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 text-sm font-medium transition active:scale-95"
                     >
-                      Start Service
-                    </button>
-                  )}
-                  {booking.status === 'in_progress' && (
-                    <button
-                      onClick={() => updateBookingStatus(booking.id, 'completed')}
-                      className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
-                    >
-                      Mark Completed
-                    </button>
-                  )}
-                  {booking.status === 'completed' && (
-                    <span className="text-green-600 text-sm font-medium">✓ Completed</span>
-                  )}
+                      <SolidMessageIcon className="h-5 w-5" /> Chat
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

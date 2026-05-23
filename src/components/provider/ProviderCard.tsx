@@ -1,4 +1,3 @@
-// src/components/provider/ProviderCard.tsx
 import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Star, Briefcase, Clock } from 'lucide-react';
@@ -52,8 +51,9 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
   const navigate = useNavigate();
   const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
 
+  // Combine LGA and State
   const locationString = provider.profile?.lga_name
-    ? provider.profile.lga_name
+    ? `${provider.profile.lga_name}${provider.profile?.state_name ? `, ${provider.profile.state_name}` : ''}`
     : 'Location not set';
 
   const categoryDisplay = provider.selected_category_slug
@@ -107,14 +107,16 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         </span>
       );
     }
-    if (permissionGranted && userLat && userLng) {
-      return <span className="text-xs text-gray-400">Calculating...</span>;
+    // Don't show anything while waiting for calculation
+    if (!permissionGranted) {
+      return (
+        <button onClick={handleEnableLocation} className="text-xs text-primary-600 hover:underline">
+          📍 Enable location
+        </button>
+      );
     }
-    return (
-      <button onClick={handleEnableLocation} className="text-xs text-primary-600 hover:underline">
-        📍 Enable location
-      </button>
-    );
+    // If permission granted but distance still loading, show nothing
+    return null;
   };
 
   return (
@@ -192,14 +194,17 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
           <p className="text-sm text-gray-600 line-clamp-2 mb-2">{provider.description}</p>
         )}
 
-        <Link
-          to={`/search?category=${provider.selected_category_slug}`}
-          className="inline-flex items-center text-xs text-primary-600 hover:underline mb-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Briefcase className="h-3 w-3 mr-1" />
-          <span>{categoryDisplay}</span>
-        </Link>
+        {/* Category badge – solid green pill */}
+        <div className="mb-2">
+          <Link
+            to={`/search?category=${provider.selected_category_slug}`}
+            className="inline-flex items-center gap-1 bg-primary-600 text-white text-xs px-2.5 py-0.5 rounded-full hover:bg-primary-700 transition"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Briefcase className="h-3 w-3" />
+            <span>{categoryDisplay}</span>
+          </Link>
+        </div>
 
         <div className="flex items-start text-xs text-gray-600 mb-1">
           <MapPin className="h-3.5 w-3.5 mr-1 flex-shrink-0 mt-0.5" />

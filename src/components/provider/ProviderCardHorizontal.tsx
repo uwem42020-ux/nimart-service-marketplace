@@ -1,4 +1,3 @@
-// src/components/provider/ProviderCardHorizontal.tsx
 import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Star, Briefcase, Clock } from 'lucide-react';
@@ -53,7 +52,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
   const navigate = useNavigate();
 
   const locationString = provider.profile?.lga_name
-    ? provider.profile.lga_name
+    ? `${provider.profile.lga_name}${provider.profile?.state_name ? `, ${provider.profile.state_name}` : ''}`
     : 'Location not set';
 
   const categoryDisplay = provider.selected_category_slug
@@ -183,12 +182,13 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
         </div>
 
         <div className="mt-2 flex items-center justify-between">
+          {/* Category badge – solid green pill */}
           <Link
             to={`/search?category=${provider.selected_category_slug}`}
-            className="text-xs text-primary-600 hover:underline flex items-center gap-1"
+            className="inline-flex items-center gap-1 bg-primary-600 text-white text-xs px-2.5 py-0.5 rounded-full hover:bg-primary-700 transition"
           >
             <Briefcase className="h-3 w-3" />
-            {categoryDisplay}
+            <span>{categoryDisplay}</span>
           </Link>
           {provider.status === 'away' ? (
             <button
