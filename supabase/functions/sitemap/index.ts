@@ -66,15 +66,11 @@ serve(async (_req) => {
       };
     });
 
-    // Blog query with logging
     const { data: blogPosts, error: blogError } = await supabase
       .from("blog_posts")
       .select("slug, updated_at")
       .eq("published", true)
       .order("updated_at", { ascending: false });
-
-    // Log to see what's happening
-    console.log("Blog query result:", JSON.stringify({ count: blogPosts?.length || 0, error: blogError?.message }));
 
     if (blogError) throw blogError;
 
