@@ -9,11 +9,11 @@ serve(async (_req) => {
   try {
     const baseUrl = "https://nimart.ng";
 
-    // 1. Static pages
     const staticUrls = [
       { loc: "/", priority: "1.0", changefreq: "daily" },
       { loc: "/search", priority: "0.9", changefreq: "daily" },
-      { loc: "/blog", priority: "0.9", changefreq: "daily" },          // ← added
+      { loc: "/blog", priority: "0.9", changefreq: "daily" },
+      { loc: "/careers", priority: "0.5", changefreq: "weekly" },
       { loc: "/auth/signup", priority: "0.8", changefreq: "weekly" },
       { loc: "/auth/signup?role=provider", priority: "0.8", changefreq: "weekly" },
       { loc: "/auth/signin", priority: "0.7", changefreq: "weekly" },
@@ -24,10 +24,8 @@ serve(async (_req) => {
       { loc: "/cookies", priority: "0.3", changefreq: "yearly" },
       { loc: "/report", priority: "0.4", changefreq: "monthly" },
       { loc: "/nimart-vs-nimart", priority: "0.4", changefreq: "monthly" },
-      { loc: "/careers", priority: "0.5", changefreq: "weekly" },       // ← added
     ];
 
-    // 2. Provider profiles
     const { data: providers, error: providerError } = await supabase
       .from("providers")
       .select("id, updated_at")
@@ -38,14 +36,11 @@ serve(async (_req) => {
 
     const providerUrls = (providers || []).map((p) => ({
       loc: `${baseUrl}/provider/${p.id}`,
-      lastmod: p.updated_at
-        ? p.updated_at.split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      lastmod: p.updated_at ? p.updated_at.split("T")[0] : new Date().toISOString().split("T")[0],
       changefreq: "weekly",
       priority: "0.7",
     }));
 
-    // 3. Service‑Location landing pages (category + LGA)
     const { data: catLgaPairs, error: pairError } = await supabase
       .from("providers")
       .select("selected_category_slug, profiles!inner(lga_id)")
@@ -71,25 +66,25 @@ serve(async (_req) => {
       };
     });
 
-    // 4. Blog posts (the missing part!)
+    // Blog query with logging
     const { data: blogPosts, error: blogError } = await supabase
       .from("blog_posts")
       .select("slug, updated_at")
       .eq("published", true)
       .order("updated_at", { ascending: false });
 
+    // Log to see what's happening
+    console.log("Blog query result:", JSON.stringify({ count: blogPosts?.length || 0, error: blogError?.message }));
+
     if (blogError) throw blogError;
 
     const blogUrls = (blogPosts || []).map((p) => ({
       loc: `${baseUrl}/blog/${p.slug}`,
-      lastmod: p.updated_at
-        ? p.updated_at.split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      lastmod: p.updated_at ? p.updated_at.split("T")[0] : new Date().toISOString().split("T")[0],
       changefreq: "monthly",
       priority: "0.6",
     }));
 
-    // 5. Build the full URL set
     const urlset = [
       ...staticUrls.map((u) => ({
         loc: `${baseUrl}${u.loc}`,
@@ -99,10 +94,9 @@ serve(async (_req) => {
       })),
       ...providerUrls,
       ...serviceLocationUrls,
-      ...blogUrls,    // ← added
+      ...blogUrls,
     ];
 
-    // 6. Generate XML
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urlset
