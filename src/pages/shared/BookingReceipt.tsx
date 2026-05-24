@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
-import { Calendar, Clock, MapPin, User, Briefcase, Shield, QRCode } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Briefcase, Shield, QrCode } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 
 export default function BookingReceipt() {
@@ -41,7 +41,7 @@ export default function BookingReceipt() {
               <p className="text-primary-100 text-sm mt-1">Nimart Service Marketplace</p>
             </div>
             <div className="bg-white/20 rounded-lg px-4 py-2 text-center">
-              <QRCode className="h-16 w-16 mx-auto text-white" />
+              <QrCode className="h-16 w-16 mx-auto text-white" />
               <p className="text-[10px] text-primary-100 mt-1">Scan to verify</p>
             </div>
           </div>
@@ -134,4 +134,4 @@ export default function BookingReceipt() {
       </div>
     </div>
   );
-}
+};
