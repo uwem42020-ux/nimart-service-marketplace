@@ -77,6 +77,12 @@ export function InstallPrompt() {
                 Later
               </button>
             </div>
+            {/* iOS hint — shown only on iOS Safari, not in standalone mode */}
+            {/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches && (
+              <div className="mt-2 text-[10px] text-gray-400 text-center">
+                On iPhone? Tap <span className="font-semibold">Share</span> → <span className="font-semibold">Add to Home Screen</span>
+              </div>
+            )}
           </div>
           <button
             onClick={() => setShowPrompt(false)}
