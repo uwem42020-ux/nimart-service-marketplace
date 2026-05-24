@@ -317,6 +317,9 @@ export default function ProviderProfile() {
 
   const submitReview = async () => {
     if (!user) { toast.error('Please sign in to leave a review'); navigate('/auth/signin'); return; }
+    
+    const bookingId = searchParams.get('bookingId');
+    
     setSubmittingReview(true);
     try {
       const { data: existingReview } = await supabase
@@ -326,9 +329,11 @@ export default function ProviderProfile() {
         .eq('provider_id', id!)
         .maybeSingle();
       if (existingReview) { toast.error('You have already reviewed this provider'); setShowReviewModal(false); return; }
+      
       const { error } = await supabase.from('reviews').insert([{
         reviewer_id: user.id,
         provider_id: id!,
+        booking_id: bookingId || null,
         rating: reviewRating,
         content: reviewContent || null,
       }]);
@@ -421,7 +426,6 @@ export default function ProviderProfile() {
     { label: providerName },
   ];
 
-  // ===== NEW: BreadcrumbList structured data =====
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -432,7 +436,6 @@ export default function ProviderProfile() {
       "item": item.to ? `https://nimart.ng${item.to}` : undefined,
     })),
   };
-  // ===============================================
 
   const providerSchema = {
     "@context": "https://schema.org",
@@ -485,7 +488,7 @@ export default function ProviderProfile() {
         image={provider.profile?.avatar_url || '/og-image.png'}
         url={`https://nimart.ng/provider/${id}`}
         type="profile"
-        schema={[providerSchema, breadcrumbSchema]}   // <-- NOW AN ARRAY
+        schema={[providerSchema, breadcrumbSchema]}
       />
 
       {/* ============== MODERN MOBILE LAYOUT ============== */}
