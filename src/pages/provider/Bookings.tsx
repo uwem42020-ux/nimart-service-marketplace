@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
 import {
   Calendar, Clock, MapPin, CheckCircle, XCircle, MessageCircle, Phone,
-  AlertCircle, RefreshCw, ChevronDown, Loader2
+  AlertCircle, RefreshCw, ChevronDown, Loader2, Share2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
@@ -38,6 +38,7 @@ interface Booking {
   customer_avatar: string | null;
   customer_confirmation_status: string;
   dispute_reason: string | null;
+  receipt_token: string | null;
 }
 
 const tabs = [
@@ -150,6 +151,17 @@ export default function ProviderBookings() {
     if (isTomorrow(date)) return `Tomorrow, ${format(date, 'MMM d')}`;
     if (isThisWeek(date, { weekStartsOn: 1 })) return format(date, 'EEEE, MMM d');
     return format(date, 'MMM d, yyyy');
+  };
+
+  const shareReceipt = (token: string) => {
+    const url = `${window.location.origin}/receipt/${token}`;
+    if (navigator.share) {
+      navigator.share({ title: 'Booking Receipt', url }).catch(() => {
+        navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
+      });
+    } else {
+      navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
+    }
   };
 
   if (isLoading) {
@@ -324,6 +336,15 @@ export default function ProviderBookings() {
                       <div className="flex items-center gap-1 text-yellow-600 text-sm">
                         <Clock className="h-4 w-4" /> Awaiting confirmation
                       </div>
+                    )}
+                    {/* Share Receipt button */}
+                    {booking.receipt_token && (
+                      <button
+                        onClick={() => shareReceipt(booking.receipt_token!)}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-green-50 text-green-700 rounded-full hover:bg-green-100 text-sm font-medium transition active:scale-95"
+                      >
+                        <Share2 className="h-4 w-4" /> Receipt
+                      </button>
                     )}
                     <Link to={`/provider/messages`}
                       className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 text-sm font-medium transition active:scale-95"
