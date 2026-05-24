@@ -5,7 +5,7 @@ import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
 import {
   Calendar, Clock, MapPin, Star, XCircle, MessageCircle,
   CheckCircle, AlertCircle, RefreshCw, ShieldAlert,
-  ChevronDown, ThumbsUp, ThumbsDown, Loader2, Flag
+  ChevronDown, ThumbsUp, ThumbsDown, Loader2, Flag, Share2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
@@ -40,6 +40,7 @@ interface Booking {
   provider_business: string | null;
   customer_confirmation_status: string;
   dispute_reason: string | null;
+  receipt_token: string | null;
 }
 
 const tabs = [
@@ -69,7 +70,7 @@ export default function CustomerBookings() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [disputingId, setDisputingId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
-  const [flagBookingId, setFlagBookingId] = useState<string | null>(null); // <-- NEW
+  const [flagBookingId, setFlagBookingId] = useState<string | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['customer-bookings', user?.id, activeTab],
@@ -183,6 +184,17 @@ export default function CustomerBookings() {
     else {
       toast.success('Dispute submitted. We will review it shortly.');
       queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
+    }
+  };
+
+  const shareReceipt = (token: string) => {
+    const url = `${window.location.origin}/receipt/${token}`;
+    if (navigator.share) {
+      navigator.share({ title: 'Booking Receipt', url }).catch(() => {
+        navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
+      });
+    } else {
+      navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
     }
   };
 
@@ -347,10 +359,19 @@ export default function CustomerBookings() {
                       </>
                     )}
                     {booking.status === 'completed' && booking.customer_confirmation_status === 'confirmed' && (
-                      <Link to={`/provider/${booking.provider_id}?review=true`}
+                      <Link to={`/provider/${booking.provider_id}?review=true&bookingId=${booking.id}`}
                         className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 text-sm font-medium transition active:scale-95">
                         <Star className="h-4 w-4" /> Review
                       </Link>
+                    )}
+                    {/* Share Receipt button */}
+                    {booking.receipt_token && (
+                      <button
+                        onClick={() => shareReceipt(booking.receipt_token!)}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-green-50 text-green-700 rounded-full hover:bg-green-100 text-sm font-medium transition active:scale-95"
+                      >
+                        <Share2 className="h-4 w-4" /> Receipt
+                      </button>
                     )}
                     {/* Report Issue button */}
                     <button
