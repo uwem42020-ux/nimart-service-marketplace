@@ -1,5 +1,5 @@
 module.exports = {
-  source: 'dist',                          // ← ADD THIS
+  source: "dist",
   exclude: [
     "/admin/*",
     "/auth/*",
