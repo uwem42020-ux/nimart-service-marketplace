@@ -5,7 +5,7 @@ import { format, isToday, isTomorrow, isThisWeek, parseISO } from 'date-fns';
 import {
   Calendar, Clock, MapPin, Star, XCircle, MessageCircle,
   CheckCircle, AlertCircle, RefreshCw, ShieldAlert,
-  ChevronDown, ThumbsUp, ThumbsDown, Loader2, Flag
+  ChevronDown, ThumbsUp, ThumbsDown, Loader2, Flag, Share2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
@@ -14,13 +14,6 @@ import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookingStatusTimeline } from '../../components/common/BookingStatusTimeline';
 import { FlagBookingModal } from '../../components/customer/FlagBookingModal';
-
-// Solid message icon (same as header)
-const SolidMessageIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-  </svg>
-);
 
 interface Booking {
   id: string;
@@ -40,6 +33,7 @@ interface Booking {
   provider_business: string | null;
   customer_confirmation_status: string;
   dispute_reason: string | null;
+  receipt_token: string | null;
 }
 
 const tabs = [
@@ -69,7 +63,8 @@ export default function CustomerBookings() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [disputingId, setDisputingId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
-  const [flagBookingId, setFlagBookingId] = useState<string | null>(null); // <-- NEW
+  const [flagBookingId, setFlagBookingId] = useState<string | null>(null);
+  const [showPastBookings, setShowPastBookings] = useState(false);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['customer-bookings', user?.id, activeTab],
@@ -149,19 +144,31 @@ export default function CustomerBookings() {
 
   const handleConfirmCompletion = async (bookingId: string) => {
     setConfirmingId(bookingId);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .update({
         customer_confirmed_at: new Date().toISOString(),
         customer_confirmation_status: 'confirmed'
       })
-      .eq('id', bookingId);
+      .eq('id', bookingId)
+      .select('id, customer_confirmation_status')
+      .single();
+
     setConfirmingId(null);
-    if (error) toast.error(error.message);
-    else {
-      toast.success('Thank you for confirming!');
-      queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
+
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+
+    if (!data) {
+      toast.error('Booking not found. Please refresh and try again.');
+      return;
+    }
+
+    toast.success('Thank you for confirming!');
+    setShowPastBookings(true); // auto-expand past bookings
+    queryClient.invalidateQueries({ queryKey: ['customer-bookings', user?.id] });
   };
 
   const handleDispute = async (bookingId: string) => {
@@ -186,6 +193,17 @@ export default function CustomerBookings() {
     }
   };
 
+  const shareReceipt = (token: string) => {
+    const url = `${window.location.origin}/receipt/${token}`;
+    if (navigator.share) {
+      navigator.share({ title: 'Booking Receipt', url }).catch(() => {
+        navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
+      });
+    } else {
+      navigator.clipboard.writeText(url).then(() => toast.success('Receipt link copied!'));
+    }
+  };
+
   const formatBookingDate = (dateStr: string) => {
     const date = parseISO(dateStr);
     if (isToday(date)) return `Today, ${format(date, 'MMM d')}`;
@@ -193,6 +211,16 @@ export default function CustomerBookings() {
     if (isThisWeek(date, { weekStartsOn: 1 })) return format(date, 'EEEE, MMM d');
     return format(date, 'MMM d, yyyy');
   };
+
+  // Keep completed bookings visible in active list until confirmed
+  const activeBookings = bookings?.filter(
+    b => !['cancelled_by_customer', 'cancelled_by_provider', 'no_show'].includes(b.status) &&
+         !(b.status === 'completed' && b.customer_confirmation_status === 'confirmed')
+  );
+  const pastBookings = bookings?.filter(
+    b => ['cancelled_by_customer', 'cancelled_by_provider', 'no_show'].includes(b.status) ||
+        (b.status === 'completed' && b.customer_confirmation_status === 'confirmed')
+  );
 
   if (isLoading) {
     return (
@@ -251,154 +279,247 @@ export default function CustomerBookings() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
-          {bookings.map(booking => {
-            const providerDisplayName = booking.provider_business || booking.provider_name || 'Unknown Provider';
-            const isPendingConfirmation = booking.status === 'completed' && booking.customer_confirmation_status === 'pending';
-            const isDisputed = booking.customer_confirmation_status === 'disputed';
+        <>
+          {/* ACTIVE BOOKINGS */}
+          {activeBookings?.map(booking => (
+            <div
+              key={booking.id}
+              className={cn(
+                'bg-white rounded-2xl shadow-sm border p-5 hover:shadow-md transition',
+                booking.status.startsWith('cancelled') && 'opacity-60'
+              )}
+            >
+              <BookingStatusTimeline
+                currentStatus={booking.status}
+                customerConfirmationStatus={booking.customer_confirmation_status}
+                size="sm"
+              />
 
-            return (
-              <div
-                key={booking.id}
-                className={cn(
-                  'bg-white rounded-2xl shadow-sm border p-5 hover:shadow-md transition',
-                  booking.status.startsWith('cancelled') && 'opacity-60'
-                )}
-              >
-                {/* Full‑width timeline */}
-                <BookingStatusTimeline
-                  currentStatus={booking.status}
-                  customerConfirmationStatus={booking.customer_confirmation_status}
-                  size="sm"
-                />
-
-                <div className="mt-4 flex flex-col sm:flex-row gap-4">
-                  {/* Provider info */}
-                  <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
-                    {booking.provider_avatar ? (
-                      <img src={booking.provider_avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
-                        <span className="text-primary-600 font-semibold text-lg">{providerDisplayName?.[0] || '?'}</span>
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <Link to={`/provider/${booking.provider_id}`} className="font-semibold text-gray-900 hover:text-primary-600 truncate block">
-                        {providerDisplayName}
-                      </Link>
-                      <p className="text-xs text-gray-500 truncate">{booking.service_name}</p>
+              <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                {/* Provider info */}
+                <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
+                  {booking.provider_avatar ? (
+                    <img src={booking.provider_avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                      <span className="text-primary-600 font-semibold text-lg">{booking.provider_name?.[0] || '?'}</span>
                     </div>
-                  </div>
-
-                  {/* Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-sm font-bold text-gray-800 font-mono tracking-wide">{booking.booking_number}</span>
-                      <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium border', statusColors[booking.status])}>
-                        {booking.status.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <h3 className="font-semibold text-gray-900">{booking.service_name}</h3>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
-                      <div className="flex items-center gap-1"><Calendar className="h-4 w-4 text-primary-500" />{formatBookingDate(booking.booking_date)}</div>
-                      <div className="flex items-center gap-1"><Clock className="h-4 w-4 text-primary-500" />{booking.booking_time} ({booking.duration_minutes} min)</div>
-                      <div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-primary-500" />{booking.location}</div>
-                    </div>
-                    {booking.price && <p className="mt-2 text-sm font-semibold">₦{booking.price.toLocaleString()}</p>}
-                    {booking.special_instructions && (
-                      <button onClick={() => setExpandedBooking(expandedBooking === booking.id ? null : booking.id)}
-                        className="mt-2 flex items-center gap-1 text-sm text-primary-600 hover:underline">
-                        <ChevronDown className={cn('h-4 w-4 transition', expandedBooking === booking.id && 'rotate-180')} />
-                        {expandedBooking === booking.id ? 'Hide instructions' : 'View instructions'}
-                      </button>
-                    )}
-                    {expandedBooking === booking.id && booking.special_instructions && (
-                      <p className="mt-2 text-sm text-gray-500 italic bg-gray-50 rounded-lg px-3 py-1.5">"{booking.special_instructions}"</p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:w-40 flex-shrink-0">
-                    {booking.status === 'pending' && (
-                      <button onClick={() => handleCancel(booking.id)}
-                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm font-medium transition active:scale-95">
-                        <XCircle className="h-4 w-4" /> Cancel
-                      </button>
-                    )}
-                    {isPendingConfirmation && (
-                      <>
-                        <button
-                          onClick={() => handleConfirmCompletion(booking.id)}
-                          disabled={confirmingId === booking.id}
-                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 disabled:opacity-50"
-                        >
-                          {confirmingId === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
-                          Confirm
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDisputingId(booking.id);
-                            setDisputeReason('');
-                          }}
-                          className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 text-sm font-medium transition active:scale-95"
-                        >
-                          <ThumbsDown className="h-4 w-4" /> Dispute
-                        </button>
-                      </>
-                    )}
-                    {booking.status === 'completed' && booking.customer_confirmation_status === 'confirmed' && (
-                      <Link to={`/provider/${booking.provider_id}?review=true`}
-                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 text-sm font-medium transition active:scale-95">
-                        <Star className="h-4 w-4" /> Review
-                      </Link>
-                    )}
-                    {/* Report Issue button */}
-                    <button
-                      onClick={() => setFlagBookingId(booking.id)}
-                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-50 text-red-700 rounded-full hover:bg-red-100 text-sm font-medium transition active:scale-95"
-                    >
-                      <Flag className="h-4 w-4" /> Report Issue
-                    </button>
-                    <Link to={`/customer/messages`}
-                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 text-sm font-medium transition active:scale-95"
-                    >
-                      <SolidMessageIcon className="h-5 w-5" /> Chat
+                  )}
+                  <div className="min-w-0">
+                    <Link to={`/provider/${booking.provider_id}`} className="font-semibold text-gray-900 hover:text-primary-600 truncate block">
+                      {booking.provider_business || booking.provider_name || 'Unknown Provider'}
                     </Link>
+                    <p className="text-xs text-gray-500 truncate">{booking.service_name}</p>
                   </div>
                 </div>
 
-                {/* Dispute modal inline */}
-                {disputingId === booking.id && (
-                  <div className="mt-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
-                    <h4 className="font-semibold text-orange-800 mb-2">Why are you disputing?</h4>
-                    <textarea
-                      rows={2}
-                      className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      placeholder="e.g., Provider did not show up, poor work quality..."
-                      value={disputeReason}
-                      onChange={(e) => setDisputeReason(e.target.value)}
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={() => handleDispute(booking.id)}
-                        disabled={disputingId === booking.id}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-full text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
-                      >
-                        Submit Dispute
-                      </button>
-                      <button
-                        onClick={() => setDisputingId(null)}
-                        className="px-4 py-2 border border-gray-300 rounded-full text-sm hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                {/* Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-sm font-bold text-gray-800 font-mono tracking-wide">{booking.booking_number}</span>
+                    <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium border', statusColors[booking.status])}>
+                      {booking.status.replace(/_/g, ' ')}
+                    </span>
                   </div>
-                )}
+                  <h3 className="font-semibold text-gray-900">{booking.service_name}</h3>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-1"><Calendar className="h-4 w-4 text-primary-500" />{formatBookingDate(booking.booking_date)}</div>
+                    <div className="flex items-center gap-1"><Clock className="h-4 w-4 text-primary-500" />{booking.booking_time} ({booking.duration_minutes} min)</div>
+                    <div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-primary-500" />{booking.location}</div>
+                  </div>
+                  {booking.price && <p className="mt-2 text-sm font-semibold">₦{booking.price.toLocaleString()}</p>}
+                  {booking.special_instructions && (
+                    <button onClick={() => setExpandedBooking(expandedBooking === booking.id ? null : booking.id)}
+                      className="mt-2 flex items-center gap-1 text-sm text-primary-600 hover:underline">
+                      <ChevronDown className={cn('h-4 w-4 transition', expandedBooking === booking.id && 'rotate-180')} />
+                      {expandedBooking === booking.id ? 'Hide instructions' : 'View instructions'}
+                    </button>
+                  )}
+                  {expandedBooking === booking.id && booking.special_instructions && (
+                    <p className="mt-2 text-sm text-gray-500 italic bg-gray-50 rounded-lg px-3 py-1.5">"{booking.special_instructions}"</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:w-40 flex-shrink-0">
+                  {booking.status === 'pending' && (
+                    <button onClick={() => handleCancel(booking.id)}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm font-medium transition active:scale-95">
+                      <XCircle className="h-4 w-4" /> Cancel
+                    </button>
+                  )}
+
+                  {booking.status === 'completed' && booking.customer_confirmation_status === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => handleConfirmCompletion(booking.id)}
+                        disabled={confirmingId === booking.id}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-primary-600 text-white rounded-full hover:bg-primary-700 text-sm font-medium transition active:scale-95 disabled:opacity-50"
+                      >
+                        {confirmingId === booking.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDisputingId(booking.id);
+                          setDisputeReason('');
+                        }}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 text-sm font-medium transition active:scale-95"
+                      >
+                        <ThumbsDown className="h-4 w-4" /> Dispute
+                      </button>
+                    </>
+                  )}
+
+                  {/* Review button – always visible for completed bookings */}
+                  {booking.status === 'completed' && (
+                    <Link to={`/provider/${booking.provider_id}?review=true&bookingId=${booking.id}`}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 text-sm font-medium transition active:scale-95">
+                      <Star className="h-4 w-4" /> Review
+                    </Link>
+                  )}
+
+                  {booking.receipt_token && (
+                    <button
+                      onClick={() => shareReceipt(booking.receipt_token!)}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-green-50 text-green-700 rounded-full hover:bg-green-100 text-sm font-medium transition active:scale-95"
+                    >
+                      <Share2 className="h-4 w-4" /> Receipt
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setFlagBookingId(booking.id)}
+                    className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-50 text-red-700 rounded-full hover:bg-red-100 text-sm font-medium transition active:scale-95"
+                  >
+                    <Flag className="h-4 w-4" /> Report Issue
+                  </button>
+                </div>
               </div>
-            );
-          })}
-        </div>
+
+              {/* Dispute modal inline */}
+              {disputingId === booking.id && (
+                <div className="mt-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                  <h4 className="font-semibold text-orange-800 mb-2">Why are you disputing?</h4>
+                  <textarea
+                    rows={2}
+                    className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="e.g., Provider did not show up, poor work quality..."
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => handleDispute(booking.id)}
+                      disabled={disputingId === booking.id}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-full text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      Submit Dispute
+                    </button>
+                    <button
+                      onClick={() => setDisputingId(null)}
+                      className="px-4 py-2 border border-gray-300 rounded-full text-sm hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* PAST BOOKINGS TOGGLE */}
+          {pastBookings && pastBookings.length > 0 && (
+            <div className="mt-6">
+              <button
+                onClick={() => setShowPastBookings(!showPastBookings)}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+              >
+                <ChevronDown className={cn('h-4 w-4 transition', showPastBookings && 'rotate-180')} />
+                {showPastBookings ? 'Hide past bookings' : `View past bookings (${pastBookings.length})`}
+              </button>
+
+              {showPastBookings && (
+                <div className="mt-3 space-y-4">
+                  {pastBookings.map(booking => (
+                    <div
+                      key={booking.id}
+                      className={cn(
+                        'bg-white rounded-2xl shadow-sm border p-5 hover:shadow-md transition',
+                        booking.status.startsWith('cancelled') && 'opacity-60'
+                      )}
+                    >
+                      <BookingStatusTimeline
+                        currentStatus={booking.status}
+                        customerConfirmationStatus={booking.customer_confirmation_status}
+                        size="sm"
+                      />
+
+                      <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                        <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
+                          {booking.provider_avatar ? (
+                            <img src={booking.provider_avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                              <span className="text-primary-600 font-semibold text-lg">{booking.provider_name?.[0] || '?'}</span>
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <Link to={`/provider/${booking.provider_id}`} className="font-semibold text-gray-900 hover:text-primary-600 truncate block">
+                              {booking.provider_business || booking.provider_name || 'Unknown Provider'}
+                            </Link>
+                            <p className="text-xs text-gray-500 truncate">{booking.service_name}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="text-sm font-bold text-gray-800 font-mono tracking-wide">{booking.booking_number}</span>
+                            <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium border', statusColors[booking.status])}>
+                              {booking.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <h3 className="font-semibold text-gray-900">{booking.service_name}</h3>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-1"><Calendar className="h-4 w-4 text-primary-500" />{formatBookingDate(booking.booking_date)}</div>
+                            <div className="flex items-center gap-1"><Clock className="h-4 w-4 text-primary-500" />{booking.booking_time} ({booking.duration_minutes} min)</div>
+                            <div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-primary-500" />{booking.location}</div>
+                          </div>
+                          {booking.price && <p className="mt-2 text-sm font-semibold">₦{booking.price.toLocaleString()}</p>}
+                        </div>
+
+                        <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:w-40 flex-shrink-0">
+                          {booking.status === 'completed' && (
+                            <Link to={`/provider/${booking.provider_id}?review=true&bookingId=${booking.id}`}
+                              className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 text-sm font-medium transition active:scale-95">
+                              <Star className="h-4 w-4" /> Review
+                            </Link>
+                          )}
+
+                          {booking.receipt_token && (
+                            <button
+                              onClick={() => shareReceipt(booking.receipt_token!)}
+                              className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-green-50 text-green-700 rounded-full hover:bg-green-100 text-sm font-medium transition active:scale-95"
+                            >
+                              <Share2 className="h-4 w-4" /> Receipt
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => setFlagBookingId(booking.id)}
+                            className="w-full flex items-center justify-center gap-1 px-3 py-2.5 bg-red-50 text-red-700 rounded-full hover:bg-red-100 text-sm font-medium transition active:scale-95"
+                          >
+                            <Flag className="h-4 w-4" /> Report Issue
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Flag Booking Modal */}

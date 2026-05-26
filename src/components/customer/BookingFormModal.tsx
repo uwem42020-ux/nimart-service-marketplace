@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { X, Calendar, Clock, MapPin, FileText, Loader2, Shield, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
+import { sendEmail, sendPushNotification } from '../../lib/email';
+import { providerNewBookingEmail, customerBookingConfirmationEmail } from '../../lib/emailTemplates';
 
 interface BookingFormModalProps {
   isOpen: boolean;
@@ -17,7 +19,6 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [gpsWarning, setGpsWarning] = useState(false);
   const [formData, setFormData] = useState({
     serviceName: '',
     bookingDate: format(new Date(), 'yyyy-MM-dd'),
@@ -27,7 +28,7 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
     specialInstructions: '',
   });
 
-  // Get GPS location when modal opens
+  // Capture GPS silently
   useEffect(() => {
     if (isOpen && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -35,7 +36,7 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
           setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         () => {
-          toast.error('Please enable location for safety verification');
+          // GPS not available – that's fine
         }
       );
     }
@@ -50,18 +51,9 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
       return;
     }
 
-    // Check GPS vs claimed location
-    if (gpsCoords && formData.location) {
-      // Simple warning if GPS is available but location field differs from profile
-      if (formData.location !== profile?.lga_name && formData.location !== profile?.address_area) {
-        setGpsWarning(true);
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      // Basic VPN check (you can enhance with ipapi.co or similar)
+      // Basic VPN check
       let vpnDetected = false;
       try {
         const ipRes = await fetch('https://ipapi.co/json/');
@@ -90,6 +82,64 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
       if (error) throw error;
 
       toast.success('Booking request sent!');
+
+      // ---- Send styled email + push to provider ----
+      const { data: providerProfile } = await supabase
+        .from('profiles')
+        .select('email, fcm_token')
+        .eq('id', providerId)
+        .single();
+
+      if (providerProfile?.email) {
+        await sendEmail(
+          providerProfile.email,
+          `New Booking Request – ${formData.serviceName}`,
+          providerNewBookingEmail({
+            serviceName: formData.serviceName,
+            bookingDate: formData.bookingDate,
+            bookingTime: formData.bookingTime,
+            location: formData.location,
+          })
+        );
+      }
+
+      if (providerProfile?.fcm_token) {
+        await sendPushNotification(
+          providerProfile.fcm_token,
+          'New Booking Request',
+          `${formData.serviceName} — ${formData.bookingDate} at ${formData.bookingTime}`
+        );
+      }
+
+      // ---- Send styled email + push to customer ----
+      if (user.email) {
+        await sendEmail(
+          user.email,
+          `Booking Submitted – ${formData.serviceName}`,
+          customerBookingConfirmationEmail({
+            providerName: providerName,
+            serviceName: formData.serviceName,
+            bookingDate: formData.bookingDate,
+            bookingTime: formData.bookingTime,
+            location: formData.location,
+          })
+        );
+      }
+
+      const { data: customerProfile } = await supabase
+        .from('profiles')
+        .select('fcm_token')
+        .eq('id', user.id)
+        .single();
+
+      if (customerProfile?.fcm_token) {
+        await sendPushNotification(
+          customerProfile.fcm_token,
+          'Booking Submitted',
+          `Your booking for ${formData.serviceName} has been sent to ${providerName}.`
+        );
+      }
+
       onClose();
     } catch (error: any) {
       toast.error(error.message);
@@ -117,36 +167,6 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
             <X className="h-5 w-5" />
           </button>
         </div>
-
-        {/* GPS Warning Modal */}
-        {gpsWarning && (
-          <div className="p-4 bg-yellow-50 border-b border-yellow-200">
-            <div className="flex items-start gap-2">
-              <Navigation className="h-5 w-5 text-yellow-600 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">Location Mismatch</p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  Your current GPS location appears different from your booking location. 
-                  This is recorded for safety. Please confirm you're booking for the correct location.
-                </p>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => { setGpsWarning(false); handleSubmit(new Event('submit') as any); }}
-                    className="px-3 py-1.5 bg-yellow-600 text-white text-xs rounded-lg hover:bg-yellow-700"
-                  >
-                    Confirm Location
-                  </button>
-                  <button
-                    onClick={() => setGpsWarning(false)}
-                    className="px-3 py-1.5 border border-yellow-300 text-xs rounded-lg hover:bg-yellow-100"
-                  >
-                    Edit Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -223,7 +243,7 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
             />
             {gpsCoords && (
               <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                <Navigation className="h-3 w-3" /> Location verified for safety
+                <Navigation className="h-3 w-3" /> Location recorded for safety
               </p>
             )}
           </div>
@@ -245,7 +265,7 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
           <div className="bg-yellow-50 rounded-xl p-3 flex items-start gap-2">
             <Shield className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-yellow-800">
-              <strong>Safety tip:</strong> Do not pay in full before the work is done. 
+              <strong>Safety tip:</strong> Do not pay in full before the work is done.
               For multi-day jobs, agree on milestone payments. If the provider demands full upfront payment, report it.
             </p>
           </div>
@@ -277,4 +297,4 @@ export function BookingFormModal({ isOpen, onClose, providerId, providerName, pr
       </div>
     </div>
   );
-};
+}

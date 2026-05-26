@@ -1,7 +1,7 @@
-// src/components/common/UpdateNotification.tsx
 import { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { RefreshCw } from 'lucide-react';
 
 export function UpdateNotification() {
   const {
@@ -11,8 +11,8 @@ export function UpdateNotification() {
   } = useRegisterSW({
     onRegisteredSW(swUrl, r) {
       console.log('Service Worker registered:', swUrl);
-      // Check for updates every hour
-      r && setInterval(() => r.update(), 3600000);
+      // Check for updates every 30 minutes (was 1 hour)
+      r && setInterval(() => r.update(), 1800000);
     },
     onRegisterError(error) {
       console.error('SW registration error:', error);
@@ -29,24 +29,26 @@ export function UpdateNotification() {
 
   useEffect(() => {
     if (needRefresh) {
-      // Clear any existing timer
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
 
-      // Show a toast that will auto‑reload after 5 seconds
-      const toastId = toast(
+      // Show a persistent toast with an action
+      toast(
         (t) => (
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">New version available – reloading in 5 seconds</span>
+            <span className="text-sm font-medium">New version available</span>
+            <button
+              onClick={() => {
+                toast.dismiss(t.id);
+                updateServiceWorker(true); // forces reload
+              }}
+              className="bg-primary-600 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-primary-700"
+            >
+              Update now
+            </button>
           </div>
         ),
-        { duration: 5000, id: 'sw-update' }
+        { duration: Infinity, id: 'sw-update' }
       );
-
-      // Set timer to reload
-      reloadTimerRef.current = setTimeout(() => {
-        updateServiceWorker(true);
-        // No need to manually reload; updateServiceWorker(true) will reload
-      }, 5000);
     }
 
     return () => {

@@ -1,180 +1,365 @@
-// src/pages/ServiceLocationPage.tsx
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { ProviderCardPortrait } from '../components/provider/ProviderCardPortrait';
 import { SEO } from '../components/common/SEO';
-import { NimartSpinner } from '../components/common/NimartSpinner';
+import { ProviderCardPortrait } from '../components/provider/ProviderCardPortrait';
+import { ProviderCardHorizontal } from '../components/provider/ProviderCardHorizontal';
 import { Breadcrumbs } from '../components/common/Breadcrumbs';
-import { calculateDistance } from '../lib/distance';
-import { useAuth } from '../contexts/AuthContext';
-import type { Database } from '../types/database';
+import { NimartSpinner } from '../components/common/NimartSpinner';
+import { MapPin, Star, LayoutGrid, List, ArrowRight, Shield } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { cn } from '../lib/utils';
+import { Link as RouterLink } from 'react-router-dom';
 
-type ProviderRow = Database['public']['Tables']['providers']['Row'];
-type ProfileRow = Database['public']['Tables']['profiles']['Row'];
-type PortfolioImageRow = Database['public']['Tables']['portfolio_images']['Row'];
-
-interface ProviderWithProfile extends ProviderRow {
-  profile: ProfileRow;
-  portfolio_images: PortfolioImageRow[];
-  distance?: number;
-  average_rating?: number;
-  review_count?: number;
-  lastSignInAt?: string | null;
+interface ProviderWithDetails {
+  id: string;
+  business_name: string | null;
+  description: string | null;
+  status: string;
+  is_available: boolean;
+  selected_category_slug: string | null;
+  selected_tier_slug: string | null;
+  tags: string[] | null;
+  boost_until: string | null;
+  top_placement_until: string | null;
+  profile: {
+    full_name: string | null;
+    avatar_url: string | null;
+    lga_name: string | null;
+    state_name: string | null;
+    is_verified: boolean;
+    lat: number | null;
+    lng: number | null;
+    updated_at: string | null;
+  } | null;
+  portfolio_images: { id: string; image_url: string }[];
+  average_rating: number;
+  review_count: number;
+  distance: number | null;
+  lastSignInAt: string | null;
+  is_available_now: boolean;
 }
 
 export default function ServiceLocationPage() {
   const { categorySlug, lgaId } = useParams<{ categorySlug: string; lgaId: string }>();
-  const { profile } = useAuth();
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // ---- Meta data (category name, LGA name, state) ----
-  const { data: meta } = useQuery({
-    queryKey: ['service-location-meta', categorySlug, lgaId],
+  const { data, isLoading } = useQuery({
+    queryKey: ['service-location', categorySlug, lgaId],
     queryFn: async () => {
-      const { data: cat } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('slug', categorySlug)
-        .maybeSingle();
+      if (!categorySlug || !lgaId) return null;
 
-      const { data: lga } = await supabase
+      // 1. Get LGA info
+      const { data: lgaData } = await supabase
         .from('lga_centers')
         .select('lga_name, state_name')
-        .eq('lga_id', parseInt(lgaId || '0'))
-        .maybeSingle();
+        .eq('lga_id', parseInt(lgaId))
+        .single();
 
-      return {
-        categoryName: cat?.name || (categorySlug ? categorySlug.replace(/-/g, ' ') : 'Service'),
-        lgaName: lga?.lga_name || 'this area',
-        stateName: lga?.state_name || '',
-      };
-    },
-    enabled: !!categorySlug && !!lgaId,
-  });
-
-  const pageCategoryName = meta?.categoryName || 'Service';
-  const pageLgaName = meta?.lgaName || 'your area';
-  const pageStateName = meta?.stateName || 'Nigeria';
-
-  // ---- Providers in this category + LGA ----
-  const { data: providers, isLoading } = useQuery({
-    queryKey: ['service-location-providers', categorySlug, lgaId],
-    queryFn: async () => {
-      if (!categorySlug || !lgaId) return [];
-
-      // Step 1: find profiles with this LGA
+      // 2. Find profiles in this LGA
       const { data: profilesInLga } = await supabase
         .from('profiles')
         .select('id')
         .eq('lga_id', parseInt(lgaId));
 
-      if (!profilesInLga || profilesInLga.length === 0) return [];
+      if (!profilesInLga?.length) {
+        return { lga: lgaData, providers: [], totalCount: 0 };
+      }
 
-      const providerIdsInLga = profilesInLga.map(p => p.id);
+      const profileIds = profilesInLga.map(p => p.id);
 
-      // Step 2: fetch providers in those ids AND matching category slug
-      const { data: providers } = await supabase
+      // 3. Find providers in this LGA with the matching category
+      const { data: providers, count } = await supabase
         .from('providers')
-        .select(`
-          id,
-          business_name,
-          description,
-          status,
-          is_available,
-          selected_tier_slug,
-          selected_category_slug,
-          selected_subcategory_id,
-          tags,
-          boost_until,
-          top_placement_until
-        `)
-        .eq('selected_category_slug', categorySlug)
-        .in('id', providerIdsInLga)
+        .select('*', { count: 'exact' })
         .eq('is_available', true)
+        .eq('selected_category_slug', categorySlug)
+        .in('id', profileIds)
         .order('boost_until', { ascending: false, nullsFirst: false })
-        .order('status', { ascending: true })
-        .limit(30);
+        .limit(20);
 
-      if (!providers || providers.length === 0) return [];
+      if (!providers?.length) {
+        return { lga: lgaData, providers: [], totalCount: count || 0 };
+      }
 
-      const ids = providers.map(p => p.id);
+      // 4. Fetch profiles, images, and reviews for these providers
+      const providerIds = providers.map(p => p.id);
 
-      const [profilesRes, portfolioRes] = await Promise.all([
-        supabase.from('profiles').select('*').in('id', ids),
-        supabase.from('portfolio_images').select('*').in('provider_id', ids),
+      const [profilesRes, imagesRes, reviewsRes] = await Promise.all([
+        supabase.from('profiles').select('*').in('id', providerIds),
+        supabase.from('portfolio_images').select('id, provider_id, image_url').in('provider_id', providerIds),
+        supabase.from('reviews').select('provider_id, rating').in('provider_id', providerIds),
       ]);
 
-      const profiles = profilesRes.data ?? [];
-      const images = portfolioRes.data ?? [];
+      const profilesMap = new Map((profilesRes.data || []).map(p => [p.id, p]));
+      const imagesMap = new Map<number, any[]>();
+      (imagesRes.data || []).forEach(img => {
+        if (!imagesMap.has(img.provider_id)) imagesMap.set(img.provider_id, []);
+        imagesMap.get(img.provider_id)!.push(img);
+      });
 
-      const userLat = profile?.lat;
-      const userLng = profile?.lng;
+      const reviewsMap = new Map<string, { sum: number; count: number }>();
+      (reviewsRes.data || []).forEach(r => {
+        if (!reviewsMap.has(r.provider_id)) reviewsMap.set(r.provider_id, { sum: 0, count: 0 });
+        const cur = reviewsMap.get(r.provider_id)!;
+        cur.sum += r.rating;
+        cur.count += 1;
+      });
 
-      return providers.map(provider => {
-        const p = profiles.find(pr => pr.id === provider.id) ?? ({} as ProfileRow);
-        const imgs = images.filter(img => img.provider_id === provider.id);
-        const distance = (userLat && userLng && p.lat && p.lng)
-          ? calculateDistance(userLat, userLng, p.lat, p.lng)
-          : undefined;
+      const enriched = providers.map(provider => {
+        const profile = profilesMap.get(provider.id) || null;
+        const images = imagesMap.get(provider.id) || [];
+        const reviewStats = reviewsMap.get(provider.id);
+        const avgRating = reviewStats ? reviewStats.sum / reviewStats.count : 0;
+
         return {
           ...provider,
-          profile: p,
-          portfolio_images: imgs,
-          distance,
-          average_rating: 0,
-          review_count: 0,
-        } as ProviderWithProfile;
+          profile,
+          portfolio_images: images,
+          average_rating: avgRating,
+          review_count: reviewStats?.count || 0,
+          distance: null,
+          lastSignInAt: profile?.updated_at || null,
+          is_available_now: provider.status === 'available',
+        };
       });
+
+      return {
+        lga: lgaData,
+        providers: enriched as ProviderWithDetails[],
+        totalCount: count || 0,
+      };
     },
     enabled: !!categorySlug && !!lgaId,
   });
 
-  // ---- Breadcrumbs ----
+  const categoryName = useMemo(() => {
+    if (!categorySlug) return '';
+    return categorySlug
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }, [categorySlug]);
+
+  const lgaName = data?.lga?.lga_name || '';
+  const stateName = data?.lga?.state_name || '';
+  const locationString = `${lgaName}, ${stateName}`;
+  const pageTitle = `${categoryName} in ${locationString} — Book Trusted Professionals | Nimart`;
+  const pageDescription = `Find the best ${categoryName.toLowerCase()} in ${locationString}. Browse verified profiles, read reviews, and book trusted ${categoryName.toLowerCase()} near you on Nimart.`;
+
+  // Breadcrumbs
   const breadcrumbItems = [
     { label: 'Home', to: '/' },
-    { label: pageCategoryName, to: `/search?category=${categorySlug}` },
-    { label: pageLgaName },
+    { label: categoryName, to: `/search?category=${categorySlug}` },
+    { label: lgaName || 'Area' },
   ];
 
-  // ---- Page title & description ----
-  const title = `${pageCategoryName} in ${pageLgaName}, ${pageStateName} – Nimart`;
-  const description = `Find trusted ${pageCategoryName.toLowerCase()} in ${pageLgaName}, ${pageStateName}. Compare ratings, view profiles, and book directly on Nimart.`;
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": breadcrumbItems.map((item, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": item.label,
+      "item": item.to ? `https://nimart.ng${item.to}` : undefined,
+    })),
+  };
+
+  const localBusinessSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": `${categoryName} in ${locationString} — Nimart`,
+    "description": pageDescription,
+    "url": `https://nimart.ng/services/${categorySlug}/in/${lgaId}`,
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": lgaName,
+      "addressRegion": stateName,
+      "addressCountry": "NG",
+    },
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <NimartSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+        <MapPin className="mx-auto h-16 w-16 text-gray-300" />
+        <h2 className="mt-4 text-xl font-bold text-gray-900">Location not found</h2>
+        <p className="mt-2 text-gray-500">The area you're looking for doesn't exist.</p>
+        <Link to="/search" className="mt-4 inline-block text-primary-600 hover:underline font-medium">
+          Browse all providers →
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <>
       <SEO
-        title={title}
-        description={description}
+        title={pageTitle}
+        description={pageDescription}
         url={`https://nimart.ng/services/${categorySlug}/in/${lgaId}`}
+        type="website"
+        schema={[breadcrumbSchema, localBusinessSchema]}
       />
 
-      {/* Breadcrumb navigation */}
-      <Breadcrumbs items={breadcrumbItems} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Breadcrumbs */}
+        <Breadcrumbs items={breadcrumbItems} />
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{title}</h1>
-
-      {isLoading ? (
-        <div className="flex justify-center py-20">
-          <NimartSpinner size="lg" />
-        </div>
-      ) : providers?.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border">
-          <p className="text-gray-500">
-            No {pageCategoryName.toLowerCase()} found in {pageLgaName}.
+        {/* Hero Section */}
+        <div className="bg-gradient-to-br from-primary-600 to-green-600 rounded-2xl p-6 sm:p-10 mb-8 text-white">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-3">
+            {categoryName} in {locationString}
+          </h1>
+          <p className="text-primary-100 text-sm sm:text-base max-w-2xl">
+            Browse verified {categoryName.toLowerCase()} in {lgaName}. Read reviews, compare profiles, and book a trusted professional near you on Nimart — Nigeria's service marketplace.
           </p>
-          <Link to="/search" className="mt-2 inline-block text-primary-600 hover:underline">
-            Browse all providers
-          </Link>
+          <div className="flex flex-wrap gap-3 mt-6">
+            <Link
+              to={`/search?category=${categorySlug}&lga=${lgaId}`}
+              className="inline-flex items-center gap-2 bg-white text-primary-700 px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-100 transition"
+            >
+              Search & Filter
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/auth/signup?role=provider"
+              className="inline-flex items-center gap-2 bg-white/20 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-white/30 transition border border-white/30"
+            >
+              Are you a {categoryName.toLowerCase()}? Join Nimart
+            </Link>
+          </div>
         </div>
-      ) : (
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
-          {providers!.map(provider => (
-            <div key={provider.id} className="mb-4 break-inside-avoid">
-              <ProviderCardPortrait provider={provider} />
+
+        {/* Results Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              {data.totalCount > 0
+                ? `${data.totalCount} ${categoryName}${data.totalCount > 1 ? 's' : ''} in ${lgaName}`
+                : `No ${categoryName} in ${lgaName} yet`}
+            </h2>
+            {data.totalCount > 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                Read reviews, compare profiles, and book with confidence
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={cn('p-2 text-gray-500 hover:text-primary-600', viewMode === 'grid' && 'bg-primary-50 text-primary-600')}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={cn('p-2 text-gray-500 hover:text-primary-600', viewMode === 'list' && 'bg-primary-50 text-primary-600')}
+                title="List view"
+              >
+                <List className="h-5 w-5" />
+              </button>
             </div>
-          ))}
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* Empty State */}
+        {data.providers.length === 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">
+            <Shield className="mx-auto h-16 w-16 text-gray-300" />
+            <h3 className="mt-4 text-lg font-semibold text-gray-700">
+              Be the first {categoryName.toLowerCase()} in {lgaName}!
+            </h3>
+            <p className="mt-2 text-gray-500 max-w-md mx-auto">
+              There are no {categoryName.toLowerCase()} listed in {lgaName} yet. If you're a professional in this area, join Nimart and start getting bookings today.
+            </p>
+            <Link
+              to="/auth/signup?role=provider"
+              className="mt-6 inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 transition font-semibold"
+            >
+              Join as a Provider
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          </div>
+        )}
+
+        {/* Provider Grid / List */}
+        {data.providers.length > 0 && (
+          <>
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {data.providers.map((provider: any) => (
+                  <ProviderCardPortrait
+                    key={provider.id}
+                    provider={{
+                      ...provider,
+                      profile: provider.profile || {},
+                      portfolio_images: provider.portfolio_images || [],
+                      distance: provider.distance,
+                      average_rating: provider.average_rating,
+                      review_count: provider.review_count,
+                      lastSignInAt: provider.lastSignInAt,
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {data.providers.map((provider: any) => (
+                  <ProviderCardHorizontal
+                    key={provider.id}
+                    provider={{
+                      ...provider,
+                      profile: provider.profile || {},
+                      portfolio_images: provider.portfolio_images || [],
+                      distance: provider.distance,
+                      average_rating: provider.average_rating,
+                      review_count: provider.review_count,
+                      lastSignInAt: provider.lastSignInAt,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Bottom CTA */}
+            <div className="mt-10 bg-gray-50 rounded-2xl p-6 sm:p-8 text-center">
+              <h3 className="text-lg font-bold text-gray-900">
+                Don't see the right {categoryName.toLowerCase()}?
+              </h3>
+              <p className="text-gray-600 mt-2">
+                Expand your search or check back soon — new providers join Nimart every day.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3 mt-4">
+                <Link
+                  to="/search"
+                  className="inline-flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-primary-700 transition"
+                >
+                  Browse All Providers
+                </Link>
+                {data.lga?.state_name && (
+                  <Link
+                    to={`/search?state=${categorySlug}`}
+                    className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-medium hover:bg-gray-100 transition"
+                  >
+                    View All in {data.lga.state_name}
+                  </Link>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

@@ -12,6 +12,7 @@ import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { ProviderCardPortrait } from '../../components/provider/ProviderCardPortrait';
 import { ProviderCardHorizontal } from '../../components/provider/ProviderCardHorizontal';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
+import { FavoriteButton } from '../../components/common/FavoriteButton';   // ← NEW
 import {
   MapPin,
   Star,
@@ -317,6 +318,9 @@ export default function ProviderProfile() {
 
   const submitReview = async () => {
     if (!user) { toast.error('Please sign in to leave a review'); navigate('/auth/signin'); return; }
+    
+    const bookingId = searchParams.get('bookingId');
+    
     setSubmittingReview(true);
     try {
       const { data: existingReview } = await supabase
@@ -326,9 +330,11 @@ export default function ProviderProfile() {
         .eq('provider_id', id!)
         .maybeSingle();
       if (existingReview) { toast.error('You have already reviewed this provider'); setShowReviewModal(false); return; }
+      
       const { error } = await supabase.from('reviews').insert([{
         reviewer_id: user.id,
         provider_id: id!,
+        booking_id: bookingId || null,
         rating: reviewRating,
         content: reviewContent || null,
       }]);
@@ -421,7 +427,6 @@ export default function ProviderProfile() {
     { label: providerName },
   ];
 
-  // ===== NEW: BreadcrumbList structured data =====
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -432,7 +437,6 @@ export default function ProviderProfile() {
       "item": item.to ? `https://nimart.ng${item.to}` : undefined,
     })),
   };
-  // ===============================================
 
   const providerSchema = {
     "@context": "https://schema.org",
@@ -485,7 +489,7 @@ export default function ProviderProfile() {
         image={provider.profile?.avatar_url || '/og-image.png'}
         url={`https://nimart.ng/provider/${id}`}
         type="profile"
-        schema={[providerSchema, breadcrumbSchema]}   // <-- NOW AN ARRAY
+        schema={[providerSchema, breadcrumbSchema]}
       />
 
       {/* ============== MODERN MOBILE LAYOUT ============== */}
@@ -550,7 +554,7 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Action buttons – all 5 visible, centred, working */}
+        {/* Action buttons – all 5 visible, centred, working + FavoriteButton */}
         <div className="px-2 mb-6">
           <div className="flex flex-nowrap gap-1 justify-center">
             <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white text-[10px] font-semibold rounded-xl w-14 shadow-md shadow-primary-600/20">
@@ -580,6 +584,10 @@ export default function ProviderProfile() {
                 <span className="truncate max-w-[50px]">{provider.profile?.phone || 'No phone'}</span>
               </a>
             )}
+            {/* Favorite button – standalone icon */}
+            <div className="flex-shrink-0 flex flex-col items-center justify-center w-14">
+              <FavoriteButton providerId={id!} size="md" />
+            </div>
           </div>
         </div>
 
@@ -804,7 +812,7 @@ export default function ProviderProfile() {
               )}
             </div>
 
-            {/* Action buttons */}
+            {/* Action buttons + FavoriteButton */}
             <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
               <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all">
                 <Calendar className="h-5 w-5" /> Book
@@ -827,6 +835,10 @@ export default function ProviderProfile() {
                   <Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}
                 </a>
               )}
+              {/* Favorite button – desktop */}
+              <div className="flex items-center">
+                <FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" />
+              </div>
             </div>
           </div>
 

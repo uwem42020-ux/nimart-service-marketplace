@@ -3,7 +3,7 @@ import { Resend } from "npm:resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-const FROM_EMAIL = "Nimart <noreply@nimart.ng>"; // Replace with your verified domain
+const FROM_EMAIL = "Nimart <info@nimart.ng>"; // Replace with your verified domain
 
 serve(async (req) => {
   try {

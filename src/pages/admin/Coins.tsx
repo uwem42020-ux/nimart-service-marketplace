@@ -1,8 +1,8 @@
-// src/pages/admin/Coins.tsx
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Search, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { sendEmail, sendPushNotification } from '../../lib/email';
 
 export default function AdminCoins() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,14 +14,10 @@ export default function AdminCoins() {
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
-
-    // 1. Search profiles (no join)
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('id, full_name, email')
-      .or(
-        `full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
-      )
+      .or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
       .limit(10);
 
     if (error || !profiles || profiles.length === 0) {
@@ -31,8 +27,6 @@ export default function AdminCoins() {
     }
 
     const profileIds = profiles.map((p: any) => p.id);
-
-    // 2. Fetch provider data for those profiles
     const { data: providers } = await supabase
       .from('providers')
       .select('id, coin_balance, business_name')
@@ -41,7 +35,6 @@ export default function AdminCoins() {
     const providerMap = new Map<string, any>();
     providers?.forEach((p: any) => providerMap.set(p.id, p));
 
-    // 3. Merge results (only show providers)
     const merged = profiles
       .filter((p: any) => providerMap.has(p.id))
       .map((profile: any) => {
@@ -74,13 +67,38 @@ export default function AdminCoins() {
         reference_id: null,
       });
 
-      // Update balance
+      // Update balance (RPC sends notification automatically)
       await supabase.rpc('adjust_coin_balance', {
         p_provider_id: selectedProvider.id,
         p_amount: finalAmount,
       });
 
-      toast.success(`${type === 'add' ? 'Added' : 'Removed'} ${amount} Nicoin`);
+      toast.success(`${type === 'add' ? 'Added' : 'Removed'} ${Math.abs(finalAmount)} Nicoin`);
+
+      // Send email notification
+      if (selectedProvider.email) {
+        await sendEmail(
+          selectedProvider.email,
+          'Nicoin Balance Updated',
+          `<h2>Your Nicoin balance has been ${type === 'add' ? 'increased' : 'decreased'} by ${Math.abs(finalAmount)} coins.</h2>`
+        );
+      }
+
+      // Send push notification (fetch FCM token)
+      const { data: providerProfile } = await supabase
+        .from('profiles')
+        .select('fcm_token')
+        .eq('id', selectedProvider.id)
+        .single();
+
+      if (providerProfile?.fcm_token) {
+        await sendPushNotification(
+          providerProfile.fcm_token,
+          'Nicoin Balance Updated',
+          `Your balance has been ${type === 'add' ? 'increased' : 'decreased'} by ${Math.abs(finalAmount)} Nicoin.`
+        );
+      }
+
       setCoinAmount('');
       setReason('');
 
@@ -128,7 +146,6 @@ export default function AdminCoins() {
         </button>
       </div>
 
-      {/* Search results */}
       {searchResults.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border mb-6">
           {searchResults.map((profile: any) => (
@@ -149,7 +166,6 @@ export default function AdminCoins() {
         </div>
       )}
 
-      {/* Selected provider coin adjustment */}
       {selectedProvider && (
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="font-semibold text-gray-900 mb-4">

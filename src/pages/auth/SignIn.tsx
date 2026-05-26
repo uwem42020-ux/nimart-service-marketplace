@@ -4,10 +4,11 @@ import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { requestPushPermission } from '../../lib/pushNotifications';
 
 export default function SignIn() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'password' | 'otp'>('password');   // ← password first
+  const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,6 +30,9 @@ export default function SignIn() {
         .select('role, is_complete')
         .eq('id', user?.id)
         .single();
+
+      // Request push notification permission
+      if (user) await requestPushPermission(user.id);
 
       if (profile?.role === 'provider') {
         if (!profile.is_complete) {
@@ -76,6 +80,9 @@ export default function SignIn() {
         .eq('id', user?.id)
         .single();
 
+      // Request push notification permission
+      if (user) await requestPushPermission(user.id);
+
       if (profile?.role === 'provider') {
         if (!profile.is_complete) {
           navigate('/provider/setup');
@@ -96,6 +103,20 @@ export default function SignIn() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleFacebookSignIn = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -128,17 +149,7 @@ export default function SignIn() {
       {/* Centered card */}
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          {/* Card */}
           <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8">
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <img
-                src="https://qootzfndochmcoijnwxf.supabase.co/storage/v1/object/public/logo/logo.png"
-                alt="Nimart"
-                className="h-10 sm:h-12 w-auto"
-              />
-            </div>
-
             <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
               Welcome back
             </h2>
@@ -311,7 +322,7 @@ export default function SignIn() {
               </div>
             </div>
 
-            {/* Google */}
+            {/* Google sign-in */}
             <button
               onClick={handleGoogleSignIn}
               className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition font-medium shadow-sm"
@@ -335,6 +346,17 @@ export default function SignIn() {
                 />
               </svg>
               Continue with Google
+            </button>
+
+            {/* Facebook sign-in */}
+            <button
+              onClick={handleFacebookSignIn}
+              className="w-full flex items-center justify-center gap-3 bg-[#1877F2] text-white py-3 rounded-xl hover:bg-[#166fe5] transition font-medium shadow-sm mt-3"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              Continue with Facebook
             </button>
 
             {/* Footer link */}

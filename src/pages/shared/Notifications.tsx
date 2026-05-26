@@ -6,6 +6,7 @@ import { Bell, CheckCircle, Calendar, MessageCircle, AlertCircle, XCircle } from
 import { cn } from '../../lib/utils';
 import toast from 'react-hot-toast';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   id: string;
@@ -26,6 +27,7 @@ const iconMap: Record<string, React.ElementType> = {
 
 export default function Notifications() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -34,7 +36,6 @@ export default function Notifications() {
     if (!user) return;
     fetchNotifications();
 
-    // Real‑time subscription
     const channel = supabase
       .channel('notifications-page')
       .on(
@@ -96,8 +97,29 @@ export default function Notifications() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }
 
-  const filteredNotifications = filter === 'all' 
-    ? notifications 
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.is_read) {
+      markAsRead(notification.id);
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
+      );
+    }
+
+    const data = notification.data;
+
+    if (data?.booking_id) {
+      const role = data.role || 'customer';
+      navigate(`/${role}/bookings`);
+    } else if (data?.thread_id) {
+      const role = data.role || 'customer';
+      navigate(`/${role}/messages/${data.thread_id}`);
+    } else if (data?.provider_id) {
+      navigate(`/provider/${data.provider_id}`);
+    }
+  };
+
+  const filteredNotifications = filter === 'all'
+    ? notifications
     : notifications.filter(n => !n.is_read);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -139,14 +161,17 @@ export default function Notifications() {
         <div className="space-y-2">
           {filteredNotifications.map((notif) => {
             const Icon = iconMap[notif.type] || Bell;
+            const hasAction = notif.data?.booking_id || notif.data?.thread_id || notif.data?.provider_id;
+
             return (
               <div
                 key={notif.id}
                 className={cn(
                   'bg-white rounded-lg shadow-sm border p-4 transition',
-                  !notif.is_read && 'border-l-4 border-l-primary-500 bg-primary-50/30'
+                  !notif.is_read && 'border-l-4 border-l-primary-500 bg-primary-50/30',
+                  hasAction && 'cursor-pointer hover:shadow-md hover:bg-gray-50'
                 )}
-                onClick={() => !notif.is_read && markAsRead(notif.id)}
+                onClick={() => handleNotificationClick(notif)}
               >
                 <div className="flex items-start gap-3">
                   <div className={cn(
@@ -165,10 +190,18 @@ export default function Notifications() {
                       </span>
                     </div>
                     {notif.body && <p className="text-sm text-gray-600 mt-1">{notif.body}</p>}
+                    {hasAction && (
+                      <p className="text-xs text-primary-600 font-medium mt-2 hover:underline">
+                        Tap to view details →
+                      </p>
+                    )}
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }}
-                    className="text-gray-400 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteNotification(notif.id);
+                    }}
+                    className="text-gray-400 hover:text-red-500 flex-shrink-0"
                   >
                     <XCircle className="h-4 w-4" />
                   </button>

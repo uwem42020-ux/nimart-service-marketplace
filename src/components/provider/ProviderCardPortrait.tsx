@@ -9,6 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocationStore } from '../../stores/locationStore';
 import toast from 'react-hot-toast';
+import { FavoriteButton } from '../common/FavoriteButton';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -72,6 +73,7 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
     : 'Recently';
 
   const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
+  const isVerified = provider.profile?.is_verified || false;
 
   const handleBookNow = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -125,6 +127,7 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
       className={cn(
         'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col break-inside-avoid',
         isBoosted && 'border-2 border-amber-500',
+        isVerified && !isBoosted && 'border-2 border-primary-500',
         className
       )}
     >
@@ -148,8 +151,13 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
           </div>
         )}
 
+        {/* Favorite button – top left */}
+        <div className="absolute top-2 left-2 z-10">
+          <FavoriteButton providerId={provider.id} size="sm" />
+        </div>
+
         {/* Verified badge (top right) */}
-        {provider.profile?.is_verified && (
+        {isVerified && (
           <div className="absolute top-3 right-3 bg-white rounded-full p-0.5 shadow-sm z-10">
             <img src="/verify.png" alt="Verified" className="h-7 w-7" />
           </div>

@@ -1,11 +1,9 @@
-// src/pages/Search.tsx
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ProviderCardPortrait } from '../components/provider/ProviderCardPortrait';
 import { ProviderCardHorizontal } from '../components/provider/ProviderCardHorizontal';
 import { useAuth } from '../contexts/AuthContext';
-import { calculateDistance } from '../lib/distance';
 import { EnhancedFilterSidebar } from '../components/search/EnhancedFilterSidebar';
 import { SortDropdown } from '../components/search/SortDropdown';
 import { SEO } from '../components/common/SEO';
@@ -16,7 +14,7 @@ import {
   X,
   LayoutGrid,
   List,
-  Map,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { NimartSpinner } from '../components/common/NimartSpinner';
 import { cn } from '../lib/utils';
@@ -47,6 +45,7 @@ export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sortBy, setSortBy] = useState<string>('distance');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const keyword = searchParams.get('q') || '';
   const tier = searchParams.get('tier');
@@ -55,6 +54,7 @@ export default function Search() {
   const state = searchParams.get('state');
   const lga = searchParams.get('lga');
 
+  // Use the same location source as the homepage
   const userLat = profile?.lat ?? undefined;
   const userLng = profile?.lng ?? undefined;
 
@@ -167,7 +167,7 @@ export default function Search() {
     setShowSuggestions(false);
   };
 
-  // Providers query – exactly the old stable logic
+  // Providers query – uses RPC for distances and last seen (accurate)
   const { data: providers, isLoading } = useQuery({
     queryKey: ['search-providers', keyword, tier, category, subcategory, state, lga, userLat, userLng, sortBy],
     queryFn: async () => {
@@ -247,6 +247,8 @@ export default function Search() {
       if (!providersData || providersData.length === 0) return [] as ProviderWithProfile[];
 
       const providerIds = providersData.map(p => p.id);
+
+      // Fetch profiles, portfolio, reviews in parallel
       const [profilesRes, portfolioRes] = await Promise.all([
         supabase.from('profiles').select('*').in('id', providerIds),
         supabase.from('portfolio_images').select('*').in('provider_id', providerIds)
@@ -254,12 +256,40 @@ export default function Search() {
       const profiles = profilesRes.data ?? [];
       const portfolioImages = portfolioRes.data ?? [];
 
+      // Batch distance calculation using the same RPC as the homepage
+      let distancesMap: Record<string, number> = {};
+      if (userLat && userLng) {
+        const { data: distances, error: rpcError } = await supabase
+          .rpc('get_provider_distances', {
+            user_lat: userLat,
+            user_lng: userLng,
+            provider_ids: providerIds,
+          });
+
+        if (!rpcError && distances) {
+          distances.forEach((d: any) => {
+            distancesMap[d.provider_id] = d.distance_meters;
+          });
+        }
+      }
+
+      // Batch last sign‑in times (accurate)
+      let lastSignInMap: Record<string, string | null> = {};
+      const signInPromises = providerIds.map(async (id) => {
+        const { data } = await supabase.rpc('get_user_last_sign_in', { user_id: id });
+        return { id, lastSignInAt: data };
+      });
+      const signInResults = await Promise.all(signInPromises);
+      signInResults.forEach(({ id, lastSignInAt }) => {
+        lastSignInMap[id] = lastSignInAt;
+      });
+
       const providersWithDetails = await Promise.all(providersData.map(async (provider) => {
         const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
         const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
-        const distance = (userLat && userLng && providerProfile.lat && providerProfile.lng)
-          ? calculateDistance(userLat, userLng, providerProfile.lat, providerProfile.lng)
-          : undefined;
+
+        const distanceMeters = distancesMap[provider.id];
+        const distance = distanceMeters ? distanceMeters / 1000 : undefined;
 
         const { data: reviews } = await supabase
           .from('reviews')
@@ -269,8 +299,7 @@ export default function Search() {
           ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
           : 0;
 
-        const { data: lastSignInData } = await supabase
-          .rpc('get_user_last_sign_in', { user_id: provider.id });
+        const lastSignInAt = lastSignInMap[provider.id] ?? null;
 
         return {
           ...provider,
@@ -279,10 +308,11 @@ export default function Search() {
           distance,
           average_rating: avgRating,
           review_count: reviews?.length || 0,
-          lastSignInAt: lastSignInData,
+          lastSignInAt,
         } as ProviderWithProfile;
       }));
 
+      // Sort (by distance is now accurate)
       if (sortBy === 'distance') {
         providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
       } else if (sortBy === 'rating') {
@@ -298,26 +328,52 @@ export default function Search() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-0 sm:px-4 lg:px-8 py-6">
       <SEO
         title={`Search${keyword ? `: ${keyword}` : ''}`}
         description="Find trusted service providers in Nigeria. Browse by category, location, and ratings."
         url={`https://nimart.ng/search?${searchParams.toString()}`}
       />
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
-        <aside className="lg:w-64 flex-shrink-0">
+      {/* Mobile filter button */}
+      <div className="px-4 sm:px-0 mb-4">
+        <button
+          className="lg:hidden flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg"
+          onClick={() => setMobileSidebarOpen(true)}
+        >
+          <SlidersHorizontal className="h-5 w-5" /> Filters
+        </button>
+      </div>
+
+      {/* Sidebar overlay for mobile */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setMobileSidebarOpen(false)} />
+          <aside className="relative w-80 max-w-[85%] bg-white h-full overflow-y-auto p-4 ml-auto shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">Filters</h3>
+              <button onClick={() => setMobileSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <EnhancedFilterSidebar />
+          </aside>
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:block lg:w-64 flex-shrink-0">
           <EnhancedFilterSidebar />
         </aside>
 
         {/* Main content */}
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 px-4 sm:px-0">
           {/* Search bar with autocomplete */}
-          <div className="mb-6 relative">
+          <div className="mb-5 relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <div className="relative">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -328,7 +384,7 @@ export default function Search() {
                   }}
                   onFocus={() => setShowSuggestions(true)}
                   placeholder="Search services, providers..."
-                  className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900"
+                  className="w-full pl-12 pr-10 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 shadow-sm"
                 />
                 {searchInput && (
                   <button
@@ -354,7 +410,7 @@ export default function Search() {
             {showSuggestions && debouncedSearchTerm && suggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-20 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden"
+                className="absolute z-20 mt-1 w-full bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
               >
                 {suggestions.map((s, idx) => (
                   <button
@@ -376,15 +432,11 @@ export default function Search() {
           </div>
 
           {/* Toolbar: heading, view toggle, map, sort */}
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <h1 className="text-xl font-bold text-gray-900">
-              {keyword ? `Results for "${keyword}"` : tier ? `${tier} Services` : category ? category : 'All Providers'}
-              {providers && providers.length > 0 && (
-                <span className="text-sm text-gray-500 ml-2">({providers.length})</span>
-              )}
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <h1 className="text-xl font-bold text-gray-900 truncate">
+              {keyword ? `"${keyword}"` : tier ? `${tier} Services` : category ? category : 'Recommended'}
             </h1>
             <div className="flex items-center gap-2">
-              {/* View toggle */}
               <div className="flex border border-gray-200 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -401,17 +453,11 @@ export default function Search() {
                   <List className="h-5 w-5" />
                 </button>
               </div>
-
-              {/* Map button */}
-              <Link
-                to="/map"
-                className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:text-primary-600"
-                title="Map view"
-              >
-                <Map className="h-5 w-5" />
+              <Link to="/map" className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:text-primary-600" title="Map view">
+                <svg className="w-5 h-5" aria-hidden="true">
+                  <use href="/icons/sprite.svg#map" />
+                </svg>
               </Link>
-
-              {/* Sort dropdown */}
               <SortDropdown value={sortBy} onChange={setSortBy} />
             </div>
           </div>
@@ -422,28 +468,44 @@ export default function Search() {
               <NimartSpinner size="lg" />
             </div>
           ) : !providers || providers.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border">
+            <div className="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm">
               <p className="text-gray-500">No providers found.</p>
-              <Link to="/" className="mt-2 inline-block text-primary-600 hover:underline">
+              <Link to="/" className="mt-2 inline-block text-primary-600 hover:underline font-medium">
                 Browse all providers
               </Link>
             </div>
-          ) : viewMode === 'grid' ? (
-            /* Masonry grid with portrait cards */
-            <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
-              {providers.map((provider) => (
-                <div key={provider.id} className="mb-4 break-inside-avoid">
-                  <ProviderCardPortrait provider={provider} />
-                </div>
-              ))}
-            </div>
           ) : (
-            /* List view with horizontal cards */
-            <div className="flex flex-col gap-3">
-              {providers.map((provider) => (
-                <ProviderCardHorizontal key={provider.id} provider={provider} />
-              ))}
-            </div>
+            <>
+              {/* Mobile: full‑width 2‑column grid */}
+              <div className="block sm:hidden">
+                <div className="columns-2 gap-2">
+                  {providers.map((provider) => (
+                    <div key={provider.id} className="mb-2 break-inside-avoid">
+                      <ProviderCardPortrait provider={provider} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tablet/Desktop: grid or list based on viewMode */}
+              <div className="hidden sm:block">
+                {viewMode === 'grid' ? (
+                  <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+                    {providers.map((provider) => (
+                      <div key={provider.id} className="mb-4 break-inside-avoid">
+                        <ProviderCardPortrait provider={provider} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {providers.map((provider) => (
+                      <ProviderCardHorizontal key={provider.id} provider={provider} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </main>
       </div>

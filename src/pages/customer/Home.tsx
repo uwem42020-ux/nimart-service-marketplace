@@ -199,7 +199,7 @@ export default function Home() {
     fetchNearestLGA();
   }, [permissionGranted, globalLat, globalLng]);
 
-  // Featured providers query (unchanged)
+  // Featured providers query
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
@@ -315,6 +315,17 @@ export default function Home() {
         }
       }
 
+      // Batch last sign‑in times (accurate)
+      let lastSignInMap: Record<string, string | null> = {};
+      const signInPromises = providerIds.map(async (id) => {
+        const { data } = await supabase.rpc('get_user_last_sign_in', { user_id: id });
+        return { id, lastSignInAt: data };
+      });
+      const signInResults = await Promise.all(signInPromises);
+      signInResults.forEach(({ id, lastSignInAt }) => {
+        lastSignInMap[id] = lastSignInAt;
+      });
+
       const providersWithDetails = providers.map(provider => {
         const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
         const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
@@ -328,7 +339,7 @@ export default function Home() {
           : 0;
         const reviewCount = reviewStats?.count || 0;
 
-        const lastSignInAt = providerProfile.updated_at || null;
+        const lastSignInAt = lastSignInMap[provider.id] ?? null;
 
         return {
           ...provider,
@@ -391,7 +402,8 @@ export default function Home() {
     autoLocationApplied.current = true;
   };
 
-  const handleSearch = () => {
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const query = searchInputRef.current?.value.trim();
     if (query) {
       navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -463,7 +475,7 @@ export default function Home() {
         title="Nimart - Nigeria's Trusted Service Marketplace"
         description="Connect with verified professionals across Nigeria. Book trusted services for home, auto, beauty, and more."
         url="https://nimart.ng"
-        schema={[homeSchema, siteNavSchema]}   // WebSite + SiteNavigationElement
+        schema={[homeSchema, siteNavSchema]}
       />
 
       {/* Hero section – grey background matching page, white card for location/search */}
@@ -502,8 +514,8 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Search bar */}
-              <div className="flex bg-white rounded-lg overflow-hidden flex-1 md:flex-1 border border-[#008751]/30">
+              {/* Search bar (form wraps input + button so Enter triggers search) */}
+              <form onSubmit={handleSearch} className="flex bg-white rounded-lg overflow-hidden flex-1 md:flex-1 border border-[#008751]/30">
                 <div className="hidden md:flex items-center pl-3">
                   <Search className="h-5 w-5 text-[#008751]" />
                 </div>
@@ -514,13 +526,13 @@ export default function Home() {
                   className="w-full px-3 py-3 text-gray-900 focus:outline-none text-sm md:text-base"
                 />
                 <button
-                  onClick={handleSearch}
+                  type="submit"
                   className="bg-[#008751] hover:bg-green-700 text-white px-3 md:px-6 transition flex items-center justify-center"
                 >
                   <Search className="h-5 w-5" />
                   <span className="hidden md:inline ml-2">Search</span>
                 </button>
-              </div>
+              </form>
             </div>
           </div>
         </div>

@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Database } from '../../types/database';
+import { FavoriteButton } from '../common/FavoriteButton';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -69,6 +70,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
     : 'Recently';
 
   const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
+  const isVerified = provider.profile?.is_verified || false;
 
   const handleBook = () => {
     if (provider.status === 'away') return;
@@ -84,6 +86,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
       className={cn(
         'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-row items-stretch hover:shadow-md transition-shadow',
         isBoosted && 'border-2 border-amber-500',
+        isVerified && !isBoosted && 'border-2 border-primary-500',
         className
       )}
     >
@@ -109,8 +112,13 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
           </div>
         )}
 
+        {/* Favorite button – top left */}
+        <div className="absolute top-2 left-2 z-10">
+          <FavoriteButton providerId={provider.id} size="sm" />
+        </div>
+
         {/* Verified badge (top right) */}
-        {provider.profile?.is_verified && (
+        {isVerified && (
           <div className="absolute top-2 right-2 bg-white rounded-full p-0.5 shadow-sm z-10">
             <img src="/verify.png" alt="Verified" className="h-6 w-6" />
           </div>
