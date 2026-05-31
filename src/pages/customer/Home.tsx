@@ -173,33 +173,14 @@ export default function Home() {
     preloadLocations();
   }, []);
 
-  // Auto‑location detection
-  useEffect(() => {
-    if (!permissionGranted || !globalLat || !globalLng) return;
-    if (autoLocationApplied.current) return;
-    if (searchParams.get('state') || searchParams.get('lga')) return;
+  // ============================================================
+  //  AUTO‑LOCATION DETECTION REMOVED
+  //  The page now always starts with "All Nigeria".
+  //  Location changes only happen when the user manually
+  //  picks a state or LGA from the dropdown.
+  // ============================================================
 
-    const fetchNearestLGA = async () => {
-      const { data, error } = await supabase.rpc('find_nearest_lga', {
-        user_lat: globalLat,
-        user_lng: globalLng
-      });
-
-      if (!error && data && data.length > 0) {
-        const nearest = data[0];
-        const params = new URLSearchParams(searchParams);
-        params.set('state', nearest.state_id.toString());
-        params.set('lga', nearest.lga_id.toString());
-        setSearchParams(params, { replace: true });
-        setLocationLabel(`${nearest.lga_name}, ${nearest.state_name}`);
-        autoLocationApplied.current = true;
-      }
-    };
-
-    fetchNearestLGA();
-  }, [permissionGranted, globalLat, globalLng]);
-
-  // Featured providers query
+  // Featured providers query (unchanged)
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
@@ -514,7 +495,7 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Search bar (form wraps input + button so Enter triggers search) */}
+              {/* Search bar */}
               <form onSubmit={handleSearch} className="flex bg-white rounded-lg overflow-hidden flex-1 md:flex-1 border border-[#008751]/30">
                 <div className="hidden md:flex items-center pl-3">
                   <Search className="h-5 w-5 text-[#008751]" />
@@ -607,17 +588,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mobile Layout */}
-        <div className="block md:hidden">
+        {/* Mobile Layout – FULL SCREEN AGGRESSIVE with small gap */}
+        <div className="block md:hidden -mx-4 sm:-mx-6 lg:-mx-8">
           <QuickLinksBanner onFindProviders={() => setRadarOpen(true)} />
           <TopProvidersSlider />
 
-          <div className="mb-4">
+          <div className="mb-4 px-4">
             <CategoryButtons providerCounts={providerCounts} subcategoryCounts={subcategoryCounts} />
           </div>
 
           <section>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 px-4">
               <h2 className="text-lg font-bold text-gray-900">
                 {lgaFilter
                   ? `Providers in ${locationName}`
@@ -658,12 +639,12 @@ export default function Home() {
                     <div className="columns-2 gap-2">
                       {featuredProviders.map((provider) => (
                         <div key={provider.id} className="mb-2 break-inside-avoid">
-                          <ProviderCardPortrait provider={provider} />
+                          <ProviderCardPortrait provider={provider} className="shadow-none border-0 rounded-none" />
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 px-4">
                       {featuredProviders.map((provider) => (
                         <ProviderCardHorizontal key={provider.id} provider={provider} />
                       ))}

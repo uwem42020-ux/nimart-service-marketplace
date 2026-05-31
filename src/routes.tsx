@@ -59,7 +59,8 @@ const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const AdminCoins = lazy(() => import('./pages/admin/Coins'));
 const AdminPayments = lazy(() => import('./pages/admin/Payments'));
 const AdminBlog = lazy(() => import('./pages/admin/Blog'));
-const AdminFlags = lazy(() => import('./pages/admin/Flags'));   // ← NEW
+const AdminFlags = lazy(() => import('./pages/admin/Flags'));
+const AdminReferrals = lazy(() => import('./pages/admin/Referrals'));
 
 // Provider portfolio page (customer view)
 const CustomerProviderPortfolio = lazy(() => import('./pages/customer/ProviderPortfolio'));
@@ -154,7 +155,8 @@ export const router = createBrowserRouter([
       { path: 'coins', element: <Suspense fallback={<LoadingSkeleton />}><AdminCoins /></Suspense> },
       { path: 'payments', element: <Suspense fallback={<LoadingSkeleton />}><AdminPayments /></Suspense> },
       { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><AdminBlog /></Suspense> },
-      { path: 'flags', element: <Suspense fallback={<LoadingSkeleton />}><AdminFlags /></Suspense> },   // ← NEW
+      { path: 'flags', element: <Suspense fallback={<LoadingSkeleton />}><AdminFlags /></Suspense> },
+      { path: 'referrals', element: <Suspense fallback={<LoadingSkeleton />}><AdminReferrals /></Suspense> },
     ],
   },
 ]);

@@ -1,4 +1,3 @@
-// vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -8,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'inline',  // 👈 ADD THIS LINE
+      injectRegister: 'inline',
       includeAssets: [
         'favicon.ico',
         'favicon-16x16.png',
@@ -90,6 +89,9 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // 👇 NEW: Forces browser to fetch latest on every navigation
+        navigateFallback: null,
+        navigationPreload: true,
       }
     })
   ],

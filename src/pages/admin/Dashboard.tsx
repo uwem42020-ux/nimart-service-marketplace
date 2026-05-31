@@ -183,6 +183,15 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-500">Review flagged bookings</p>
             </Link>
           </div>
+
+          {/* Referral Quick Action */}
+          <div className="mt-6">
+            <Link to="/admin/referrals" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition inline-block w-full sm:w-auto">
+              <Users className="h-8 w-8 text-primary-600 mb-4" />
+              <h3 className="font-semibold text-gray-900">Referrals</h3>
+              <p className="text-sm text-gray-500">Monitor referral program</p>
+            </Link>
+          </div>
         </>
       )}
     </div>

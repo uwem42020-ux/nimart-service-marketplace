@@ -5,11 +5,19 @@ import { supabase } from '../../lib/supabase';
 import { ProviderStatusToggle } from '../../components/provider/ProviderStatusToggle';
 import {
   Calendar, Star, Settings, Image, Package, Shield, Coins,
-  TrendingUp, Zap, Tag, ChevronRight, Bell
+  TrendingUp, Zap, Tag, Users, Copy, Share2, ChevronRight
 } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import toast from 'react-hot-toast';
 import { CATEGORIES } from '../../data/categories';
+import {
+  STANDARD_BOOST_COST,
+  PREMIUM_BOOST_COST,
+  TOP_PLACEMENT_COST,
+  EXTRA_CATEGORY_COST,
+  REFERRAL_BONUS,
+} from '../../lib/nicoinConfig';
+import { generateUniqueReferralCode } from '../../lib/referralUtils';
 
 interface DashboardStats {
   totalBookings: number;
@@ -17,6 +25,12 @@ interface DashboardStats {
   completedBookings: number;
   averageRating: number;
   reviewCount: number;
+}
+
+interface ReferralStats {
+  total: number;
+  pending: number;
+  awarded: number;
 }
 
 export default function ProviderDashboard() {
@@ -43,17 +57,27 @@ export default function ProviderDashboard() {
   const [boostType, setBoostType] = useState<'standard' | 'premium'>('standard');
   const [extraCategorySlug, setExtraCategorySlug] = useState('');
 
+  // Referral state
+  const [referralCode, setReferralCode] = useState('');
+  const [referralStats, setReferralStats] = useState<ReferralStats>({
+    total: 0,
+    pending: 0,
+    awarded: 0,
+  });
+
   useEffect(() => {
     if (!user) return;
     fetchProviderData();
     fetchStats();
     checkVerificationStatus();
+    fetchReferralStats();
   }, [user]);
 
   useEffect(() => {
     if (user) fetchCoinData();
   }, [user]);
 
+  // ---- Data Fetching ----
   async function fetchCoinData() {
     const { data } = await supabase
       .from('providers')
@@ -77,6 +101,17 @@ export default function ProviderDashboard() {
     const combined = { ...provider, profile };
     setProviderData(combined);
     setIsVerified(profile?.is_verified || false);
+
+    // Generate referral code if missing
+    if (provider && !provider.referral_code) {
+      const name = provider.business_name || profile?.full_name || 'Provider';
+      const code = await generateUniqueReferralCode(name);
+      await supabase.from('providers').update({ referral_code: code }).eq('id', user!.id);
+      setReferralCode(code);
+    } else if (provider?.referral_code) {
+      setReferralCode(provider.referral_code);
+    }
+
     if (combined && (!combined.profile?.lga_id || !combined.business_name)) {
       navigate('/provider/setup');
     }
@@ -117,11 +152,33 @@ export default function ProviderDashboard() {
     setHasPendingVerification(data && data.length > 0);
   }
 
-  // Boost handlers (unchanged logic)
+  async function fetchReferralStats() {
+    const { count: total } = await supabase
+      .from('referrals')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', user!.id);
+    const { count: pending } = await supabase
+      .from('referrals')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', user!.id)
+      .eq('status', 'pending');
+    const { count: awarded } = await supabase
+      .from('referrals')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', user!.id)
+      .eq('status', 'awarded');
+    setReferralStats({
+      total: total || 0,
+      pending: pending || 0,
+      awarded: awarded || 0,
+    });
+  }
+
+  // ---- Boost Handlers ----
   const handleBoost = async () => {
     setBoostLoading(true);
     try {
-      const cost = boostType === 'standard' ? 1000 : 3000;
+      const cost = boostType === 'standard' ? STANDARD_BOOST_COST : PREMIUM_BOOST_COST;
       const { data: provider } = await supabase
         .from('providers')
         .select('coin_balance, status')
@@ -157,7 +214,7 @@ export default function ProviderDashboard() {
   const handleTopPlacement = async () => {
     setBoostLoading(true);
     try {
-      const cost = 10000;
+      const cost = TOP_PLACEMENT_COST;
       const { data: provider } = await supabase
         .from('providers')
         .select('coin_balance, status')
@@ -193,7 +250,7 @@ export default function ProviderDashboard() {
     if (!extraCategorySlug) return;
     setBoostLoading(true);
     try {
-      const cost = 1500;
+      const cost = EXTRA_CATEGORY_COST;
       await supabase.rpc('purchase_extra_category', {
         p_provider_id: user!.id,
         p_category_slug: extraCategorySlug,
@@ -210,6 +267,25 @@ export default function ProviderDashboard() {
     }
   };
 
+  // ---- Referral Actions ----
+  const copyReferralLink = () => {
+    const link = `https://nimart.ng/auth/signup?role=provider&ref=${referralCode}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Referral link copied!');
+  };
+
+  const shareReferralLink = () => {
+    const link = `https://nimart.ng/auth/signup?role=provider&ref=${referralCode}`;
+    const text = `Join Nimart as a provider and get ${REFERRAL_BONUS} free Nicoins! Use my referral link: ${link}`;
+    if (navigator.share) {
+      navigator.share({ title: 'Join Nimart', text, url: link });
+    } else {
+      navigator.clipboard.writeText(link);
+      toast.success('Referral link copied!');
+    }
+  };
+
+  // ---- Loading State ----
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -225,9 +301,7 @@ export default function ProviderDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         {providerData && (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 font-medium">
-              Select availability status:
-            </span>
+            <span className="text-sm text-gray-600 font-medium">Select availability status:</span>
             <ProviderStatusToggle
               providerId={user!.id}
               initialStatus={providerData.status}
@@ -247,10 +321,7 @@ export default function ProviderDashboard() {
               <p className="text-sm text-blue-600">Verified providers get more bookings</p>
             </div>
           </div>
-          <Link
-            to="/provider/verification"
-            className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm font-medium w-full sm:w-auto text-center"
-          >
+          <Link to="/provider/verification" className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm font-medium w-full sm:w-auto text-center">
             Get Verified
           </Link>
         </div>
@@ -261,9 +332,7 @@ export default function ProviderDashboard() {
           <Shield className="h-6 w-6 text-yellow-600" />
           <div>
             <p className="font-medium text-yellow-800">Verification in progress</p>
-            <p className="text-sm text-yellow-600">
-              We're reviewing your documents. This usually takes 24-48 hours.
-            </p>
+            <p className="text-sm text-yellow-600">We're reviewing your documents. This usually takes 24-48 hours.</p>
           </div>
         </div>
       )}
@@ -288,10 +357,7 @@ export default function ProviderDashboard() {
               {coinBalance.toLocaleString()}
             </p>
           </div>
-          <Link
-            to="/provider/payment"
-            className="bg-white/20 text-white px-4 py-2 rounded-xl hover:bg-white/30 text-sm font-medium"
-          >
+          <Link to="/provider/payment" className="bg-white/20 text-white px-4 py-2 rounded-xl hover:bg-white/30 text-sm font-medium">
             Manage Coins →
           </Link>
         </div>
@@ -316,47 +382,35 @@ export default function ProviderDashboard() {
         </div>
         <div className="bg-white rounded-2xl shadow-sm border p-4">
           <Star className="h-6 w-6 text-yellow-400 mb-2" />
-          <p className="text-lg font-bold">
-            {stats.averageRating.toFixed(1)}{' '}
-            <span className="text-xs text-gray-400">({stats.reviewCount})</span>
-          </p>
+          <p className="text-lg font-bold">{stats.averageRating.toFixed(1)} <span className="text-xs text-gray-400">({stats.reviewCount})</span></p>
           <p className="text-xs text-gray-500">Rating</p>
         </div>
       </div>
 
       {/* Setup Checklist */}
-      {providerData &&
-        (!providerData.profile?.lga_id || !providerData.business_name) && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8 rounded-r-xl">
-            <div className="flex">
-              <Settings className="h-5 w-5 text-yellow-400 mr-2" />
-              <p className="text-sm text-yellow-700">
-                Complete your profile to appear in searches.{' '}
-                <Link to="/provider/setup" className="font-medium underline">
-                  Complete Setup
-                </Link>
-              </p>
-            </div>
+      {providerData && (!providerData.profile?.lga_id || !providerData.business_name) && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8 rounded-r-xl">
+          <div className="flex">
+            <Settings className="h-5 w-5 text-yellow-400 mr-2" />
+            <p className="text-sm text-yellow-700">
+              Complete your profile to appear in searches. <Link to="/provider/setup" className="font-medium underline">Complete Setup</Link>
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
       {/* Boost Cards */}
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">
-        Boost Your Visibility
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Boost Your Visibility</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {/* Standard Boost */}
         <div className="bg-white rounded-2xl shadow-sm border p-5">
           <TrendingUp className="h-6 w-6 text-primary-600 mb-2" />
           <h3 className="font-semibold">Standard Boost</h3>
           <p className="text-sm text-gray-500 mb-3">7 days at top</p>
-          <p className="text-lg font-bold mb-4">1,000 Nicoin</p>
+          <p className="text-lg font-bold mb-4">{STANDARD_BOOST_COST.toLocaleString()} Nicoin</p>
           <button
-            onClick={() => {
-              setBoostType('standard');
-              setShowBoostModal(true);
-            }}
-            disabled={coinBalance < 1000}
+            onClick={() => { setBoostType('standard'); setShowBoostModal(true); }}
+            disabled={coinBalance < STANDARD_BOOST_COST}
             className="w-full bg-primary-600 text-white py-2.5 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-medium text-sm"
           >
             Boost Now
@@ -368,13 +422,10 @@ export default function ProviderDashboard() {
           <Zap className="h-6 w-6 text-amber-500 mb-2" />
           <h3 className="font-semibold">Premium Boost</h3>
           <p className="text-sm text-gray-500 mb-3">30 days at top</p>
-          <p className="text-lg font-bold mb-4">3,000 Nicoin</p>
+          <p className="text-lg font-bold mb-4">{PREMIUM_BOOST_COST.toLocaleString()} Nicoin</p>
           <button
-            onClick={() => {
-              setBoostType('premium');
-              setShowBoostModal(true);
-            }}
-            disabled={coinBalance < 3000}
+            onClick={() => { setBoostType('premium'); setShowBoostModal(true); }}
+            disabled={coinBalance < PREMIUM_BOOST_COST}
             className="w-full bg-amber-500 text-white py-2.5 rounded-xl hover:bg-amber-600 disabled:opacity-50 transition font-medium text-sm"
           >
             Boost 1 Month
@@ -385,13 +436,11 @@ export default function ProviderDashboard() {
         <div className="bg-white rounded-2xl shadow-sm border p-5">
           <Tag className="h-6 w-6 text-purple-600 mb-2" />
           <h3 className="font-semibold">Top Placement</h3>
-          <p className="text-sm text-gray-500 mb-3">
-            Guaranteed top‑3 for 7 days
-          </p>
-          <p className="text-lg font-bold mb-4">10,000 Nicoin</p>
+          <p className="text-sm text-gray-500 mb-3">Guaranteed top‑3 for 7 days</p>
+          <p className="text-lg font-bold mb-4">{TOP_PLACEMENT_COST.toLocaleString()} Nicoin</p>
           <button
             onClick={() => setShowTopPlacementModal(true)}
-            disabled={coinBalance < 10000}
+            disabled={coinBalance < TOP_PLACEMENT_COST}
             className="w-full bg-purple-600 text-white py-2.5 rounded-xl hover:bg-purple-700 disabled:opacity-50 transition font-medium text-sm"
           >
             Get Top Spot
@@ -405,51 +454,91 @@ export default function ProviderDashboard() {
           onClick={() => setShowExtraCategoryModal(true)}
           className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50"
         >
-          <Package className="h-4 w-4" /> Add Extra Category (1,500 Nicoin)
+          <Package className="h-4 w-4" /> Add Extra Category ({EXTRA_CATEGORY_COST.toLocaleString()} Nicoin)
         </button>
+      </div>
+
+      {/* Your Referrals Widget */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary-600" />
+            Your Referrals
+          </h2>
+        </div>
+
+        {/* Referral code and share */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <p className="text-sm text-gray-500 mb-1">Your Referral Code</p>
+            <div className="flex items-center gap-2">
+              <code className="text-2xl font-bold text-primary-600 bg-primary-50 px-4 py-2 rounded-lg">
+                {referralCode || '—'}
+              </code>
+              <button
+                onClick={copyReferralLink}
+                className="p-2 text-gray-500 hover:text-primary-600 rounded-full hover:bg-gray-100 transition"
+                title="Copy referral link"
+              >
+                <Copy className="h-5 w-5" />
+              </button>
+              <button
+                onClick={shareReferralLink}
+                className="p-2 text-gray-500 hover:text-primary-600 rounded-full hover:bg-gray-100 transition"
+                title="Share"
+              >
+                <Share2 className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Share your link and earn {REFERRAL_BONUS} Nicoin for every new provider who completes their first booking.
+            </p>
+          </div>
+
+          {/* Referral stats */}
+          <div className="flex gap-6">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">{referralStats.total}</p>
+              <p className="text-xs text-gray-500">Total</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-yellow-600">{referralStats.pending}</p>
+              <p className="text-xs text-gray-500">Pending</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600">{referralStats.awarded}</p>
+              <p className="text-xs text-gray-500">Awarded</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Quick Actions */}
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Link
-          to="/provider/bookings"
-          className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center"
-        >
+        <Link to="/provider/bookings" className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center">
           <Calendar className="h-8 w-8 text-primary-600 mx-auto mb-2" />
           <h3 className="font-semibold text-sm">Bookings</h3>
         </Link>
-        <Link
-          to="/provider/portfolio"
-          className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center"
-        >
+        <Link to="/provider/portfolio" className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center">
           <Image className="h-8 w-8 text-primary-600 mx-auto mb-2" />
           <h3 className="font-semibold text-sm">Portfolio</h3>
         </Link>
-        <Link
-          to="/provider/services"
-          className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center"
-        >
+        <Link to="/provider/services" className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center">
           <Package className="h-8 w-8 text-primary-600 mx-auto mb-2" />
           <h3 className="font-semibold text-sm">Services</h3>
         </Link>
-        <Link
-          to="/provider/verification"
-          className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center"
-        >
+        <Link to="/provider/verification" className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center">
           <Shield className="h-8 w-8 text-primary-600 mx-auto mb-2" />
           <h3 className="font-semibold text-sm">Get Verified</h3>
         </Link>
-        <Link
-          to="/provider/profile"
-          className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center"
-        >
+        <Link to="/provider/profile" className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition text-center">
           <Settings className="h-8 w-8 text-primary-600 mx-auto mb-2" />
           <h3 className="font-semibold text-sm">Settings</h3>
         </Link>
       </div>
 
-      {/* Modals (same as before) */}
+      {/* Modals */}
       {showBoostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
@@ -457,22 +546,11 @@ export default function ProviderDashboard() {
               Activate {boostType === 'standard' ? 'Standard' : 'Premium'} Boost
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              {boostType === 'standard' ? '1,000' : '3,000'} Nicoin will be
-              deducted. Your profile will appear at the top for{' '}
-              {boostType === 'standard' ? '7 days' : '30 days'}.
+              {boostType === 'standard' ? STANDARD_BOOST_COST.toLocaleString() : PREMIUM_BOOST_COST.toLocaleString()} Nicoin will be deducted. Your profile will appear at the top for {boostType === 'standard' ? '7 days' : '30 days'}.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowBoostModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBoost}
-                disabled={boostLoading}
-                className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
+              <button onClick={() => setShowBoostModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={handleBoost} disabled={boostLoading} className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">
                 {boostLoading ? 'Activating...' : 'Confirm'}
               </button>
             </div>
@@ -483,25 +561,13 @@ export default function ProviderDashboard() {
       {showTopPlacementModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold mb-2">
-              Activate Top Placement
-            </h3>
+            <h3 className="text-lg font-semibold mb-2">Activate Top Placement</h3>
             <p className="text-sm text-gray-600 mb-4">
-              10,000 Nicoin will be deducted. You'll appear in the Top Providers
-              slider for 7 days.
+              {TOP_PLACEMENT_COST.toLocaleString()} Nicoin will be deducted. You'll appear in the Top Providers slider for 7 days.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowTopPlacementModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleTopPlacement}
-                disabled={boostLoading}
-                className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
+              <button onClick={() => setShowTopPlacementModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={handleTopPlacement} disabled={boostLoading} className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50">
                 {boostLoading ? 'Activating...' : 'Confirm'}
               </button>
             </div>
@@ -514,7 +580,7 @@ export default function ProviderDashboard() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold mb-2">Add Extra Category</h3>
             <p className="text-sm text-gray-600 mb-4">
-              1,500 Nicoin per category. Pick one to add to your profile.
+              {EXTRA_CATEGORY_COST.toLocaleString()} Nicoin per category. Pick one to add to your profile.
             </p>
             <select
               value={extraCategorySlug}
@@ -523,23 +589,12 @@ export default function ProviderDashboard() {
             >
               <option value="">Select category</option>
               {CATEGORIES.map((cat) => (
-                <option key={cat.slug} value={cat.slug}>
-                  {cat.name}
-                </option>
+                <option key={cat.slug} value={cat.slug}>{cat.name}</option>
               ))}
             </select>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowExtraCategoryModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleExtraCategory}
-                disabled={boostLoading || !extraCategorySlug}
-                className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
+              <button onClick={() => setShowExtraCategoryModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={handleExtraCategory} disabled={boostLoading || !extraCategorySlug} className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">
                 {boostLoading ? 'Adding...' : 'Add Category'}
               </button>
             </div>

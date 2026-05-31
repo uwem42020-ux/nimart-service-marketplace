@@ -122,6 +122,14 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
     return null;
   };
 
+  // 🚀 Preload the route when the user hovers over the card
+  const handleMouseEnter = () => {
+    const preloadLink = document.createElement('link');
+    preloadLink.rel = 'prefetch';
+    preloadLink.href = `/provider/${provider.id}`;
+    document.head.appendChild(preloadLink);
+  };
+
   return (
     <div
       className={cn(
@@ -131,8 +139,11 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
         className
       )}
     >
-      {/* Image section */}
-      <Link to={`/provider/${provider.id}`} className="block relative w-full bg-gray-100">
+      <Link
+        to={`/provider/${provider.id}`}
+        onMouseEnter={handleMouseEnter}
+        className="block relative w-full bg-gray-100"
+      >
         {provider.profile?.avatar_url ? (
           <OptimizedImage
             src={provider.profile.avatar_url}
@@ -151,19 +162,16 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
           </div>
         )}
 
-        {/* Favorite button – top left */}
         <div className="absolute top-2 left-2 z-10">
           <FavoriteButton providerId={provider.id} size="sm" />
         </div>
 
-        {/* Verified badge (top right) */}
         {isVerified && (
           <div className="absolute top-3 right-3 bg-white rounded-full p-0.5 shadow-sm z-10">
             <img src="/verify.png" alt="Verified" className="h-7 w-7" />
           </div>
         )}
 
-        {/* Boosted badge – bottom left, vertical */}
         {isBoosted && (
           <div
             className="absolute bottom-3 left-0 bg-amber-500 text-white rounded-r-md px-2 py-2 shadow-md z-10"
@@ -174,7 +182,6 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
         )}
       </Link>
 
-      {/* Details */}
       <div className="p-3 sm:p-4 flex flex-col flex-1">
         <div className="flex items-center gap-1.5 mb-1">
           <div className="relative flex-shrink-0">
@@ -193,7 +200,7 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
             />
           </div>
           <Link to={`/provider/${provider.id}`} className="block flex-1">
-            <h3 className="font-semibold text-primary-600 truncate hover:underline text-sm">
+            <h3 className="font-semibold text-primary-600 line-clamp-2 hover:underline text-sm leading-tight">
               {provider.business_name || provider.profile?.full_name || 'Unnamed Provider'}
             </h3>
           </Link>
@@ -203,7 +210,6 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
           <p className="text-xs text-gray-600 line-clamp-2 mb-2">{provider.description}</p>
         )}
 
-        {/* Category badge – solid green pill */}
         <div className="mb-2">
           <Link
             to={`/search?category=${provider.selected_category_slug}`}

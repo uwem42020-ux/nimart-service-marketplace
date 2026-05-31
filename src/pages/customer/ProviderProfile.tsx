@@ -6,13 +6,12 @@ import { calculateDistance, formatDistance } from '../../lib/distance';
 import { BookingFormModal } from '../../components/customer/BookingFormModal';
 import { PortfolioGallery } from '../../components/provider/PortfolioGallery';
 import { ReviewsList } from '../../components/reviews/ReviewsList';
-import { ChatWidget } from '../../components/chat/ChatWidget';
 import { SEO } from '../../components/common/SEO';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { ProviderCardPortrait } from '../../components/provider/ProviderCardPortrait';
 import { ProviderCardHorizontal } from '../../components/provider/ProviderCardHorizontal';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
-import { FavoriteButton } from '../../components/common/FavoriteButton';   // ← NEW
+import { FavoriteButton } from '../../components/common/FavoriteButton';
 import {
   MapPin,
   Star,
@@ -59,16 +58,16 @@ interface FullProvider extends ProviderRow {
   created_at?: string;
 }
 
-const statusLabel: Record<string, string> = {
-  available: 'Active now',
-  busy: 'Busy',
-  away: 'Away',
-};
-
 const statusIconMap: Record<string, string> = {
   available: '/active.svg',
   busy: '/busy.svg',
   away: '/away.svg',
+};
+
+const statusLabel: Record<string, string> = {
+  available: 'Available for Booking',   // ← changed
+  busy: 'Busy',
+  away: 'Away',
 };
 
 const priceTypeLabels: Record<string, string> = {
@@ -107,16 +106,14 @@ export default function ProviderProfile() {
     callback();
   };
 
-  // Opens the ChatWidget by directly clicking its floating button
+  // Opens the ChatWidget by directly clicking its floating button – REMOVED
   const openChat = () => {
-    const chatButton = document.querySelector(
-      '.fixed.bottom-4.right-4 button'
-    ) as HTMLButtonElement | null;
-    if (chatButton) {
-      chatButton.click();
-    } else {
-      toast.error('Chat could not be opened. Please refresh and try again.');
+    // Navigate directly to messages page instead of opening widget
+    if (!user) {
+      navigate('/auth/signin');
+      return;
     }
+    navigate('/customer/messages');
   };
 
   // Share with fallbacks that work on HTTP
@@ -234,6 +231,7 @@ export default function ProviderProfile() {
       return fullProvider;
     },
     enabled: !!id,
+    staleTime: 1000 * 60 * 2,   // 2 minutes – avoids refetch when revisiting quickly
   });
 
   const { data: similarProviders } = useQuery({
@@ -367,7 +365,7 @@ export default function ProviderProfile() {
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchMove = (e: React.TouchEvent) => { touchEndX.current = e.touches[0].clientX; };
   const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current || !provider?.portfolio_images.length) return;
+    if (!touchStartX.current || !touchEndX.current || !provider?.portfolio_images?.length) return;
     const diff = touchStartX.current - touchEndX.current;
     const threshold = 50;
     if (Math.abs(diff) > threshold) {
@@ -394,7 +392,8 @@ export default function ProviderProfile() {
     );
   }
 
-  const avgRating = provider.reviews.length
+  // Safe accessors (no more undefined reads)
+  const avgRating = provider.reviews?.length
     ? provider.reviews.reduce((acc, r) => acc + r.rating, 0) / provider.reviews.length
     : 0;
 
@@ -458,19 +457,19 @@ export default function ProviderProfile() {
       "latitude": provider.profile.lat,
       "longitude": provider.profile.lng
     } : undefined,
-    "aggregateRating": provider.reviews.length > 0 ? {
+    "aggregateRating": provider.reviews?.length > 0 ? {
       "@type": "AggregateRating",
       "ratingValue": avgRating,
       "reviewCount": provider.reviews.length
     } : undefined,
-    "review": provider.reviews.length > 0 ? provider.reviews.slice(0, 5).map(r => ({
+    "review": provider.reviews?.length > 0 ? provider.reviews.slice(0, 5).map(r => ({
       "@type": "Review",
       "author": r.reviewer?.full_name || 'Anonymous',
       "reviewRating": { "@type": "Rating", "ratingValue": r.rating },
       "reviewBody": r.content || '',
       "datePublished": r.created_at
     })) : undefined,
-    "makesOffer": provider.services.length > 0 ? provider.services.map(s => ({
+    "makesOffer": provider.services?.length > 0 ? provider.services.map(s => ({
       "@type": "Offer",
       "name": s.name,
       "description": s.description || '',
@@ -599,7 +598,7 @@ export default function ProviderProfile() {
                 <MapPin className="h-3.5 w-3.5 text-primary-500" /> {locationString}
               </span>
               <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
-                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" /> {avgRating.toFixed(1)} ({provider.reviews.length})
+                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" /> {avgRating.toFixed(1)} ({provider.reviews?.length || 0})
               </span>
               <span className="inline-flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200">
                 <Calendar className="h-3.5 w-3.5 text-gray-400" /> {provider.completedBookings} bookings
@@ -617,7 +616,7 @@ export default function ProviderProfile() {
         </div>
 
         {/* Portfolio */}
-        {provider.portfolio_images.length > 0 && (
+        {provider.portfolio_images?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
               <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
@@ -643,7 +642,7 @@ export default function ProviderProfile() {
         )}
 
         {/* Services */}
-        {provider.services.length > 0 && (
+        {provider.services?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
               <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Services
@@ -710,7 +709,7 @@ export default function ProviderProfile() {
             <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
           </h2>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-            <ReviewsList reviews={provider.reviews} />
+            <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
 
@@ -779,8 +778,8 @@ export default function ProviderProfile() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
 
-          {/* Main info */}
-          <div className="relative px-6 sm:px-8 -mt-14 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
+          {/* Main info – name pushed further down */}
+          <div className="relative px-6 sm:px-8 -mt-12 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
             {/* Avatar */}
             <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
               {provider.profile?.avatar_url ? (
@@ -803,7 +802,7 @@ export default function ProviderProfile() {
                 <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
                 <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
-                  {statusLabel[provider.status] || 'Active now'}
+                  {statusLabel[provider.status] || 'Available for Booking'}
                 </span>
               </div>
               <p className="text-sm font-medium text-primary-600">{categoryName}</p>
@@ -849,7 +848,7 @@ export default function ProviderProfile() {
                 <MapPin className="h-4 w-4 text-primary-500" /><span>{locationString}</span>
               </div>
               <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /><span>{avgRating.toFixed(1)} ({provider.reviews.length} reviews)</span>
+                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /><span>{avgRating.toFixed(1)} ({provider.reviews?.length || 0} reviews)</span>
               </div>
               <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
                 <Calendar className="h-4 w-4 text-gray-400" /><span>{provider.completedBookings} bookings</span>
@@ -889,7 +888,7 @@ export default function ProviderProfile() {
         {/* Services & Portfolio in a two-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Services card */}
-          {provider.services.length > 0 && (
+          {provider.services?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="w-1 h-5 bg-primary-500 rounded-full"></span>
@@ -913,7 +912,7 @@ export default function ProviderProfile() {
           )}
 
           {/* Portfolio card */}
-          {provider.portfolio_images.length > 0 && (
+          {provider.portfolio_images?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
@@ -962,7 +961,7 @@ export default function ProviderProfile() {
             <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
             </h2>
-            <ReviewsList reviews={provider.reviews} />
+            <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
 
@@ -991,7 +990,7 @@ export default function ProviderProfile() {
         )}
       </div>
 
-      {/* ============== MODALS & CHAT WIDGET ============== */}
+      {/* ============== MODALS (ChatWidget removed) ============== */}
       <BookingFormModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
@@ -999,9 +998,6 @@ export default function ProviderProfile() {
         providerName={providerName}
         providerVerified={provider?.profile?.is_verified || false}
       />
-
-      {/* ChatWidget – always visible, its floating button controls open/close */}
-      <ChatWidget recipientId={id!} recipientName={providerName} />
 
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

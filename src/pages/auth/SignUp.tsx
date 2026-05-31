@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { User, Briefcase, Mail, CheckCircle, ArrowLeft } from 'lucide-react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { requestPushPermission } from '../../lib/pushNotifications';
+import { REFERRAL_BONUS } from '../../lib/nicoinConfig';
 
 type Step = 'email' | 'otp' | 'profile';
 
@@ -18,14 +19,21 @@ export default function SignUp() {
   const [otp, setOtp] = useState('');
   const [role, setRole] = useState<'customer' | 'provider'>('customer');
   const [fullName, setFullName] = useState('');
+  const [referralCode, setReferralCode] = useState(''); // ← NEW
   const [loading, setLoading] = useState(false);
 
+  // Pre‑fill role and referral from URL params
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam === 'provider') {
       setRole('provider');
     } else if (roleParam === 'customer') {
       setRole('customer');
+    }
+
+    const refParam = searchParams.get('ref');
+    if (refParam) {
+      setReferralCode(refParam.trim().toUpperCase());
     }
   }, [searchParams]);
 
@@ -88,6 +96,30 @@ export default function SignUp() {
         navigate('/auth/signin');
         return;
       }
+
+      // ---- REFERRAL LOGIC (only for providers) ----
+      if (role === 'provider' && referralCode.trim()) {
+        const { data: referrer } = await supabase
+          .from('providers')
+          .select('id')
+          .eq('referral_code', referralCode.trim().toUpperCase())
+          .single();
+
+        if (referrer && referrer.id !== user.id) {
+          // Mark the new provider as referred
+          await supabase
+            .from('providers')
+            .update({ referred_by: referrer.id })
+            .eq('id', user.id);
+
+          // Create the referral record
+          await supabase.from('referrals').insert({
+            referrer_id: referrer.id,
+            referred_provider_id: user.id,
+          });
+        }
+      }
+      // ------------------------------------------
 
       // For customers: simple profile update
       if (role === 'customer') {
@@ -338,6 +370,25 @@ export default function SignUp() {
                       placeholder="John Doe"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Referral Code (optional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
+                      placeholder="Enter referral code"
+                      maxLength={12}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    If someone invited you, enter their code. Both of you will earn {REFERRAL_BONUS} Nicoin after your first completed booking.
+                  </p>
                 </div>
 
                 <div>

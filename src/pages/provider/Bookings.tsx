@@ -13,6 +13,7 @@ import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookingStatusTimeline } from '../../components/common/BookingStatusTimeline';
 import { sendEmail, sendPushNotification } from '../../lib/email';
+import { REFERRAL_BONUS } from '../../lib/nicoinConfig';
 
 interface Booking {
   id: string;
@@ -141,7 +142,7 @@ export default function ProviderBookings() {
     toast.success(`Booking ${newStatus.replace(/_/g, ' ')}`);
     queryClient.invalidateQueries({ queryKey: ['provider-bookings', user?.id] });
 
-    // Send email + push notification when booking is completed
+    // Send email + push when completed
     if (newStatus === 'completed') {
       const { data: customerProfile } = await supabase
         .from('profiles')
@@ -164,6 +165,44 @@ export default function ProviderBookings() {
           'Booking Completed',
           `${booking.service_name} has been marked as completed. Please confirm the job.`
         );
+      }
+
+      // ---- REFERRAL BONUS LOGIC ----
+      // Check if this is the provider's first completed booking
+      const { count: completedCount } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('provider_id', booking.provider_id)   // booking.provider_id is the current user's ID
+        .eq('status', 'completed');
+
+      if (completedCount === 1) {
+        // Check for a pending referral for this provider
+        const { data: referral } = await supabase
+          .from('referrals')
+          .select('id, referrer_id, status')
+          .eq('referred_provider_id', booking.provider_id)
+          .eq('status', 'pending')
+          .single();
+
+        if (referral) {
+          // Award both the referrer and the new provider
+          await supabase.rpc('adjust_coin_balance', {
+            p_provider_id: referral.referrer_id,
+            p_amount: REFERRAL_BONUS,
+          });
+          await supabase.rpc('adjust_coin_balance', {
+            p_provider_id: booking.provider_id,
+            p_amount: REFERRAL_BONUS,
+          });
+
+          // Mark referral as awarded
+          await supabase
+            .from('referrals')
+            .update({ status: 'awarded', awarded_at: new Date().toISOString() })
+            .eq('id', referral.id);
+
+          // Notifications are already sent by adjust_coin_balance
+        }
       }
     }
   };
@@ -419,6 +458,7 @@ function BookingCard({
               <Share2 className="h-4 w-4" /> Receipt
             </button>
           )}
+          {/* No Chat button */}
         </div>
       </div>
     </div>

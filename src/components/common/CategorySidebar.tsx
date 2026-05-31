@@ -1,10 +1,10 @@
-// src/components/common/CategorySidebar.tsx
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronUp, Wrench, Monitor, Scissors, Home, Truck, Briefcase, Shield, Heart, BookOpen, Music, Users, Handshake, Globe, Utensils, Camera, Bike, Car, Flame, Lightbulb, GlassWater, PaintBucket, Dumbbell, Stethoscope, Brain, Plane, Download, Upload, ShoppingBag, Sparkles, Key, PenTool, Palette, Cable, Drill, Tag } from 'lucide-react';
 import { TIERS, CATEGORIES, SUBCATEGORIES } from '../../data/categories';
 import { cn } from '../../lib/utils';
 
+// Tier icons (unchanged)
 const tierIconMap: Record<string, string> = {
   automotive: '/categoryicons/roadside.png',
   'home-property': '/categoryicons/home.png',
@@ -22,13 +22,249 @@ const tierIconMap: Record<string, string> = {
   trade: '/categoryicons/export.png',
 };
 
-const getCategoryIcon = (name: string) => {
-  const firstChar = name.charAt(0).toUpperCase();
+// Category PNGs (matching MobileCategoryPanel)
+const categoryPngMap: Record<string, string> = {
+  'vehicle-mechanics': '/auto/vehicle.png',
+  'roadside-emergencies': '/auto/emergencies.png',
+  'auto-repair': '/auto/autorepair.png',
+  'auto-maintenance': '/auto/automaintenace.png',
+  'auto-parts': '/auto/parts.png',
+  'commercial-vehicles': '/auto/commercial.png',
+  'official-vehicle': '/auto/official.png',
+  'plumbing': '/auto/plumber.png',
+  'electrical': '/auto/electrical.png',
+  'construction': '/auto/construction.png',
+  'carpentry': '/auto/capentary.png',
+  'painting': '/auto/painter.png',
+  'metal-works': '/auto/metalwork.png',
+  'glass': '/auto/glasswork.png',
+  'appliance-repair': '/auto/eletronicsrepair.png',
+  'home-security': '/auto/homesecurity.png',
+  'medical-emergency': '/auto/medicalemergency.png',
+  'fire-rescue': '/auto/fireextinguisher.png',
+  'security-guarding': '/auto/security.png',
+  'legal': '/auto/legal.png',
+  'financial': '/auto/financial.png',
+  'business': '/auto/business.png',
+  'real-estate': '/auto/realestate.png',
+  'architecture': '/auto/architectate.png',
+  'computer-it': '/auto/computer.png',
+  'mobile-phone': '/auto/phone.png',
+  'digital-creative': '/auto/digitalcreative.png',
+  'printing': '/auto/printing.png',
+  'hair': '/auto/hairservices.png',
+  'makeup': '/auto/makeup.png',
+  'nail': '/auto/nail.png',
+  'spa': '/auto/spaandwellness.png',
+  'fashion': '/auto/fashion.png',
+  'catering': '/auto/cateringservices.png',
+  'private-chef': '/auto/privatechef.png',
+  'food-delivery': '/auto/fooddelivery.png',
+  'drinks': '/auto/drinks.png',
+  'professional-food': '/auto/professional food services.png',
+  'photography': '/auto/Event photographer.png',
+  'event-planning': '/auto/event planning.png',
+  'entertainment': '/auto/music and arts.png',
+  'weddings': '/auto/weddings.png',
+  'tutoring': '/auto/ucational support.png',
+  'skills': '/auto/skill.png',
+  'music-arts': '/auto/music and arts.png',
+  'special-needs': '/auto/special need education.png',
+  'edu-support': '/auto/ucational support.png',
+  'medical-home': '/auto/medical professional home visit.png',
+  'alternative-medicine': '/auto/alternative medicine.png',
+  'mental-health': '/auto/mental health.png',
+  'fitness': '/auto/fitness and sport.png',
+  'moving': '/auto/moving and relocation.png',
+  'delivery': '/auto/delivery and courer.png',
+  'rentals': '/auto/rentals.png',
+  'social-groups': '/auto/social groups.png',
+  'venues': '/auto/events space.png',
+  'b2b-partners': '/auto/business partner B2B.png',
+  'sme-services': '/auto/business services SME.png',
+  'creative-partners': '/auto/creativeeconomy partner.png',
+  'export': '/auto/export services.png',
+  'import': '/auto/import services.png',
+  'cross-border': '/auto/cross border trade.png',
+};
+
+// Subcategory PNGs (from /autolast/)
+const subcategoryPngMap: Record<number, string> = {
+  // Vehicle Mechanics
+  101: '/autolast/general motor machanic.png',
+  102: '/autolast/Mercedes-Benz.png',
+  103: '/autolast/toyota.png',
+  104: '/autolast/honder.png',
+  105: '/autolast/BMW.png',
+  106: '/autolast/japan.png',
+  107: '/autolast/KIV.png',
+  108: '/autolast/china.png',
+  109: '/autolast/diesel engine.png',
+  110: '/autolast/petrol engine.png',
+  111: '/autolast/gear box.png',
+  112: '/autolast/engine reboring.png',
+  113: '/autolast/car computer.png',
+  114: '/autolast/car computer.png',
+  115: '/autolast/village machanic.png',
+
+  // Roadside Emergencies
+  201: '/autolast/vehicle towing.png',
+  202: '/autolast/trailer services.png',
+  203: '/autolast/battary rescure.png',
+  204: '/autolast/tire change.png',
+  205: '/autolast/fuel delivery.png',
+  206: '/autolast/lockout service.png',
+  207: '/autolast/accident rescue.png',
+  208: '/autolast/vehicle extrication.png',
+
+  // Auto Repair Specialists
+  301: '/autolast/air condition repair.png',
+  302: '/autolast/radiator and cooling system.png',
+  303: '/autolast/brake system specialist.png',
+  304: '/autolast/suspension.png',
+  305: '/autolast/car steering.png',
+  306: '/autolast/exhaust.png',
+  307: '/autolast/auto paint.png',
+  308: '/autolast/panel beating.png',
+  309: '/autolast/dent removal.png',
+  310: '/autolast/car seat repair.png',
+  311: '/autolast/windscreen repair.png',
+  312: '/autolast/car key programming.png',
+
+  // Auto Maintenance & Services
+  401: '/autolast/oil change and lubrication.png',
+  402: '/autolast/car wash and detailing.png',
+  403: '/autolast/car polishing.png',
+  404: '/autolast/engine flush.png',
+  405: '/autolast/battry sales and installation.png',
+  406: '/autolast/tire sales and rotation.png',
+  407: '/autolast/wheel alignment services.png',
+  409: '/autolast/wiper blade replacement.png',
+  410: '/autolast/light replacement.png',
+  411: '/autolast/pre travel vehicle inspection.png',
+
+  // Auto Parts & Accessories
+  501: '/autolast/original spare part.png',
+  502: '/autolast/kumbo parts dealer.png',
+  503: '/autolast/auto parts import.png',
+  504: '/autolast/scrap yard auto dismantle.png',
+  505: '/autolast/car audio and entertainment.png',
+  506: '/autolast/car asseseries.png',
+  507: '/autolast/car lighting.png',
+  508: '/autolast/car battaries distributio.png',
+  509: '/autolast/engine oil lubricate dealer.png',
+
+  // Commercial Vehicles
+  601: '/autolast/truck and trailer machanic.png',
+  602: '/autolast/public transport mechanic.png',
+  603: '/autolast/heavy duty equipment repair.png',
+  604: '/autolast/forkleft repair and maintenace.png',
+  605: '/autolast/generator machanic.png',
+  606: '/autolast/tipper and truck services.png',
+
+  // Official Vehicle Services
+  701: '/autolast/FRSC services.png',
+  702: '/autolast/vehicle license agent.png',
+  703: '/autolast/driver license processing.png',
+  704: '/autolast/vehicle verification agent.png',
+  705: '/autolast/customer clearance agent.png',
+  706: '/autolast/insurance assessors.png',
+
+  // Plumbing & Water (first batch)
+  801: '/autolast/general plumbers.png',
+  802: '/autolast/borehole drilling and installation.png',
+  803: '/autolast/well digging services.png',
+  804: '/autolast/water heater and installation.png',
+};
+
+// Lucide fallback icons per category (same as mobile panel)
+const parentCategoryIcons: Record<string, React.ReactNode> = {
+  'vehicle-mechanics': <Wrench className="h-5 w-5" />,
+  'roadside-emergencies': <Truck className="h-5 w-5" />,
+  'auto-repair': <Wrench className="h-5 w-5" />,
+  'auto-maintenance': <Wrench className="h-5 w-5" />,
+  'auto-parts': <Wrench className="h-5 w-5" />,
+  'commercial-vehicles': <Truck className="h-5 w-5" />,
+  'official-vehicle': <Briefcase className="h-5 w-5" />,
+  'plumbing': <Wrench className="h-5 w-5" />,
+  'electrical': <Cable className="h-5 w-5" />,
+  'construction': <Home className="h-5 w-5" />,
+  'carpentry': <Home className="h-5 w-5" />,
+  'painting': <PaintBucket className="h-5 w-5" />,
+  'metal-works': <Wrench className="h-5 w-5" />,
+  'glass': <GlassWater className="h-5 w-5" />,
+  'appliance-repair': <Wrench className="h-5 w-5" />,
+  'home-security': <Shield className="h-5 w-5" />,
+  'medical-emergency': <Heart className="h-5 w-5" />,
+  'fire-rescue': <Flame className="h-5 w-5" />,
+  'security-guarding': <Shield className="h-5 w-5" />,
+  'legal': <Briefcase className="h-5 w-5" />,
+  'financial': <Briefcase className="h-5 w-5" />,
+  'business': <Briefcase className="h-5 w-5" />,
+  'real-estate': <Home className="h-5 w-5" />,
+  'architecture': <PenTool className="h-5 w-5" />,
+  'computer-it': <Monitor className="h-5 w-5" />,
+  'mobile-phone': <Monitor className="h-5 w-5" />,
+  'digital-creative': <Palette className="h-5 w-5" />,
+  'printing': <Monitor className="h-5 w-5" />,
+  'hair': <Scissors className="h-5 w-5" />,
+  'makeup': <Sparkles className="h-5 w-5" />,
+  'nail': <Scissors className="h-5 w-5" />,
+  'spa': <Heart className="h-5 w-5" />,
+  'fashion': <ShoppingBag className="h-5 w-5" />,
+  'catering': <Utensils className="h-5 w-5" />,
+  'private-chef': <Utensils className="h-5 w-5" />,
+  'food-delivery': <Bike className="h-5 w-5" />,
+  'drinks': <GlassWater className="h-5 w-5" />,
+  'professional-food': <Utensils className="h-5 w-5" />,
+  'photography': <Camera className="h-5 w-5" />,
+  'event-planning': <Music className="h-5 w-5" />,
+  'entertainment': <Music className="h-5 w-5" />,
+  'weddings': <Heart className="h-5 w-5" />,
+  'tutoring': <BookOpen className="h-5 w-5" />,
+  'skills': <Lightbulb className="h-5 w-5" />,
+  'music-arts': <Music className="h-5 w-5" />,
+  'special-needs': <Brain className="h-5 w-5" />,
+  'edu-support': <BookOpen className="h-5 w-5" />,
+  'medical-home': <Stethoscope className="h-5 w-5" />,
+  'alternative-medicine': <Brain className="h-5 w-5" />,
+  'mental-health': <Brain className="h-5 w-5" />,
+  'fitness': <Dumbbell className="h-5 w-5" />,
+  'moving': <Truck className="h-5 w-5" />,
+  'delivery': <Truck className="h-5 w-5" />,
+  'rentals': <Key className="h-5 w-5" />,
+  'social-groups': <Users className="h-5 w-5" />,
+  'venues': <Users className="h-5 w-5" />,
+  'b2b-partners': <Handshake className="h-5 w-5" />,
+  'sme-services': <Handshake className="h-5 w-5" />,
+  'creative-partners': <Handshake className="h-5 w-5" />,
+  'export': <Upload className="h-5 w-5" />,
+  'import': <Download className="h-5 w-5" />,
+  'cross-border': <Plane className="h-5 w-5" />,
+};
+
+// Helper: returns the icon element for a category
+const getCategoryIconElement = (catSlug: string, catName: string) => {
+  const png = categoryPngMap[catSlug];
+  if (png) return <img src={png} alt={catName} className="w-6 h-6 object-contain" />;
+  // Fallback to a simple circle with first letter (same as before)
   return (
-    <div className="w-5 h-5 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-xs font-medium">
-      {firstChar}
+    <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-xs font-medium">
+      {catName.charAt(0).toUpperCase()}
     </div>
   );
+};
+
+// Helper: returns the icon element for a subcategory
+const getSubcategoryIconElement = (subId: number, subName: string, parentCategorySlug: string) => {
+  const png = subcategoryPngMap[subId];
+  if (png) return <img src={png} alt={subName} className="w-5 h-5 object-contain" />;
+  // Fallback to parent category's Lucide icon
+  if (parentCategorySlug && parentCategoryIcons[parentCategorySlug]) {
+    return parentCategoryIcons[parentCategorySlug];
+  }
+  // Ultimate fallback
+  return <Tag className="h-4 w-4 text-gray-400" />;
 };
 
 interface CategorySidebarProps {
@@ -56,7 +292,6 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
     return cats.reduce((sum, cat) => sum + (providerCounts[cat.slug] || 0), 0);
   };
 
-  // Delay closing flyouts to avoid accidental collapse
   const scheduleClose = () => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current);
     closeTimeout.current = setTimeout(() => {
@@ -154,18 +389,17 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
         </div>
       </div>
 
-      {/* Flyout for categories – full height, header with tier icon & name, 4px gap */}
+      {/* Flyout for categories – using custom PNGs */}
       {hoveredTier && currentCategories.length > 0 && (
         <div
           className="absolute top-0 w-64 bg-white/80 backdrop-blur-md rounded-r-lg shadow-lg border border-gray-200/50 z-50 overflow-hidden flex flex-col"
           style={{ height: 'calc(100vh - 80px)', left: 'calc(16rem + 0.25rem)' }}
           onMouseEnter={() => {
             cancelClose();
-            setHoveredTier(hoveredTier);  // keep active
+            setHoveredTier(hoveredTier);
           }}
           onMouseLeave={scheduleClose}
         >
-          {/* Flyout header – matches mobile style */}
           <div className="sticky top-0 bg-primary-50/80 backdrop-blur-md border-b border-primary-100 flex items-center gap-3 px-3 py-2.5">
             {hoveredTierObj && (
               <img
@@ -181,6 +415,7 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
           <div className="overflow-y-auto flex-1">
             {currentCategories.map(cat => {
               const catCount = providerCounts[cat.slug] || 0;
+              const hasSubs = SUBCATEGORIES.some(s => s.category_slug === cat.slug);
               return (
                 <div
                   key={cat.slug}
@@ -188,23 +423,24 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                   className="relative"
                 >
                   <Link
-                    to={`/search?category=${cat.slug}`}
+                    to={hasSubs ? '#' : `/search?category=${cat.slug}`}
+                    onClick={(e) => {
+                      if (hasSubs) e.preventDefault(); // prevent navigation when subcats exist
+                    }}
                     className={cn(
                       'flex items-center justify-between px-3 py-2.5 hover:bg-gray-50/50 transition-colors',
                       hoveredCategory === cat.slug && 'bg-primary-50/80 text-primary-700'
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      {getCategoryIcon(cat.name)}
+                      {getCategoryIconElement(cat.slug, cat.name)}
                       <span className="text-sm">{cat.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">
                         {catCount} provider{catCount !== 1 ? 's' : ''}
                       </span>
-                      {SUBCATEGORIES.some(s => s.category_slug === cat.slug) && (
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                      )}
+                      {hasSubs && <ChevronRight className="h-4 w-4 text-gray-400" />}
                     </div>
                   </Link>
                 </div>
@@ -214,7 +450,7 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
         </div>
       )}
 
-      {/* Flyout for subcategories – full height, header with category name, 4px gap */}
+      {/* Flyout for subcategories – using custom PNGs from /autolast/ */}
       {hoveredCategory && currentSubcategories.length > 0 && (
         <div
           className="absolute top-0 w-64 bg-white/80 backdrop-blur-md rounded-r-lg shadow-lg border border-gray-200/50 z-50 overflow-hidden flex flex-col"
@@ -225,28 +461,30 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
           }}
           onMouseLeave={scheduleClose}
         >
-          {/* Subcategory flyout header */}
           <div className="sticky top-0 bg-primary-50/80 backdrop-blur-md border-b border-primary-100 flex items-center px-3 py-2.5">
             <h3 className="font-semibold text-gray-900 text-sm">
               {hoveredCategoryObj?.name}
             </h3>
           </div>
           <div className="overflow-y-auto flex-1">
-            {currentSubcategories.map(sub => (
-              <Link
-                key={sub.id}
-                to={`/search?subcategory=${sub.id}`}
-                className="flex items-center justify-between px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 hover:text-primary-600 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {getCategoryIcon(sub.name)}
-                  <span>{sub.name}</span>
-                </div>
-                <span className="text-xs text-gray-400">
-                  {subcategoryCounts[sub.id] || 0} provider{(subcategoryCounts[sub.id] || 0) !== 1 ? 's' : ''}
-                </span>
-              </Link>
-            ))}
+            {currentSubcategories.map(sub => {
+              const subCount = subcategoryCounts[sub.id] || 0;
+              return (
+                <Link
+                  key={sub.id}
+                  to={`/search?subcategory=${sub.id}`}
+                  className="flex items-center justify-between px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 hover:text-primary-600 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {getSubcategoryIconElement(sub.id, sub.name, hoveredCategoryObj?.slug || '')}
+                    <span>{sub.name}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {subCount} provider{subCount !== 1 ? 's' : ''}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

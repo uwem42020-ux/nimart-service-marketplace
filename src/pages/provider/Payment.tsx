@@ -9,6 +9,14 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import {
+  NAIRA_PER_NICOIN,
+  nicoinToNaira,
+  STANDARD_BOOST_COST,
+  PREMIUM_BOOST_COST,
+  TOP_PLACEMENT_COST,
+  EXTRA_CATEGORY_COST,
+} from '../../lib/nicoinConfig';
 
 export default function ProviderPayment() {
   const { user } = useAuth();
@@ -46,9 +54,6 @@ export default function ProviderPayment() {
     accountName: 'Edidiong Godwin Edem',
     accountNumber: '8038887589',
   };
-
-  // Exchange rate: ₦100 = 1 Nicoin
-  const nairaPerNicoin = 100;
 
   // ---- Wallet data fetch ----
   useEffect(() => {
@@ -118,14 +123,11 @@ export default function ProviderPayment() {
     setShareLoading(true);
     try {
       const amount = parseInt(shareAmount);
-      // Deduct from sender
       await supabase.rpc('adjust_coin_balance', { p_provider_id: user!.id, p_amount: -amount });
-      // Add to recipient
       await supabase.rpc('adjust_coin_balance', {
         p_provider_id: selectedRecipient.id,
         p_amount: amount,
       });
-      // Log transactions
       await supabase.from('coin_transactions').insert([
         { provider_id: user!.id, amount: -amount, type: 'transfer_out', reference_id: selectedRecipient.id },
         { provider_id: selectedRecipient.id, amount: amount, type: 'transfer_in', reference_id: user!.id },
@@ -198,7 +200,6 @@ export default function ProviderPayment() {
     }
   };
 
-  // ---- Search for providers to share coins ----
   const handleSearchProvider = async () => {
     if (!searchTerm.trim()) return;
     const { data: profiles } = await supabase
@@ -216,6 +217,9 @@ export default function ProviderPayment() {
     const filtered = profiles.filter((p: any) => p.id !== user!.id && providerIds.has(p.id));
     setSearchResults(filtered);
   };
+
+  // Convert amount to Nicoin for display
+  const nicoinAmount = amount ? Math.floor(parseInt(amount) / NAIRA_PER_NICOIN) : 0;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
@@ -244,14 +248,14 @@ export default function ProviderPayment() {
               boost your profile, get top placement, and unlock extra features.
             </p>
             <p>
-              <strong>Exchange rate:</strong> <span className="text-primary-600 font-semibold">₦100 = 1 Nicoin</span>
+              <strong>Exchange rate:</strong> <span className="text-primary-600 font-semibold">₦{NAIRA_PER_NICOIN.toLocaleString()} = 1 Nicoin</span>
             </p>
             <p className="font-medium">Quick conversion:</p>
             <ul className="list-disc list-inside space-y-1 text-gray-600">
-              <li>₦1,000 → 10 Nicoin</li>
-              <li>₦2,500 → 25 Nicoin</li>
-              <li>₦5,000 → 50 Nicoin</li>
-              <li>₦10,000 → 100 Nicoin</li>
+              <li>₦{NAIRA_PER_NICOIN * 10} → 10 Nicoin</li>
+              <li>₦{NAIRA_PER_NICOIN * 25} → 25 Nicoin</li>
+              <li>₦{NAIRA_PER_NICOIN * 50} → 50 Nicoin</li>
+              <li>₦{NAIRA_PER_NICOIN * 100} → 100 Nicoin</li>
             </ul>
             <p>
               Buy Nicoin by transferring to the bank account below and uploading
@@ -340,7 +344,7 @@ export default function ProviderPayment() {
               />
               {amount && parseInt(amount) >= 100 && (
                 <p className="text-sm text-primary-600 mt-1">
-                  You'll receive <strong>{Math.floor(parseInt(amount) / nairaPerNicoin)} Nicoins</strong>
+                  You'll receive <strong>{nicoinAmount} Nicoins</strong>
                 </p>
               )}
             </div>

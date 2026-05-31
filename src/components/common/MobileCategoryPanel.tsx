@@ -1,4 +1,3 @@
-// src/components/common/MobileCategoryPanel.tsx
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, Tag, Wrench, Monitor, Scissors, Home, Truck, Briefcase, Shield, Heart, BookOpen, Music, Users, Handshake, Globe, Utensils, Camera, Bike, Car, Flame, Lightbulb, GlassWater, PaintBucket, Dumbbell, Stethoscope, Brain, Plane, Download, Upload, ShoppingBag, Sparkles, Key, PenTool, Palette, Cable, Drill } from 'lucide-react';
 import { CATEGORIES, SUBCATEGORIES } from '../../data/categories';
@@ -13,7 +12,7 @@ interface MobileCategoryPanelProps {
   onClose: () => void;
 }
 
-// 🖼️ Category custom PNGs (public/auto/)
+// 🖼️ Category custom PNGs (unchanged)
 const categoryPngMap: Record<string, string> = {
   'vehicle-mechanics': '/auto/vehicle.png',
   'roadside-emergencies': '/auto/emergencies.png',
@@ -79,14 +78,93 @@ const categoryPngMap: Record<string, string> = {
   'cross-border': '/auto/cross border trade.png',
 };
 
-// 🖼️ Subcategory custom PNGs – map subcategory slugs (exactly as in data/categories.ts) to your PNGs
-const subcategoryPngMap: Record<string, string> = {
+// 🖼️ Subcategory custom PNGs – loads from /autolast/
+const subcategoryPngMap: Record<number, string> = {
   // Vehicle Mechanics
-  'general-motor-mechanics': '/auto/vehicle.png',      // example – change to actual slug
-  'mercedes-benz-specialist': '/auto/vehicle.png',       // example
-  'car-mechanic': '/auto/vehicle.png',
-  'motorcycle-mechanic': '/auto/vehicle.png',
-  // ... add more as needed
+  101: '/autolast/general motor machanic.png',
+  102: '/autolast/Mercedes-Benz.png',
+  103: '/autolast/toyota.png',
+  104: '/autolast/honder.png',
+  105: '/autolast/BMW.png',
+  106: '/autolast/japan.png',
+  107: '/autolast/KIV.png',
+  108: '/autolast/china.png',
+  109: '/autolast/diesel engine.png',
+  110: '/autolast/petrol engine.png',
+  111: '/autolast/gear box.png',
+  112: '/autolast/engine reboring.png',
+  113: '/autolast/car computer.png',
+  114: '/autolast/car computer.png',
+  115: '/autolast/village machanic.png',
+
+  // Roadside Emergencies
+  201: '/autolast/vehicle towing.png',
+  202: '/autolast/trailer services.png',
+  203: '/autolast/battary rescure.png',
+  204: '/autolast/tire change.png',
+  205: '/autolast/fuel delivery.png',
+  206: '/autolast/lockout service.png',
+  207: '/autolast/accident rescue.png',
+  208: '/autolast/vehicle extrication.png',
+
+  // Auto Repair Specialists
+  301: '/autolast/air condition repair.png',
+  302: '/autolast/radiator and cooling system.png',
+  303: '/autolast/brake system specialist.png',
+  304: '/autolast/suspension.png',
+  305: '/autolast/car steering.png',
+  306: '/autolast/exhaust.png',
+  307: '/autolast/auto paint.png',
+  308: '/autolast/panel beating.png',
+  309: '/autolast/dent removal.png',
+  310: '/autolast/car seat repair.png',
+  311: '/autolast/windscreen repair.png',
+  312: '/autolast/car key programming.png',
+
+  // Auto Maintenance & Services
+  401: '/autolast/oil change and lubrication.png',
+  402: '/autolast/car wash and detailing.png',
+  403: '/autolast/car polishing.png',
+  404: '/autolast/engine flush.png',
+  405: '/autolast/battry sales and installation.png',
+  406: '/autolast/tire sales and rotation.png',
+  407: '/autolast/wheel alignment services.png',
+  409: '/autolast/wiper blade replacement.png',
+  410: '/autolast/light replacement.png',
+  411: '/autolast/pre travel vehicle inspection.png',
+
+  // Auto Parts & Accessories
+  501: '/autolast/original spare part.png',
+  502: '/autolast/kumbo parts dealer.png',
+  503: '/autolast/auto parts import.png',
+  504: '/autolast/scrap yard auto dismantle.png',
+  505: '/autolast/car audio and entertainment.png',
+  506: '/autolast/car asseseries.png',
+  507: '/autolast/car lighting.png',
+  508: '/autolast/car battaries distributio.png',
+  509: '/autolast/engine oil lubricate dealer.png',
+
+  // Commercial Vehicles
+  601: '/autolast/truck and trailer machanic.png',
+  602: '/autolast/public transport mechanic.png',
+  603: '/autolast/heavy duty equipment repair.png',
+  604: '/autolast/forkleft repair and maintenace.png',
+  605: '/autolast/generator machanic.png',
+  606: '/autolast/tipper and truck services.png',
+
+  // Official Vehicle Services
+  701: '/autolast/FRSC services.png',
+  702: '/autolast/vehicle license agent.png',
+  703: '/autolast/driver license processing.png',
+  704: '/autolast/vehicle verification agent.png',
+  705: '/autolast/customer clearance agent.png',
+  706: '/autolast/insurance assessors.png',
+
+  // Plumbing & Water (first batch)
+  801: '/autolast/general plumbers.png',
+  802: '/autolast/borehole drilling and installation.png',
+  803: '/autolast/well digging services.png',
+  804: '/autolast/water heater and installation.png',
 };
 
 // 🧠 Parent-category fallback Lucide icons – guarantees distinct icons per category
@@ -157,8 +235,8 @@ const parentCategoryIcons: Record<string, React.ReactNode> = {
 
 // Helper: returns subcategory icon
 const getSubcategoryIcon = (sub: { slug?: string; id: number; name: string }, parentCategorySlug: string) => {
-  // 1. Check custom PNG map
-  const png = subcategoryPngMap[sub.slug || ''] || subcategoryPngMap[sub.id.toString()];
+  // 1. Check custom PNG map from /autolast/
+  const png = subcategoryPngMap[sub.id];
   if (png) return <img src={png} alt={sub.name} className="w-9 h-9 object-contain" />;
 
   // 2. Fallback to parent category's descriptive icon
