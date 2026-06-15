@@ -13,14 +13,23 @@ const firebaseConfig = {
 // Only initialise Firebase app if it hasn't been created yet
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
+// We do NOT initialise messaging here – that avoids the top‑level await
 let messaging: Messaging | null = null;
-try {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    const { getMessaging } = await import("firebase/messaging");
-    messaging = getMessaging(app);
+
+// Call this async function when you need messaging (e.g., from pushNotifications.ts)
+export async function getMessagingInstance(): Promise<Messaging | null> {
+  if (!messaging) {
+    try {
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        const { getMessaging } = await import("firebase/messaging");
+        messaging = getMessaging(app);
+      }
+    } catch (error) {
+      console.warn("Firebase messaging not available:", error);
+      messaging = null;
+    }
   }
-} catch (error) {
-  console.warn("Firebase messaging not available:", error);
+  return messaging;
 }
 
-export { messaging };
+export { app };

@@ -1,12 +1,23 @@
 import { getToken, onMessage, deleteToken } from "firebase/messaging";
-import { messaging } from "./firebase";
+import { getMessagingInstance } from "./firebase";
 import { supabase } from "./supabase";
 
 const VAPID_KEY = "BDZ4uN_no-rSBlF-DOYvTlAnAGJ7wDzorZSiYomvSmzayJgcOqRQy1VmKlNpDK5EutkwqaHi_yGZTpbBcDkyIgc";
 
-// Request permission and save the FCM token to the user's profile
+// Helper to get messaging instance (returns null if not available)
+async function ensureMessaging() {
+  const messaging = await getMessagingInstance();
+  if (!messaging) {
+    console.warn("Firebase messaging is not available in this environment.");
+  }
+  return messaging;
+}
+
 export async function requestPushPermission(userId: string) {
   try {
+    const messaging = await ensureMessaging();
+    if (!messaging) return null;
+
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
 
@@ -19,7 +30,6 @@ export async function requestPushPermission(userId: string) {
 
     // Save the token to the user's profile
     await supabase.from("profiles").update({ fcm_token: token }).eq("id", userId);
-
     return token;
   } catch (error) {
     console.error("Failed to get push permission:", error);
@@ -27,9 +37,11 @@ export async function requestPushPermission(userId: string) {
   }
 }
 
-// Remove the token when user logs out
 export async function removePushToken(userId: string) {
   try {
+    const messaging = await ensureMessaging();
+    if (!messaging) return;
+
     const token = await getToken(messaging, { vapidKey: VAPID_KEY });
     if (token) await deleteToken(messaging);
     await supabase.from("profiles").update({ fcm_token: null }).eq("id", userId);
@@ -38,9 +50,15 @@ export async function removePushToken(userId: string) {
   }
 }
 
-// Listen for foreground messages (when the app is open)
 export function onForegroundMessage(callback: (payload: any) => void) {
-  return onMessage(messaging, (payload) => {
-    callback(payload);
-  });
+  // This needs to be handled carefully because it's synchronous.
+  // We'll call ensureMessaging inside and attach listener once available.
+  (async () => {
+    const messaging = await ensureMessaging();
+    if (messaging) {
+      onMessage(messaging, (payload) => {
+        callback(payload);
+      });
+    }
+  })();
 }
