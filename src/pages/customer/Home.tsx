@@ -19,6 +19,7 @@ import { SEO } from '../../components/common/SEO';
 import { ProviderGridSkeleton } from '../../components/skeletons/ProviderGridSkeleton';
 import { cn } from '../../lib/utils';
 import { useSmartSort } from '../../hooks/useSmartSort';
+import { fetchProviderProfile } from '../../lib/queries';
 import type { Database } from '../../types/database';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
@@ -243,6 +244,26 @@ export default function Home() {
     enabled: true,
     staleTime: 1000 * 60 * 5,
   });
+
+  // ======== INSTANT PROFILE OPENING ========
+  // 1. Pre‑load the first 5 providers' full profile data
+  useEffect(() => {
+    if (!featuredProviders || featuredProviders.length === 0) return;
+    const providersToPreload = featuredProviders.slice(0, 5);
+    providersToPreload.forEach(provider => {
+      queryClient.prefetchQuery({
+        queryKey: ['provider', provider.id],
+        queryFn: () => fetchProviderProfile(provider.id),
+        staleTime: 1000 * 60 * 5, // matches profile page staleTime
+      });
+    });
+  }, [featuredProviders, queryClient]);
+
+  // 2. Start downloading the profile page component JS immediately
+  useEffect(() => {
+    import('../../pages/customer/ProviderProfile').catch(() => {});
+  }, []);
+  // =========================================
 
   useEffect(() => {
     const channel = supabase.channel('providers-status')

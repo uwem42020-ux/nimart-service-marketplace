@@ -1,5 +1,6 @@
+// src/pages/customer/ProviderProfile.tsx
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateDistance, formatDistance } from '../../lib/distance';
@@ -30,6 +31,7 @@ import {
   User,
   LayoutGrid,
   List,
+  Maximize2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
@@ -37,6 +39,7 @@ import { OptimizedImage } from '../../components/common/OptimizedImage';
 import { cn } from '../../lib/utils';
 import type { Database } from '../../types/database';
 import { formatDistanceToNow } from 'date-fns';
+import { useSmartSort } from '../../hooks/useSmartSort';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -93,8 +96,12 @@ export default function ProviderProfile() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
-
   const [similarViewMode, setSimilarViewMode] = useState<'grid' | 'list'>('grid');
+  const queryClient = useQueryClient();
+
+  // New states for modals
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   const requireAuth = (callback: () => void) => {
     if (!user) {
@@ -227,11 +234,21 @@ export default function ProviderProfile() {
       return fullProvider;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 
+  // AI sorting for similar providers
+  const { data: smartSortData } = useSmartSort(
+    profile?.id,
+    provider?.profile?.lat ?? undefined,
+    provider?.profile?.lng ?? undefined,
+    provider?.selected_tier_slug,
+    provider?.selected_category_slug,
+    20
+  );
+
   const { data: similarProviders } = useQuery({
-    queryKey: ['similar-providers', id],
+    queryKey: ['similar-providers', id, smartSortData],
     queryFn: async () => {
       if (!id || !provider) return [];
       const { data: currentProfile } = await supabase
@@ -287,6 +304,7 @@ export default function ProviderProfile() {
             selected_subcategory_id: null,
             tags: [],
             boost_until: null,
+            top_placement_until: null,
             portfolio_images: [],
             average_rating: 0,
             review_count: 0,
@@ -294,18 +312,19 @@ export default function ProviderProfile() {
           };
         });
 
-      const currentCategory = provider.selected_category_slug;
-      const currentTier = provider.selected_tier_slug;
+      if (smartSortData && smartSortData.length > 0) {
+        const scoreMap = new Map(smartSortData.map(s => [s.provider_id, s.score]));
+        enriched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+      } else {
+        const currentCategory = provider.selected_category_slug;
+        enriched.sort((a, b) => {
+          if (a.selected_category_slug === currentCategory && b.selected_category_slug !== currentCategory) return -1;
+          if (a.selected_category_slug !== currentCategory && b.selected_category_slug === currentCategory) return 1;
+          return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+        });
+      }
 
-      const sorted = enriched.sort((a: any, b: any) => {
-        if (a.selected_category_slug === currentCategory && b.selected_category_slug !== currentCategory) return -1;
-        if (a.selected_category_slug !== currentCategory && b.selected_category_slug === currentCategory) return 1;
-        if (a.selected_tier_slug === currentTier && b.selected_tier_slug !== currentTier) return -1;
-        if (a.selected_tier_slug !== currentTier && b.selected_tier_slug === currentTier) return 1;
-        return (a.distance ?? Infinity) - (b.distance ?? Infinity);
-      });
-
-      return sorted.slice(0, 6);
+      return enriched.slice(0, 6);
     },
     enabled: !!id && !!provider,
   });
@@ -472,6 +491,13 @@ export default function ProviderProfile() {
     "openingHours": provider.status === 'available' ? ['Mo-Su 00:00-23:59'] : undefined
   };
 
+  // Helper: short description for preview
+  const shortDescription = provider.description
+    ? provider.description.length > 150
+      ? provider.description.substring(0, 150) + '...'
+      : provider.description
+    : '';
+
   return (
     <div className="max-w-7xl mx-auto px-0 sm:px-4 sm:px-6 lg:px-8 py-0 sm:py-8">
       <SEO
@@ -483,9 +509,9 @@ export default function ProviderProfile() {
         schema={[providerSchema, breadcrumbSchema]}
       />
 
-      {/* ============== MOBILE LAYOUT ============== */}
+      {/* ============== MODERN MOBILE LAYOUT ============== */}
       <div className="block md:hidden">
-        {/* Cover photo */}
+        {/* Cover photo – use OptimizedImage with proper dimensions to prevent blur */}
         <div className="relative h-48 sm:h-52 bg-gray-100">
           {provider.profile?.cover_photo ? (
             <OptimizedImage
@@ -509,20 +535,25 @@ export default function ProviderProfile() {
           </button>
         </div>
 
-        {/* Avatar & status */}
+        {/* Avatar & status – clickable for full‑screen view */}
         <div className="relative flex justify-center -mt-14 mb-4 px-4">
           <div className="relative">
             <div className="w-28 h-28 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white">
               {provider.profile?.avatar_url ? (
-                <OptimizedImage
-                  src={provider.profile.avatar_url}
-                  alt={providerName}
-                  className="w-full h-full object-cover"
-                  width={112}
-                  height={112}
-                  loading="eager"
-                  fetchpriority="high"
-                />
+                <button onClick={() => setAvatarModalOpen(true)} className="w-full h-full relative group">
+                  <OptimizedImage
+                    src={provider.profile.avatar_url}
+                    alt={providerName}
+                    className="w-full h-full object-cover"
+                    width={112}
+                    height={112}
+                    loading="eager"
+                    fetchpriority="high"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
                   {(providerName || 'P')[0]}
@@ -550,7 +581,17 @@ export default function ProviderProfile() {
             <h1 className="text-xl font-bold text-gray-900">{providerName}</h1>
             <p className="text-sm font-medium text-primary-600 mt-0.5">{categoryName}</p>
             {provider.description && (
-              <p className="text-sm text-gray-500 mt-2 leading-relaxed">{provider.description}</p>
+              <p className="text-sm text-gray-500 mt-2 leading-relaxed break-words">
+                {shortDescription}
+                {provider.description.length > 150 && (
+                  <button
+                    onClick={() => setShowFullDescription(true)}
+                    className="text-primary-600 hover:underline ml-1 font-medium"
+                  >
+                    See more
+                  </button>
+                )}
+              </p>
             )}
             <div className="flex justify-center mt-3">
               <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
@@ -654,7 +695,7 @@ export default function ProviderProfile() {
           </div>
         )}
 
-        {/* Services */}
+        {/* Services – fixed overflow */}
         {provider.services?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
@@ -666,13 +707,13 @@ export default function ProviderProfile() {
                   key={service.id}
                   className="flex justify-between items-start bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm">{service.name}</p>
                     {service.description && (
-                      <p className="text-xs text-gray-500 mt-1">{service.description}</p>
+                      <p className="text-xs text-gray-500 mt-1 break-words">{service.description}</p>
                     )}
                   </div>
-                  <div className="text-right ml-3">
+                  <div className="text-right ml-3 flex-shrink-0">
                     <p className="font-bold text-primary-600 text-sm">₦{service.price.toLocaleString()}</p>
                     <p className="text-xs text-gray-400 font-medium">{priceTypeLabels[service.price_type]}</p>
                   </div>
@@ -684,12 +725,10 @@ export default function ProviderProfile() {
 
         {/* About */}
         <div className="px-4 mb-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> About
-            </h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 border-l-4 border-primary-500">
+            <h2 className="text-base font-bold text-gray-900 mb-3">About</h2>
             {provider.description && (
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed break-words">{provider.description}</p>
             )}
             <div className="flex flex-wrap gap-2">
               {provider.profile?.education && (
@@ -721,7 +760,7 @@ export default function ProviderProfile() {
           <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
             <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
           </h2>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 border-l-4 border-primary-500">
             <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
@@ -769,7 +808,7 @@ export default function ProviderProfile() {
         )}
       </div>
 
-      {/* ============== DESKTOP LAYOUT (with two fixes) ============== */}
+      {/* ============== DESKTOP LAYOUT (unchanged except avatar & description modals) ============== */}
       <div className="hidden md:block">
         <Breadcrumbs items={breadcrumbItems} />
         <button
@@ -780,7 +819,7 @@ export default function ProviderProfile() {
         </button>
 
         {/* Profile card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 border-l-4 border-primary-500">
           {/* Cover */}
           <div className="relative h-56 bg-gradient-to-r from-primary-100 to-primary-50">
             {provider.profile?.cover_photo ? (
@@ -799,20 +838,25 @@ export default function ProviderProfile() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
 
-          {/* Main info – adjusted spacing to prevent name touching banner */}
+          {/* Main info */}
           <div className="relative px-6 sm:px-8 -mt-8 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
-            {/* Avatar */}
+            {/* Avatar – clickable */}
             <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
               {provider.profile?.avatar_url ? (
-                <OptimizedImage
-                  src={provider.profile.avatar_url}
-                  alt={providerName}
-                  className="w-full h-full object-cover"
-                  width={128}
-                  height={128}
-                  loading="eager"
-                  fetchpriority="high"
-                />
+                <button onClick={() => setAvatarModalOpen(true)} className="w-full h-full relative group">
+                  <OptimizedImage
+                    src={provider.profile.avatar_url}
+                    alt={providerName}
+                    className="w-full h-full object-cover"
+                    width={128}
+                    height={128}
+                    loading="eager"
+                    fetchpriority="high"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
                   {(providerName || 'P')[0]}
@@ -825,7 +869,7 @@ export default function ProviderProfile() {
               )}
             </div>
 
-            {/* Name and status – pushed down with padding-top */}
+            {/* Name and status */}
             <div className="flex-1 mt-4 sm:mt-0 sm:ml-4 pt-6">
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
@@ -836,7 +880,17 @@ export default function ProviderProfile() {
               </div>
               <p className="text-sm font-medium text-primary-600">{categoryName}</p>
               {provider.description && (
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">{provider.description}</p>
+                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                  {shortDescription}
+                  {provider.description.length > 150 && (
+                    <button
+                      onClick={() => setShowFullDescription(true)}
+                      className="text-primary-600 hover:underline ml-1 font-medium"
+                    >
+                      See more
+                    </button>
+                  )}
+                </p>
               )}
             </div>
 
@@ -915,21 +969,21 @@ export default function ProviderProfile() {
 
         {/* Services & Portfolio in a two-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Services card */}
           {provider.services?.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <span className="w-1 h-5 bg-primary-500 rounded-full"></span>
                 <Package className="h-5 w-5 text-primary-600" /> Services & Pricing
               </h2>
               <div className="space-y-4">
                 {provider.services.map((service) => (
                   <div key={service.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900">{service.name}</p>
-                      {service.description && <p className="text-sm text-gray-500 mt-1">{service.description}</p>}
+                      {service.description && (
+                        <p className="text-sm text-gray-500 mt-1 break-words">{service.description}</p>
+                      )}
                     </div>
-                    <div className="text-right ml-4">
+                    <div className="text-right ml-4 flex-shrink-0">
                       <p className="font-bold text-primary-600">₦{service.price.toLocaleString()}</p>
                       <p className="text-xs text-gray-400 font-medium">{priceTypeLabels[service.price_type]}</p>
                     </div>
@@ -939,11 +993,10 @@ export default function ProviderProfile() {
             </div>
           )}
 
-          {/* Portfolio card – now all images clickable, opening full-screen gallery */}
           {provider.portfolio_images?.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
+                <Package className="h-5 w-5 text-primary-600" /> Portfolio
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {provider.portfolio_images.map((image, idx) => (
@@ -968,11 +1021,8 @@ export default function ProviderProfile() {
 
         {/* About & Reviews columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* About card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> About
-            </h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">About</h2>
             {provider.description && (
               <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>
             )}
@@ -1000,11 +1050,8 @@ export default function ProviderProfile() {
             </div>
           </div>
 
-          {/* Reviews card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
-            </h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Reviews</h2>
             <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
@@ -1035,6 +1082,38 @@ export default function ProviderProfile() {
       </div>
 
       {/* ============== MODALS ============== */}
+
+      {/* Avatar full‑screen modal */}
+      {avatarModalOpen && provider.profile?.avatar_url && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setAvatarModalOpen(false)}>
+          <button className="absolute top-4 right-4 text-white" onClick={() => setAvatarModalOpen(false)}>
+            <X className="h-8 w-8" />
+          </button>
+          <img
+            src={provider.profile.avatar_url}
+            alt={providerName}
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* Full description modal */}
+      {showFullDescription && provider.description && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowFullDescription(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">About {providerName}</h3>
+              <button onClick={() => setShowFullDescription(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap break-words">{provider.description}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Booking modal */}
       <BookingFormModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
@@ -1043,6 +1122,7 @@ export default function ProviderProfile() {
         providerVerified={provider?.profile?.is_verified || false}
       />
 
+      {/* Review modal */}
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -1085,6 +1165,8 @@ export default function ProviderProfile() {
           </div>
         </div>
       )}
+
+      {/* Report modal */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
