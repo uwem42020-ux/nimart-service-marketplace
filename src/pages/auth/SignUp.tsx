@@ -1,3 +1,4 @@
+// src/pages/auth/SignUp.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -19,8 +20,9 @@ export default function SignUp() {
   const [otp, setOtp] = useState('');
   const [role, setRole] = useState<'customer' | 'provider'>('customer');
   const [fullName, setFullName] = useState('');
-  const [referralCode, setReferralCode] = useState(''); // ← NEW
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(false);
 
   // Pre‑fill role and referral from URL params
   useEffect(() => {
@@ -50,6 +52,10 @@ export default function SignUp() {
       if (error) throw error;
       toast.success('An 8‑digit code has been sent to your email');
       setStep('otp');
+
+      // Start 30‑second cooldown
+      setOtpCooldown(true);
+      setTimeout(() => setOtpCooldown(false), 30000);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -105,19 +111,29 @@ export default function SignUp() {
           .eq('referral_code', referralCode.trim().toUpperCase())
           .single();
 
-        if (referrer && referrer.id !== user.id) {
-          // Mark the new provider as referred
-          await supabase
-            .from('providers')
-            .update({ referred_by: referrer.id })
-            .eq('id', user.id);
-
-          // Create the referral record
-          await supabase.from('referrals').insert({
-            referrer_id: referrer.id,
-            referred_provider_id: user.id,
-          });
+        if (!referrer) {
+          toast.error('Referral code not found. Please check and try again.');
+          setLoading(false);
+          return;
         }
+
+        if (referrer.id === user.id) {
+          toast.error('You cannot refer yourself.');
+          setLoading(false);
+          return;
+        }
+
+        // Mark the new provider as referred
+        await supabase
+          .from('providers')
+          .update({ referred_by: referrer.id })
+          .eq('id', user.id);
+
+        // Create the referral record
+        await supabase.from('referrals').insert({
+          referrer_id: referrer.id,
+          referred_provider_id: user.id,
+        });
       }
       // ------------------------------------------
 
@@ -226,7 +242,7 @@ export default function SignUp() {
                   Create your account
                 </h2>
                 <p className="text-sm text-gray-500 text-center mb-6">
-                  Join Nigeria’s trusted service marketplace
+                  Join Nigeria's trusted service marketplace
                 </p>
 
                 <form onSubmit={sendOTP} className="space-y-4">
@@ -241,15 +257,16 @@ export default function SignUp() {
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
                         placeholder="you@example.com"
+                        autoFocus
                       />
                     </div>
                   </div>
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || otpCooldown}
                     className="w-full bg-primary-600 text-white py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition font-semibold shadow-lg shadow-primary-600/20"
                   >
-                    Continue with Email
+                    {otpCooldown ? 'Please wait 30 seconds' : 'Continue with Email'}
                   </button>
                 </form>
 
@@ -326,6 +343,7 @@ export default function SignUp() {
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-center text-2xl tracking-[0.3em] font-mono font-bold"
                     placeholder="00000000"
                     maxLength={8}
+                    autoFocus
                   />
                 </div>
                 <button

@@ -6,6 +6,8 @@ import { AuthLayout } from './components/layout/AuthLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { AdminRoute } from './components/common/AdminRoute';
 import { LoadingSkeleton } from './components/common/LoadingSkeleton';
+import { ProviderProfileSkeleton } from './components/skeletons/ProviderProfileSkeleton';
+import { ProviderPortfolioSkeleton } from './components/skeletons/ProviderPortfolioSkeleton';
 import { MessageThread } from './components/chat/MessageThread';
 
 // Lazy load pages
@@ -75,8 +77,22 @@ export const router = createBrowserRouter([
       { path: 'map', element: <Suspense fallback={<LoadingSkeleton />}><MapPage /></Suspense> },
       { path: 'category/:tierSlug', element: <Suspense fallback={<LoadingSkeleton />}><CategoryPage /></Suspense> },
       { path: 'services/:categorySlug/in/:lgaId', element: <Suspense fallback={<LoadingSkeleton />}><ServiceLocationPage /></Suspense> },
-      { path: 'provider/:id', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderProfile /></Suspense> },
-      { path: 'provider/:id/portfolio', element: <Suspense fallback={<LoadingSkeleton />}><CustomerProviderPortfolio /></Suspense> },
+      {
+        path: 'provider/:id',
+        element: (
+          <Suspense fallback={<ProviderProfileSkeleton />}>
+            <CustomerProviderProfile />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'provider/:id/portfolio',
+        element: (
+          <Suspense fallback={<ProviderPortfolioSkeleton />}>
+            <CustomerProviderPortfolio />
+          </Suspense>
+        ),
+      },
       { path: 'blog', element: <Suspense fallback={<LoadingSkeleton />}><Blog /></Suspense> },
       { path: 'blog/:slug', element: <Suspense fallback={<LoadingSkeleton />}><BlogPost /></Suspense> },
       { path: 'careers', element: <Suspense fallback={<LoadingSkeleton />}><Careers /></Suspense> },

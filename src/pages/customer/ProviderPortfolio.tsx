@@ -1,10 +1,10 @@
-// src/pages/customer/ProviderPortfolio.tsx
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { OptimizedImage } from '../../components/common/OptimizedImage';
 
 export default function ProviderPortfolio() {
   const { id } = useParams<{ id: string }>();
@@ -70,12 +70,14 @@ export default function ProviderPortfolio() {
         <div className="w-10" /> {/* spacer for centering */}
       </div>
 
-      {/* Main image */}
+      {/* Main image – replaces raw <img> */}
       <div className="flex-1 relative flex items-center justify-center">
-        <img
+        <OptimizedImage
           src={currentImage.image_url}
           alt={currentImage.title || 'Portfolio image'}
           className="max-h-full max-w-full object-contain"
+          width={1200}
+          height={800}
         />
 
         {/* Navigation arrows */}
@@ -99,7 +101,7 @@ export default function ProviderPortfolio() {
         )}
       </div>
 
-      {/* Thumbnail strip (smaller images below) */}
+      {/* Thumbnail strip – each thumbnail is an OptimizedImage */}
       <div className="py-3 px-4 bg-black/60 backdrop-blur-sm">
         <div className="flex gap-2 overflow-x-auto hide-scrollbar justify-center">
           {portfolio.map((img, idx) => (
@@ -112,10 +114,12 @@ export default function ProviderPortfolio() {
                   : 'border-transparent opacity-60'
               }`}
             >
-              <img
+              <OptimizedImage
                 src={img.image_url}
-                alt=""
+                alt={img.title || 'Portfolio thumbnail'}
                 className="w-full h-full object-cover"
+                width={64}
+                height={64}
               />
             </button>
           ))}

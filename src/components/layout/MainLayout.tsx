@@ -5,6 +5,7 @@ import { Footer } from '../common/Footer';
 import { MobileBottomNav } from '../common/MobileBottomNav';
 import { ScrollToTop } from '../common/ScrollToTop';
 import { InstallPrompt } from '../common/InstallPrompt';
+import { ChatWidget } from '../common/ChatWidget';
 
 export function MainLayout() {
   return (
@@ -17,6 +18,7 @@ export function MainLayout() {
       <Footer />
       <MobileBottomNav />
       <InstallPrompt />
+      <ChatWidget />
     </div>
   );
 }

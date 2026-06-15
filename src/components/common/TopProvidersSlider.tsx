@@ -149,7 +149,7 @@ export function TopProvidersSlider() {
         <div className="inline-block bg-[#008751] text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-3">
           Top Providers
         </div>
-        <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
+        <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
           {[1, 2, 3, 4, 5].map(i => (
             <SkeletonCard key={i} />
           ))}
@@ -167,12 +167,13 @@ export function TopProvidersSlider() {
         Top Providers
         {isOffline && <span className="ml-2 text-xs text-white/80">(Offline mode)</span>}
       </div>
-      <div className="flex gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
-        {displayData.map(provider => {
+      <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
+        {displayData.map((provider, index) => {
           const prof = provider.profile || {};
           const isVerified = prof.is_verified;
           const isBoosted = provider.isBoosted;
           const bgImage = prof.avatar_url || null;
+          const isFirst = index === 0;
 
           return (
             <Link
@@ -188,8 +189,12 @@ export function TopProvidersSlider() {
                   {bgImage ? (
                     <OptimizedImage
                       src={bgImage}
-                      alt={provider.business_name}
+                      alt={provider.business_name || 'Provider'}
                       className="absolute inset-0 w-full h-full object-cover"
+                      width={160}
+                      height={200}
+                      loading={isFirst ? 'eager' : 'lazy'}
+                      fetchpriority={isFirst ? 'high' : 'auto'}
                     />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-primary-100 to-primary-200" />
@@ -210,14 +215,11 @@ export function TopProvidersSlider() {
                   <div className="font-semibold text-[10px] sm:text-xs text-gray-900 truncate">
                     {provider.business_name}
                   </div>
-                  {/* ---- Location with separate LGA and state lines ---- */}
                   <div className="mt-0.5 space-y-0.5">
-                    {/* LGA line */}
                     <div className="flex items-center gap-0.5 text-[8px] sm:text-[10px] text-gray-500 truncate">
                       <MapPin className="h-2 w-2 flex-shrink-0" />
                       <span className="truncate">{prof.lga_name || 'LGA not set'}</span>
                     </div>
-                    {/* State line – a little bigger */}
                     {prof.state_name && (
                       <div className="text-[10px] sm:text-xs text-gray-600 font-medium truncate">
                         {prof.state_name}

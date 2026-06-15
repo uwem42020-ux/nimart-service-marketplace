@@ -160,14 +160,14 @@ const subcategoryPngMap: Record<number, string> = {
   705: '/autolast/customer clearance agent.png',
   706: '/autolast/insurance assessors.png',
 
-  // Plumbing & Water (first batch)
+  // Plumbing & Water
   801: '/autolast/general plumbers.png',
   802: '/autolast/borehole drilling and installation.png',
   803: '/autolast/well digging services.png',
   804: '/autolast/water heater and installation.png',
 };
 
-// 🧠 Parent-category fallback Lucide icons – guarantees distinct icons per category
+// 🧠 Parent-category fallback Lucide icons
 const parentCategoryIcons: Record<string, React.ReactNode> = {
   'vehicle-mechanics': <Wrench className="h-5 w-5" />,
   'roadside-emergencies': <Truck className="h-5 w-5" />,
@@ -233,18 +233,15 @@ const parentCategoryIcons: Record<string, React.ReactNode> = {
   'cross-border': <Plane className="h-5 w-5" />,
 };
 
-// Helper: returns subcategory icon
+// Helper: returns subcategory icon – with explicit width/height
 const getSubcategoryIcon = (sub: { slug?: string; id: number; name: string }, parentCategorySlug: string) => {
-  // 1. Check custom PNG map from /autolast/
   const png = subcategoryPngMap[sub.id];
-  if (png) return <img src={png} alt={sub.name} className="w-9 h-9 object-contain" />;
+  if (png) return <img src={png} alt={sub.name} className="w-9 h-9 object-contain" width={36} height={36} />;
 
-  // 2. Fallback to parent category's descriptive icon
   if (parentCategorySlug && parentCategoryIcons[parentCategorySlug]) {
     return parentCategoryIcons[parentCategorySlug];
   }
 
-  // 3. Ultimate fallback
   return <Tag className="h-5 w-5 text-gray-500" />;
 };
 
@@ -273,10 +270,11 @@ export function MobileCategoryPanel({
   const currentCategory = selectedCategory ? categories.find(c => c.slug === selectedCategory) : null;
   const subs = currentCategory ? SUBCATEGORIES.filter(s => s.category_slug === currentCategory.slug) : [];
 
+  // Helper: returns category icon with explicit width/height
   const getCategoryIcon = (slug: string, name: string) => {
     const png = categoryPngMap[slug];
     return png ? (
-      <img src={png} alt={name} className="w-9 h-9 object-contain" />
+      <img src={png} alt={name} className="w-9 h-9 object-contain" width={36} height={36} />
     ) : (
       <div className="w-9 h-9 flex items-center justify-center text-white bg-primary-500 rounded-full text-sm font-bold">
         {name.charAt(0).toUpperCase()}
@@ -298,7 +296,7 @@ export function MobileCategoryPanel({
           ) : (
             <div className="flex items-center gap-3">
               {tierIcon ? (
-                <img src={tierIcon} alt={tierName} className="w-9 h-9 object-contain" />
+                <img src={tierIcon} alt={tierName} className="w-9 h-9 object-contain" width={36} height={36} />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-sm font-bold">{tierName.charAt(0)}</div>
               )}

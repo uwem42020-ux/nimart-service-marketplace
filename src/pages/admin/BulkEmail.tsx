@@ -1,3 +1,4 @@
+// src/pages/admin/BulkEmail.tsx (or AdminBulkEmail.tsx)
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -40,28 +41,38 @@ export default function AdminBulkEmail() {
 
     setLoading(true);
     try {
-      // Fetch recipient emails
-      let query = supabase
-        .from('profiles')
-        .select(`
-          id,
-          auth_user:auth.users!inner(email)
-        `);
-
+      // Step 1 – Get profile IDs of the chosen role
+      let profileQuery = supabase.from('profiles').select('id');
       if (recipientType === 'customers') {
-        query = query.eq('role', 'customer');
+        profileQuery = profileQuery.eq('role', 'customer');
       } else if (recipientType === 'providers') {
-        query = query.eq('role', 'provider');
+        profileQuery = profileQuery.eq('role', 'provider');
       }
 
-      const { data: recipients, error: fetchError } = await query;
+      const { data: profiles, error: profileError } = await profileQuery;
+      if (profileError) throw profileError;
+      if (!profiles || profiles.length === 0) {
+        toast.error('No recipients found');
+        return;
+      }
 
-      if (fetchError) throw fetchError;
+      const userIds = profiles.map((p) => p.id);
 
-      const emails = recipients?.map((r: any) => r.auth_user?.email).filter(Boolean) || [];
+      // Step 2 – Fetch emails via the secure RPC
+      const { data: emailsData, error: rpcError } = await supabase
+        .rpc('get_user_emails', { user_ids: userIds });
 
-      // Send emails via Edge Function
-      const { error: sendError } = await supabase.functions.invoke('send-bulk-email', {
+      if (rpcError) throw rpcError;
+
+      const emails = emailsData?.map((e: { email: string }) => e.email).filter(Boolean) || [];
+
+      if (emails.length === 0) {
+        toast.error('No email addresses found');
+        return;
+      }
+
+      // Step 3 – Send via the CORRECT Edge Function name
+      const { error: sendError } = await supabase.functions.invoke('send-email', {
         body: { emails, subject, content, admin_id: user!.id },
       });
 

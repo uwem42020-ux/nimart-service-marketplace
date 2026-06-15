@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Clock,
@@ -13,10 +13,12 @@ import {
   ArrowRight,
   Settings,
   Heart,
+  Briefcase,
 } from 'lucide-react';
 import { LocationPrompt } from '../../components/customer/LocationPrompt';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
 import { FavoriteButton } from '../../components/common/FavoriteButton';
+import toast from 'react-hot-toast';
 
 interface DashboardStats {
   totalBookings: number;
@@ -41,7 +43,8 @@ interface BookingWithProvider {
 }
 
 export default function CustomerDashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalBookings: 0,
     pendingBookings: 0,
@@ -51,6 +54,7 @@ export default function CustomerDashboard() {
   const [recentBookings, setRecentBookings] = useState<BookingWithProvider[]>([]);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -153,6 +157,30 @@ export default function CustomerDashboard() {
     );
   }
 
+  const handleSwitchToProvider = async () => {
+    if (!window.confirm(
+      'Switch to a Provider account?\n\nYou will keep your email and account. You\'ll just need to complete your business profile to appear on the map and search results.'
+    )) return;
+
+    setSwitching(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: 'provider', is_complete: false })
+        .eq('id', user!.id);
+
+      if (error) throw error;
+
+      await refreshProfile();
+      toast.success('Switched to Provider! Complete your business profile now.');
+      navigate('/provider/setup');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to switch. Please try again.');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -173,6 +201,32 @@ export default function CustomerDashboard() {
           Welcome back, {firstName}!
         </h1>
         <p className="text-gray-600 mt-1">Here's an overview of your activity.</p>
+      </div>
+
+      {/* Switch to Provider Card */}
+      <div className="bg-gradient-to-r from-primary-600 to-green-600 rounded-xl shadow-md p-6 mb-8 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Briefcase className="h-6 w-6" />
+              Offer Your Services?
+            </h2>
+            <p className="mt-1 text-green-50 text-sm max-w-md">
+              Switch to a Provider account, set up your business profile, and start getting customers directly.
+            </p>
+          </div>
+          <button
+            onClick={handleSwitchToProvider}
+            disabled={switching}
+            className="bg-white text-primary-700 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+          >
+            {switching ? 'Switching...' : (
+              <>
+                Switch to Provider <ArrowRight className="h-5 w-5" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}

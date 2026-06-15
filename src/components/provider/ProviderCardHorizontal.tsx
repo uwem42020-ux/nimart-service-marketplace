@@ -8,6 +8,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Database } from '../../types/database';
 import { FavoriteButton } from '../common/FavoriteButton';
+import { useQueryClient } from '@tanstack/react-query';
+import { fetchProviderProfile } from '../../lib/queries';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -51,6 +53,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
 }: ProviderCardHorizontalProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const locationString = provider.profile?.lga_name
     ? `${provider.profile.lga_name}${provider.profile?.state_name ? `, ${provider.profile.state_name}` : ''}`
@@ -81,6 +84,25 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
     navigate(`/provider/${provider.id}?book=true`);
   };
 
+  // Prefetch route + data + component chunk on hover
+  const handleMouseEnter = () => {
+    // Prefetch the route HTML
+    const preloadLink = document.createElement('link');
+    preloadLink.rel = 'prefetch';
+    preloadLink.href = `/provider/${provider.id}`;
+    document.head.appendChild(preloadLink);
+
+    // Prefetch the lazy component chunk
+    import('../../pages/customer/ProviderProfile');
+
+    // Prefetch profile data
+    queryClient.prefetchQuery({
+      queryKey: ['provider', provider.id],
+      queryFn: () => fetchProviderProfile(provider.id),
+      staleTime: 1000 * 60 * 2,
+    });
+  };
+
   return (
     <div
       className={cn(
@@ -93,6 +115,7 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
       {/* Image area */}
       <Link
         to={`/provider/${provider.id}`}
+        onMouseEnter={handleMouseEnter}
         className="w-28 sm:w-32 flex-shrink-0 relative bg-gray-100 overflow-hidden"
       >
         {provider.profile?.avatar_url ? (
@@ -100,6 +123,8 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
             src={provider.profile.avatar_url}
             alt={provider.business_name || provider.profile.full_name || 'Provider'}
             className="w-full h-full object-cover"
+            width={128}
+            height={128}
           />
         ) : (
           <div className="w-full h-full relative">
@@ -107,24 +132,23 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
               src="/profile.png"
               alt="Placeholder"
               className="w-full h-full object-cover"
+              width={128}
+              height={128}
             />
             <div className="absolute inset-0 bg-black/30" />
           </div>
         )}
 
-        {/* Favorite button – top left */}
         <div className="absolute top-2 left-2 z-10">
           <FavoriteButton providerId={provider.id} size="sm" />
         </div>
 
-        {/* Verified badge (top right) */}
         {isVerified && (
           <div className="absolute top-2 right-2 bg-white rounded-full p-0.5 shadow-sm z-10">
             <img src="/verify.png" alt="Verified" className="h-6 w-6" />
           </div>
         )}
 
-        {/* Boosted badge – bottom left, vertical (smaller for horizontal card) */}
         {isBoosted && (
           <div
             className="absolute bottom-2 left-0 bg-amber-500 text-white rounded-r-md px-1.5 py-1.5 shadow-md z-10"
@@ -137,7 +161,6 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
 
       {/* Details */}
       <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between">
-        {/* Provider name + status icon inline, left side */}
         <div className="flex items-center gap-1.5 mb-1">
           <div className="relative flex-shrink-0">
             <span
@@ -190,7 +213,6 @@ export const ProviderCardHorizontal = memo(function ProviderCardHorizontal({
         </div>
 
         <div className="mt-2 flex items-center justify-between">
-          {/* Category badge – solid green pill */}
           <Link
             to={`/search?category=${provider.selected_category_slug}`}
             className="inline-flex items-center gap-1 bg-primary-600 text-white text-xs px-2.5 py-0.5 rounded-full hover:bg-primary-700 transition"

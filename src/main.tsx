@@ -1,4 +1,3 @@
-import 'leaflet/dist/leaflet.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
@@ -9,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { router } from './routes';
 import { UpdateNotification } from './components/common/UpdateNotification';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -29,7 +29,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <NotificationProvider>
             <UpdateNotification />
-            <RouterProvider router={router} />
+            <ErrorBoundary>
+              <RouterProvider router={router} />
+            </ErrorBoundary>
             <Toaster
               position="top-center"
               toastOptions={{
@@ -48,17 +50,37 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// Prefetch critical provider data once service worker is ready
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.ready.then(() => {
-    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      fetch(`${SUPABASE_URL}/rest/v1/providers?select=*&limit=20`, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-      }).catch(() => {
-        // Silently fail – offline data will be served from cache if available
-      });
+// ---------- Firebase lazy‑loading (after idle) ----------
+// This delays Firebase SDK until the page is interactive,
+// reducing initial JavaScript execution time and TBT.
+setTimeout(async () => {
+  try {
+    const { initializeApp, getApp, getApps } = await import('firebase/app');
+    const { getMessaging, getToken } = await import('firebase/messaging');
+
+    const firebaseConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    };
+
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    const messaging = getMessaging(app);
+
+    if ('serviceWorker' in navigator && 'Notification' in window) {
+      try {
+        const token = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
+        if (token) {
+          console.log('Firebase token:', token);
+        }
+      } catch (err) {
+        console.warn('Unable to get Firebase token:', err);
+      }
     }
-  });
-}
+  } catch (err) {
+    console.warn('Firebase failed to load:', err);
+  }
+}, 300);

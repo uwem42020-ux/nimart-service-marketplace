@@ -89,7 +89,6 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        // 👇 NEW: Forces browser to fetch latest on every navigation
         navigateFallback: null,
         navigationPreload: true,
       }
@@ -97,5 +96,19 @@ export default defineConfig({
   ],
   server: {
     port: 3000
-  }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react', 'clsx', 'tailwind-merge'],
+          'data-vendor': ['@tanstack/react-query', 'zustand'],
+          'supabase': ['@supabase/supabase-js'],
+          'firebase': ['firebase/app', 'firebase/messaging', 'firebase/analytics'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
 });

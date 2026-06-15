@@ -56,6 +56,8 @@ export function CategoryButtons({ providerCounts, subcategoryCounts }: CategoryB
                   src={tierIconMap[tier.slug]}
                   alt={tier.name}
                   className="w-10 h-10 object-contain"
+                  width={40}
+                  height={40}
                 />
               </div>
               <span className="text-[11px] font-medium text-gray-700 text-center leading-tight">
@@ -71,7 +73,7 @@ export function CategoryButtons({ providerCounts, subcategoryCounts }: CategoryB
         <MobileCategoryPanel
           tierSlug={selectedTier}
           tierName={selectedTierName}
-          tierIcon={selectedTier ? tierIconMap[selectedTier] : ''}   // <-- passes the tier's PNG URL
+          tierIcon={selectedTier ? tierIconMap[selectedTier] : ''}
           providerCounts={providerCounts}
           subcategoryCounts={subcategoryCounts}
           onClose={() => setSelectedTier(null)}

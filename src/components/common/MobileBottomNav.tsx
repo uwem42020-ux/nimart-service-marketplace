@@ -80,12 +80,10 @@ export function MobileBottomNav() {
     return profile.role === 'provider' ? `/provider/${roleSuffix}` : `/customer/${roleSuffix}`;
   };
 
-  const isActive = (path: string) => location.pathname.startsWith(path);
-
   // Compute badge visibility (same logic as Header)
   const isOnMessagesPage = location.pathname.includes('/messages');
   const showMessagesBadge = !isOnMessagesPage && counts.messages > 0;
-  const showBookingsBadge = counts.bookings > 0;   // always show if present
+  const showBookingsBadge = counts.bookings > 0;
   const showSystemBadge = counts.system > 0;
 
   const navItems: NavItem[] = [
@@ -143,11 +141,16 @@ export function MobileBottomNav() {
     >
       <div className="flex justify-around items-center min-h-[56px]">
         {navItems.map((item) => {
-          const active = isActive(
-            item.id === 'home' ? '/' :
-            item.id === 'map' ? '/map' :
-            `/${profile?.role}/${item.id}`
-          );
+          // --- Correct active detection ---
+          let active = false;
+          if (item.id === 'home') {
+            active = location.pathname === '/' || location.pathname === '/search';
+          } else if (item.id === 'map') {
+            active = location.pathname.startsWith('/map');
+          } else {
+            const basePath = profile?.role === 'provider' ? `/provider/${item.id}` : `/customer/${item.id}`;
+            active = location.pathname.startsWith(basePath);
+          }
 
           // Determine badge count for this item
           const badge = item.id === 'bookings' && showBookingsBadge ? counts.bookings
@@ -171,6 +174,10 @@ export function MobileBottomNav() {
               )}
             >
               <div className="relative">
+                {/* Active background pill */}
+                {active && (
+                  <span className="absolute inset-0 w-10 h-8 -top-1 -left-2 bg-primary-100 rounded-full -z-10" />
+                )}
                 {item.icon}
                 {badge !== null && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full">

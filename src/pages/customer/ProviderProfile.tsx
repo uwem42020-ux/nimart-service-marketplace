@@ -4,10 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateDistance, formatDistance } from '../../lib/distance';
 import { BookingFormModal } from '../../components/customer/BookingFormModal';
-import { PortfolioGallery } from '../../components/provider/PortfolioGallery';
 import { ReviewsList } from '../../components/reviews/ReviewsList';
 import { SEO } from '../../components/common/SEO';
-import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { ProviderProfileSkeleton } from '../../components/skeletons/ProviderProfileSkeleton';
 import { ProviderCardPortrait } from '../../components/provider/ProviderCardPortrait';
 import { ProviderCardHorizontal } from '../../components/provider/ProviderCardHorizontal';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
@@ -65,7 +64,7 @@ const statusIconMap: Record<string, string> = {
 };
 
 const statusLabel: Record<string, string> = {
-  available: 'Available for Booking',   // ← changed
+  available: 'Available for Booking',
   busy: 'Busy',
   away: 'Away',
 };
@@ -106,9 +105,7 @@ export default function ProviderProfile() {
     callback();
   };
 
-  // Opens the ChatWidget by directly clicking its floating button – REMOVED
   const openChat = () => {
-    // Navigate directly to messages page instead of opening widget
     if (!user) {
       navigate('/auth/signin');
       return;
@@ -116,7 +113,6 @@ export default function ProviderProfile() {
     navigate('/customer/messages');
   };
 
-  // Share with fallbacks that work on HTTP
   const shareProviderLink = () => {
     const url = `${window.location.origin}/provider/${id}`;
     if (navigator.share) {
@@ -231,7 +227,7 @@ export default function ProviderProfile() {
       return fullProvider;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 2,   // 2 minutes – avoids refetch when revisiting quickly
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: similarProviders } = useQuery({
@@ -316,9 +312,7 @@ export default function ProviderProfile() {
 
   const submitReview = async () => {
     if (!user) { toast.error('Please sign in to leave a review'); navigate('/auth/signin'); return; }
-    
     const bookingId = searchParams.get('bookingId');
-    
     setSubmittingReview(true);
     try {
       const { data: existingReview } = await supabase
@@ -328,7 +322,6 @@ export default function ProviderProfile() {
         .eq('provider_id', id!)
         .maybeSingle();
       if (existingReview) { toast.error('You have already reviewed this provider'); setShowReviewModal(false); return; }
-      
       const { error } = await supabase.from('reviews').insert([{
         reviewer_id: user.id,
         provider_id: id!,
@@ -380,7 +373,7 @@ export default function ProviderProfile() {
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center"><NimartSpinner size="lg" /></div>;
+    return <ProviderProfileSkeleton />;
   }
 
   if (!provider) {
@@ -392,7 +385,6 @@ export default function ProviderProfile() {
     );
   }
 
-  // Safe accessors (no more undefined reads)
   const avgRating = provider.reviews?.length
     ? provider.reviews.reduce((acc, r) => acc + r.rating, 0) / provider.reviews.length
     : 0;
@@ -491,12 +483,20 @@ export default function ProviderProfile() {
         schema={[providerSchema, breadcrumbSchema]}
       />
 
-      {/* ============== MODERN MOBILE LAYOUT ============== */}
+      {/* ============== MOBILE LAYOUT ============== */}
       <div className="block md:hidden">
         {/* Cover photo */}
         <div className="relative h-48 sm:h-52 bg-gray-100">
           {provider.profile?.cover_photo ? (
-            <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" />
+            <OptimizedImage
+              src={provider.profile.cover_photo}
+              alt="Cover"
+              className="w-full h-full object-cover"
+              width={640}
+              height={208}
+              loading="eager"
+              fetchpriority="high"
+            />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
           )}
@@ -514,7 +514,15 @@ export default function ProviderProfile() {
           <div className="relative">
             <div className="w-28 h-28 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white">
               {provider.profile?.avatar_url ? (
-                <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" />
+                <OptimizedImage
+                  src={provider.profile.avatar_url}
+                  alt={providerName}
+                  className="w-full h-full object-cover"
+                  width={112}
+                  height={112}
+                  loading="eager"
+                  fetchpriority="high"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
                   {(providerName || 'P')[0]}
@@ -553,7 +561,7 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Action buttons – all 5 visible, centred, working + FavoriteButton */}
+        {/* Action buttons */}
         <div className="px-2 mb-6">
           <div className="flex flex-nowrap gap-1 justify-center">
             <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white text-[10px] font-semibold rounded-xl w-14 shadow-md shadow-primary-600/20">
@@ -583,7 +591,6 @@ export default function ProviderProfile() {
                 <span className="truncate max-w-[50px]">{provider.profile?.phone || 'No phone'}</span>
               </a>
             )}
-            {/* Favorite button – standalone icon */}
             <div className="flex-shrink-0 flex flex-col items-center justify-center w-14">
               <FavoriteButton providerId={id!} size="md" />
             </div>
@@ -633,7 +640,13 @@ export default function ProviderProfile() {
                   to={`/provider/${id}/portfolio`}
                   className="snap-start flex-shrink-0 w-40 h-40 rounded-2xl overflow-hidden bg-gray-100 shadow-md border border-gray-200/60"
                 >
-                  <img src={image.image_url} alt={image.title || 'Portfolio'} className="w-full h-full object-cover" />
+                  <OptimizedImage
+                    src={image.image_url}
+                    alt={image.title || 'Portfolio'}
+                    className="w-full h-full object-cover"
+                    width={160}
+                    height={160}
+                  />
                 </Link>
               ))}
             </div>
@@ -756,7 +769,7 @@ export default function ProviderProfile() {
         )}
       </div>
 
-      {/* ============== MODERN DESKTOP LAYOUT ============== */}
+      {/* ============== DESKTOP LAYOUT (with two fixes) ============== */}
       <div className="hidden md:block">
         <Breadcrumbs items={breadcrumbItems} />
         <button
@@ -771,19 +784,35 @@ export default function ProviderProfile() {
           {/* Cover */}
           <div className="relative h-56 bg-gradient-to-r from-primary-100 to-primary-50">
             {provider.profile?.cover_photo ? (
-              <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" />
+              <OptimizedImage
+                src={provider.profile.cover_photo}
+                alt="Cover"
+                className="w-full h-full object-cover"
+                width={1200}
+                height={224}
+                loading="eager"
+                fetchpriority="high"
+              />
             ) : (
               <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
 
-          {/* Main info – name pushed further down */}
-          <div className="relative px-6 sm:px-8 -mt-12 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
+          {/* Main info – adjusted spacing to prevent name touching banner */}
+          <div className="relative px-6 sm:px-8 -mt-8 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
             {/* Avatar */}
             <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
               {provider.profile?.avatar_url ? (
-                <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" />
+                <OptimizedImage
+                  src={provider.profile.avatar_url}
+                  alt={providerName}
+                  className="w-full h-full object-cover"
+                  width={128}
+                  height={128}
+                  loading="eager"
+                  fetchpriority="high"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
                   {(providerName || 'P')[0]}
@@ -796,8 +825,8 @@ export default function ProviderProfile() {
               )}
             </div>
 
-            {/* Name and status */}
-            <div className="flex-1 mt-4 sm:mt-0 sm:ml-4">
+            {/* Name and status – pushed down with padding-top */}
+            <div className="flex-1 mt-4 sm:mt-0 sm:ml-4 pt-6">
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
                 <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
@@ -811,7 +840,7 @@ export default function ProviderProfile() {
               )}
             </div>
 
-            {/* Action buttons + FavoriteButton */}
+            {/* Action buttons */}
             <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
               <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all">
                 <Calendar className="h-5 w-5" /> Book
@@ -834,7 +863,6 @@ export default function ProviderProfile() {
                   <Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}
                 </a>
               )}
-              {/* Favorite button – desktop */}
               <div className="flex items-center">
                 <FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" />
               </div>
@@ -911,13 +939,29 @@ export default function ProviderProfile() {
             </div>
           )}
 
-          {/* Portfolio card */}
+          {/* Portfolio card – now all images clickable, opening full-screen gallery */}
           {provider.portfolio_images?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
               </h2>
-              <PortfolioGallery images={provider.portfolio_images} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {provider.portfolio_images.map((image, idx) => (
+                  <Link
+                    key={image.id}
+                    to={`/provider/${id}/portfolio`}
+                    className="overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    <OptimizedImage
+                      src={image.image_url}
+                      alt={image.title || 'Portfolio'}
+                      className="w-full aspect-square object-cover"
+                      width={300}
+                      height={300}
+                    />
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -990,7 +1034,7 @@ export default function ProviderProfile() {
         )}
       </div>
 
-      {/* ============== MODALS (ChatWidget removed) ============== */}
+      {/* ============== MODALS ============== */}
       <BookingFormModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}

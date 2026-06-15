@@ -10,6 +10,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLocationStore } from '../../stores/locationStore';
 import toast from 'react-hot-toast';
 import { FavoriteButton } from '../common/FavoriteButton';
+import { useQueryClient } from '@tanstack/react-query';
+import { fetchProviderProfile } from '../../lib/queries';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -27,6 +29,8 @@ export interface ProviderWithProfile extends ProviderRow {
 interface ProviderCardPortraitProps {
   provider: ProviderWithProfile;
   className?: string;
+  /** Use "eager" for the first card (LCP) – overrides default "lazy" */
+  imageLoading?: 'lazy' | 'eager';
 }
 
 const statusIconMap: Record<string, string> = {
@@ -50,27 +54,12 @@ const statusRingColor: Record<string, string> = {
 export const ProviderCardPortrait = memo(function ProviderCardPortrait({
   provider,
   className,
+  imageLoading = 'lazy',
 }: ProviderCardPortraitProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
-
-  const locationString = provider.profile?.lga_name
-    ? `${provider.profile.lga_name}${provider.profile?.state_name ? `, ${provider.profile.state_name}` : ''}`
-    : 'Location not set';
-
-  const categoryDisplay = provider.selected_category_slug
-    ? provider.selected_category_slug
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
-    : 'General Services';
-
-  const lastSeen = provider.lastSignInAt
-    ? formatDistanceToNow(new Date(provider.lastSignInAt), { addSuffix: true })
-    : provider.profile?.updated_at
-    ? formatDistanceToNow(new Date(provider.profile.updated_at), { addSuffix: true })
-    : 'Recently';
+  const queryClient = useQueryClient();
 
   const isBoosted = provider.boost_until ? new Date(provider.boost_until) > new Date() : false;
   const isVerified = provider.profile?.is_verified || false;
@@ -122,18 +111,39 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
     return null;
   };
 
-  // 🚀 Preload the route when the user hovers over the card
   const handleMouseEnter = () => {
     const preloadLink = document.createElement('link');
     preloadLink.rel = 'prefetch';
     preloadLink.href = `/provider/${provider.id}`;
     document.head.appendChild(preloadLink);
+
+    import('../../pages/customer/ProviderProfile');
+
+    queryClient.prefetchQuery({
+      queryKey: ['provider', provider.id],
+      queryFn: () => fetchProviderProfile(provider.id),
+      staleTime: 1000 * 60 * 2,
+    });
   };
+
+  const categoryDisplay = provider.selected_category_slug
+    ? provider.selected_category_slug
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    : 'General Services';
+
+  const lastSeen = provider.lastSignInAt
+    ? formatDistanceToNow(new Date(provider.lastSignInAt), { addSuffix: true })
+    : provider.profile?.updated_at
+    ? formatDistanceToNow(new Date(provider.profile.updated_at), { addSuffix: true })
+    : 'Recently';
 
   return (
     <div
       className={cn(
-        'bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col break-inside-avoid',
+        'bg-white rounded-lg shadow-sm overflow-hidden flex flex-col break-inside-avoid max-w-[280px] mx-auto',
+        !isBoosted && !isVerified && 'border border-gray-100',
         isBoosted && 'border-2 border-amber-500',
         isVerified && !isBoosted && 'border-2 border-primary-500',
         className
@@ -144,23 +154,27 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
         onMouseEnter={handleMouseEnter}
         className="block relative w-full bg-gray-100"
       >
-        {provider.profile?.avatar_url ? (
-          <OptimizedImage
-            src={provider.profile.avatar_url}
-            alt={provider.business_name || provider.profile.full_name || 'Provider'}
-            className="w-full h-auto"
-            width={400}
-          />
-        ) : (
-          <div className="relative w-full h-40">
+        <div className="relative overflow-hidden bg-gray-200 w-full aspect-[4/5]">
+          {provider.profile?.avatar_url ? (
+            <OptimizedImage
+              src={provider.profile.avatar_url}
+              alt={provider.business_name || provider.profile.full_name || 'Provider'}
+              className="w-full h-full object-cover"
+              width={400}
+              height={500}
+              loading={imageLoading}
+              fetchpriority={imageLoading === 'eager' ? 'high' : 'auto'}
+            />
+          ) : (
             <img
               src="/profile.png"
               alt="Placeholder"
               className="w-full h-full object-cover"
+              width={400}
+              height={500}
             />
-            <div className="absolute inset-0 bg-black/30" />
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="absolute top-2 left-2 z-10">
           <FavoriteButton providerId={provider.id} size="sm" />
@@ -223,7 +237,14 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
 
         <div className="flex items-start text-xs text-gray-600 mb-1">
           <MapPin className="h-3.5 w-3.5 mr-1 flex-shrink-0 mt-0.5" />
-          <span className="line-clamp-1">{locationString}</span>
+          <div className="flex-1 min-w-0">
+            <span className="line-clamp-1">{provider.profile?.lga_name || 'LGA not set'}</span>
+            {provider.profile?.state_name && (
+              <div className="text-[11px] sm:text-xs font-semibold text-primary-600 truncate">
+                {provider.profile.state_name}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center text-xs text-gray-500 mb-2">
@@ -247,10 +268,7 @@ export const ProviderCardPortrait = memo(function ProviderCardPortrait({
         </div>
 
         {provider.status === 'away' ? (
-          <button
-            disabled
-            className="w-full bg-gray-300 text-gray-500 text-sm font-medium py-2 rounded-lg cursor-not-allowed"
-          >
+          <button disabled className="w-full bg-gray-300 text-gray-500 text-sm font-medium py-2 rounded-lg cursor-not-allowed">
             Not Available
           </button>
         ) : (

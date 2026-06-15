@@ -9,6 +9,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocationStore } from '../../stores/locationStore';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { fetchProviderProfile } from '../../lib/queries';
 
 type ProviderRow = Database['public']['Tables']['providers']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -49,9 +51,9 @@ const statusRingColor: Record<string, string> = {
 export const ProviderCard = memo(function ProviderCard({ provider, className }: ProviderCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { lat: userLat, lng: userLng, permissionGranted, setPermissionDenied } = useLocationStore();
+  const { permissionGranted, setPermissionDenied } = useLocationStore();
+  const queryClient = useQueryClient();
 
-  // Combine LGA and State
   const locationString = provider.profile?.lga_name
     ? `${provider.profile.lga_name}${provider.profile?.state_name ? `, ${provider.profile.state_name}` : ''}`
     : 'Location not set';
@@ -107,7 +109,6 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         </span>
       );
     }
-    // Don't show anything while waiting for calculation
     if (!permissionGranted) {
       return (
         <button onClick={handleEnableLocation} className="text-xs text-primary-600 hover:underline">
@@ -115,8 +116,26 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         </button>
       );
     }
-    // If permission granted but distance still loading, show nothing
     return null;
+  };
+
+  // Prefetch route + data + component chunk on hover
+  const handleMouseEnter = () => {
+    // Prefetch the route HTML
+    const preloadLink = document.createElement('link');
+    preloadLink.rel = 'prefetch';
+    preloadLink.href = `/provider/${provider.id}`;
+    document.head.appendChild(preloadLink);
+
+    // Prefetch the lazy component chunk
+    import('../../pages/customer/ProviderProfile');
+
+    // Prefetch profile data
+    queryClient.prefetchQuery({
+      queryKey: ['provider', provider.id],
+      queryFn: () => fetchProviderProfile(provider.id),
+      staleTime: 1000 * 60 * 2,
+    });
   };
 
   return (
@@ -127,13 +146,19 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
         className
       )}
     >
-      <Link to={`/provider/${provider.id}`} className="block relative w-full overflow-hidden bg-gray-100">
+      <Link
+        to={`/provider/${provider.id}`}
+        onMouseEnter={handleMouseEnter}
+        className="block relative w-full overflow-hidden bg-gray-100"
+      >
         <div className="relative w-full" style={{ paddingBottom: '100%' }}>
           {provider.profile?.avatar_url ? (
             <OptimizedImage
               src={provider.profile.avatar_url}
               alt={provider.business_name || provider.profile.full_name || 'Provider'}
               className="absolute inset-0 w-full h-full object-cover"
+              width={300}
+              height={300}
             />
           ) : (
             <div className="absolute inset-0 w-full h-full">
@@ -141,20 +166,20 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
                 src="/profile.png"
                 alt="Placeholder"
                 className="w-full h-full object-cover"
+                width={300}
+                height={300}
               />
               <div className="absolute inset-0 bg-black/30" />
             </div>
           )}
         </div>
 
-        {/* Verified badge (top right) */}
         {provider.profile?.is_verified && (
           <div className="absolute top-3 right-3 bg-white rounded-full p-0.5 shadow-sm z-10">
             <img src="/verify.png" alt="Verified" className="h-7 w-7" />
           </div>
         )}
 
-        {/* Boosted badge – bottom left, vertical */}
         {isBoosted && (
           <div
             className="absolute bottom-3 left-0 bg-amber-500 text-white rounded-r-md px-2 py-2 shadow-md z-10"
@@ -166,7 +191,6 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
       </Link>
 
       <div className="p-4">
-        {/* Provider name with status icon on left + pulsing ring */}
         <div className="flex items-center gap-1.5 mb-1">
           <div className="relative flex-shrink-0">
             <span
@@ -194,7 +218,6 @@ export const ProviderCard = memo(function ProviderCard({ provider, className }: 
           <p className="text-sm text-gray-600 line-clamp-2 mb-2">{provider.description}</p>
         )}
 
-        {/* Category badge – solid green pill */}
         <div className="mb-2">
           <Link
             to={`/search?category=${provider.selected_category_slug}`}

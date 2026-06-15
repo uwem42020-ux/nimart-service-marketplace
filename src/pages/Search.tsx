@@ -7,8 +7,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { EnhancedFilterSidebar } from '../components/search/EnhancedFilterSidebar';
 import { SortDropdown } from '../components/search/SortDropdown';
 import { SEO } from '../components/common/SEO';
+import { ProviderGridSkeleton } from '../components/skeletons/ProviderGridSkeleton';
 import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
+import { useSmartSort } from '../hooks/useSmartSort';
 import {
   Search as SearchIcon,
   X,
@@ -16,7 +18,6 @@ import {
   List,
   SlidersHorizontal,
 } from 'lucide-react';
-import { NimartSpinner } from '../components/common/NimartSpinner';
 import { cn } from '../lib/utils';
 import type { Database } from '../types/database';
 
@@ -43,20 +44,29 @@ interface Suggestion {
 export default function Search() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sortBy, setSortBy] = useState<string>('distance');
+  const [sortBy, setSortBy] = useState<string>('recommended');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const keyword = searchParams.get('q') || '';
-  const tier = searchParams.get('tier');
-  const category = searchParams.get('category');
-  const subcategory = searchParams.get('subcategory');
-  const state = searchParams.get('state');
-  const lga = searchParams.get('lga');
+  const tier = searchParams.get('tier') || undefined;
+  const category = searchParams.get('category') || undefined;
+  const subcategory = searchParams.get('subcategory') || undefined;
+  const state = searchParams.get('state') || undefined;
+  const lga = searchParams.get('lga') || undefined;
 
-  // Use the same location source as the homepage
   const userLat = profile?.lat ?? undefined;
   const userLng = profile?.lng ?? undefined;
+
+  // AI smart sorting hook
+  const { data: smartSortData } = useSmartSort(
+    profile?.id,
+    userLat,
+    userLng,
+    tier,
+    category,
+    50
+  );
 
   const [searchInput, setSearchInput] = useState(keyword);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -69,7 +79,7 @@ export default function Search() {
     setSearchInput(keyword);
   }, [keyword]);
 
-  // Autocomplete – safe version (fixed the old embedded filter bug)
+  // Autocomplete
   useEffect(() => {
     if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) {
       setSuggestions([]);
@@ -167,9 +177,9 @@ export default function Search() {
     setShowSuggestions(false);
   };
 
-  // Providers query – uses RPC for distances and last seen (accurate)
+  // Providers query – batched reviews, last‑seen, AI sorting
   const { data: providers, isLoading } = useQuery({
-    queryKey: ['search-providers', keyword, tier, category, subcategory, state, lga, userLat, userLng, sortBy],
+    queryKey: ['search-providers', keyword, tier, category, subcategory, state, lga, userLat, userLng, sortBy, smartSortData],
     queryFn: async () => {
       let query = supabase
         .from('providers')
@@ -201,36 +211,22 @@ export default function Search() {
           query = query.or(`business_name.ilike.${pattern},description.ilike.${pattern}`);
         }
       }
-      if (tier) {
-        query = query.eq('selected_tier_slug', tier);
-      }
-      if (category) {
-        query = query.eq('selected_category_slug', category);
-      }
-      if (subcategory) {
-        query = query.eq('selected_subcategory_id', parseInt(subcategory));
-      }
+      if (tier) query = query.eq('selected_tier_slug', tier);
+      if (category) query = query.eq('selected_category_slug', category);
+      if (subcategory) query = query.eq('selected_subcategory_id', parseInt(subcategory));
+
       if (lga) {
-        const { data: profilesInLga } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('lga_id', parseInt(lga));
+        const { data: profilesInLga } = await supabase.from('profiles').select('id').eq('lga_id', parseInt(lga));
         if (profilesInLga && profilesInLga.length > 0) {
           query = query.in('id', profilesInLga.map(p => p.id));
         } else {
           return [] as ProviderWithProfile[];
         }
       } else if (state) {
-        const { data: lgasInState } = await supabase
-          .from('lga_centers')
-          .select('lga_id')
-          .eq('state_id', parseInt(state));
+        const { data: lgasInState } = await supabase.from('lga_centers').select('lga_id').eq('state_id', parseInt(state));
         if (lgasInState && lgasInState.length > 0) {
           const lgaIds = lgasInState.map(l => l.lga_id);
-          const { data: profilesInState } = await supabase
-            .from('profiles')
-            .select('id')
-            .in('lga_id', lgaIds);
+          const { data: profilesInState } = await supabase.from('profiles').select('id').in('lga_id', lgaIds);
           if (profilesInState && profilesInState.length > 0) {
             query = query.in('id', profilesInState.map(p => p.id));
           } else {
@@ -248,24 +244,34 @@ export default function Search() {
 
       const providerIds = providersData.map(p => p.id);
 
-      // Fetch profiles, portfolio, reviews in parallel
-      const [profilesRes, portfolioRes] = await Promise.all([
+      // Batch fetch profiles, portfolio, reviews
+      const [profilesRes, portfolioRes, reviewsRes] = await Promise.all([
         supabase.from('profiles').select('*').in('id', providerIds),
-        supabase.from('portfolio_images').select('*').in('provider_id', providerIds)
+        supabase.from('portfolio_images').select('*').in('provider_id', providerIds),
+        supabase.from('reviews').select('provider_id, rating').in('provider_id', providerIds),
       ]);
+
       const profiles = profilesRes.data ?? [];
       const portfolioImages = portfolioRes.data ?? [];
+      const allReviews = reviewsRes.data ?? [];
 
-      // Batch distance calculation using the same RPC as the homepage
+      // Reviews map
+      const reviewsMap = new Map<string, { sum: number; count: number }>();
+      allReviews.forEach(r => {
+        const curr = reviewsMap.get(r.provider_id) || { sum: 0, count: 0 };
+        curr.sum += r.rating;
+        curr.count += 1;
+        reviewsMap.set(r.provider_id, curr);
+      });
+
+      // Batch distances
       let distancesMap: Record<string, number> = {};
       if (userLat && userLng) {
-        const { data: distances, error: rpcError } = await supabase
-          .rpc('get_provider_distances', {
-            user_lat: userLat,
-            user_lng: userLng,
-            provider_ids: providerIds,
-          });
-
+        const { data: distances, error: rpcError } = await supabase.rpc('get_provider_distances', {
+          user_lat: userLat,
+          user_lng: userLng,
+          provider_ids: providerIds,
+        });
         if (!rpcError && distances) {
           distances.forEach((d: any) => {
             distancesMap[d.provider_id] = d.distance_meters;
@@ -273,32 +279,26 @@ export default function Search() {
         }
       }
 
-      // Batch last sign‑in times (accurate)
+      // Batch last‑seen
       let lastSignInMap: Record<string, string | null> = {};
-      const signInPromises = providerIds.map(async (id) => {
-        const { data } = await supabase.rpc('get_user_last_sign_in', { user_id: id });
-        return { id, lastSignInAt: data };
-      });
-      const signInResults = await Promise.all(signInPromises);
-      signInResults.forEach(({ id, lastSignInAt }) => {
-        lastSignInMap[id] = lastSignInAt;
-      });
+      if (providerIds.length > 0) {
+        const { data: signInData, error: signInError } = await supabase.rpc('get_users_last_sign_in', { user_ids: providerIds });
+        if (!signInError && signInData) {
+          signInData.forEach((row: { user_id: string; last_sign_in_at: string | null }) => {
+            lastSignInMap[row.user_id] = row.last_sign_in_at;
+          });
+        }
+      }
 
-      const providersWithDetails = await Promise.all(providersData.map(async (provider) => {
+      // Assemble providers
+      const providersWithDetails = providersData.map(provider => {
         const providerProfile = profiles.find(p => p.id === provider.id) ?? ({} as ProfileRow);
         const images = portfolioImages.filter(img => img.provider_id === provider.id) ?? [];
-
         const distanceMeters = distancesMap[provider.id];
         const distance = distanceMeters ? distanceMeters / 1000 : undefined;
-
-        const { data: reviews } = await supabase
-          .from('reviews')
-          .select('rating')
-          .eq('provider_id', provider.id);
-        const avgRating = reviews?.length
-          ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
-          : 0;
-
+        const reviewStats = reviewsMap.get(provider.id);
+        const avgRating = reviewStats ? reviewStats.sum / reviewStats.count : 0;
+        const reviewCount = reviewStats?.count || 0;
         const lastSignInAt = lastSignInMap[provider.id] ?? null;
 
         return {
@@ -307,24 +307,59 @@ export default function Search() {
           portfolio_images: images,
           distance,
           average_rating: avgRating,
-          review_count: reviews?.length || 0,
+          review_count: reviewCount,
           lastSignInAt,
         } as ProviderWithProfile;
-      }));
+      });
 
-      // Sort (by distance is now accurate)
-      if (sortBy === 'distance') {
-        providersWithDetails.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
-      } else if (sortBy === 'rating') {
-        providersWithDetails.sort((a, b) => (b.average_rating ?? 0) - (a.average_rating ?? 0));
-      } else if (sortBy === 'availability') {
-        providersWithDetails.sort((a, b) => (a.status === 'available' ? -1 : 1));
-      }
+      // ---------- FINAL POLISHED SORTING ----------
+      const now = new Date();
+      const boosted = providersWithDetails.filter(p => p.boost_until && new Date(p.boost_until) > now);
+      const notBoosted = providersWithDetails.filter(p => !p.boost_until || new Date(p.boost_until) <= now);
 
-      return providersWithDetails;
+      // Status priority: available (0), busy (1), away (2)
+      const statusPriority = (s: string) => {
+        if (s === 'available') return 0;
+        if (s === 'busy') return 1;
+        return 2; // away
+      };
+
+      const sortGroup = (group: ProviderWithProfile[]) => {
+        group.sort((a, b) => {
+          // 1. Status order always first – away providers go to the bottom
+          const statusA = statusPriority(a.status);
+          const statusB = statusPriority(b.status);
+          if (statusA !== statusB) return statusA - statusB;
+
+          // 2. If recommended, use AI score
+          if (sortBy === 'recommended' && smartSortData && smartSortData.length > 0) {
+            const scoreMap = new Map(smartSortData.map(s => [s.provider_id, s.score]));
+            return (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0);
+          }
+
+          // 3. Otherwise use selected secondary sort
+          switch (sortBy) {
+            case 'distance':
+              return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+            case 'rating':
+              return (b.average_rating ?? 0) - (a.average_rating ?? 0);
+            case 'availability':
+              return 0; // already sorted by status above
+            default:
+              // fallback to rating
+              return (b.average_rating ?? 0) - (a.average_rating ?? 0);
+          }
+        });
+      };
+
+      sortGroup(boosted);
+      sortGroup(notBoosted);
+
+      // Boosted providers first, then non‑boosted
+      return [...boosted, ...notBoosted];
     },
     enabled: true,
-    staleTime: 0,
+    staleTime: 1000 * 60 * 2,
   });
 
   return (
@@ -464,9 +499,7 @@ export default function Search() {
 
           {/* Results */}
           {isLoading ? (
-            <div className="flex justify-center py-20">
-              <NimartSpinner size="lg" />
-            </div>
+            <ProviderGridSkeleton />
           ) : !providers || providers.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm">
               <p className="text-gray-500">No providers found.</p>

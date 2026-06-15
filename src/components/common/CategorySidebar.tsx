@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ChevronUp, Wrench, Monitor, Scissors, Home, Truck, Briefcase, Shield, Heart, BookOpen, Music, Users, Handshake, Globe, Utensils, Camera, Bike, Car, Flame, Lightbulb, GlassWater, PaintBucket, Dumbbell, Stethoscope, Brain, Plane, Download, Upload, ShoppingBag, Sparkles, Key, PenTool, Palette, Cable, Drill, Tag } from 'lucide-react';
+import {
+  ChevronRight, ChevronDown, ChevronUp, Wrench, Monitor, Scissors, Home,
+  Truck, Briefcase, Shield, Heart, BookOpen, Music, Users, Handshake,
+  Globe, Utensils, Camera, Bike, Car, Flame, Lightbulb, GlassWater,
+  PaintBucket, Dumbbell, Stethoscope, Brain, Plane, Download, Upload,
+  ShoppingBag, Sparkles, Key, PenTool, Palette, Cable, Drill, Tag
+} from 'lucide-react';
 import { TIERS, CATEGORIES, SUBCATEGORIES } from '../../data/categories';
 import { cn } from '../../lib/utils';
 
-// Tier icons (unchanged)
+// Tier icons
 const tierIconMap: Record<string, string> = {
   automotive: '/categoryicons/roadside.png',
   'home-property': '/categoryicons/home.png',
@@ -136,7 +142,7 @@ const subcategoryPngMap: Record<number, string> = {
   402: '/autolast/car wash and detailing.png',
   403: '/autolast/car polishing.png',
   404: '/autolast/engine flush.png',
-  405: '/autolast/battry sales and installation.png',
+  405: '/autolast/battary sales and installation.png',
   406: '/autolast/tire sales and rotation.png',
   407: '/autolast/wheel alignment services.png',
   409: '/autolast/wiper blade replacement.png',
@@ -170,7 +176,7 @@ const subcategoryPngMap: Record<number, string> = {
   705: '/autolast/customer clearance agent.png',
   706: '/autolast/insurance assessors.png',
 
-  // Plumbing & Water (first batch)
+  // Plumbing & Water
   801: '/autolast/general plumbers.png',
   802: '/autolast/borehole drilling and installation.png',
   803: '/autolast/well digging services.png',
@@ -246,8 +252,17 @@ const parentCategoryIcons: Record<string, React.ReactNode> = {
 // Helper: returns the icon element for a category
 const getCategoryIconElement = (catSlug: string, catName: string) => {
   const png = categoryPngMap[catSlug];
-  if (png) return <img src={png} alt={catName} className="w-6 h-6 object-contain" />;
-  // Fallback to a simple circle with first letter (same as before)
+  if (png)
+    return (
+      <img
+        src={png}
+        alt={catName}
+        className="w-6 h-6 object-contain"
+        width={24}
+        height={24}
+      />
+    );
+  // Fallback to a simple circle with first letter
   return (
     <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-xs font-medium">
       {catName.charAt(0).toUpperCase()}
@@ -256,9 +271,22 @@ const getCategoryIconElement = (catSlug: string, catName: string) => {
 };
 
 // Helper: returns the icon element for a subcategory
-const getSubcategoryIconElement = (subId: number, subName: string, parentCategorySlug: string) => {
+const getSubcategoryIconElement = (
+  subId: number,
+  subName: string,
+  parentCategorySlug: string
+) => {
   const png = subcategoryPngMap[subId];
-  if (png) return <img src={png} alt={subName} className="w-5 h-5 object-contain" />;
+  if (png)
+    return (
+      <img
+        src={png}
+        alt={subName}
+        className="w-5 h-5 object-contain"
+        width={20}
+        height={20}
+      />
+    );
   // Fallback to parent category's Lucide icon
   if (parentCategorySlug && parentCategoryIcons[parentCategorySlug]) {
     return parentCategoryIcons[parentCategorySlug];
@@ -272,7 +300,10 @@ interface CategorySidebarProps {
   subcategoryCounts: Record<number, number>;
 }
 
-export function CategorySidebar({ providerCounts, subcategoryCounts }: CategorySidebarProps) {
+export function CategorySidebar({
+  providerCounts,
+  subcategoryCounts,
+}: CategorySidebarProps) {
   const [hoveredTier, setHoveredTier] = useState<string | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -325,7 +356,9 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
     scheduleClose();
   };
 
-  const hoveredTierObj = hoveredTier ? TIERS.find(t => t.slug === hoveredTier) : null;
+  const hoveredTierObj = hoveredTier
+    ? TIERS.find(t => t.slug === hoveredTier)
+    : null;
   const hoveredCategoryObj = hoveredCategory
     ? currentCategories.find(c => c.slug === hoveredCategory)
     : null;
@@ -346,7 +379,8 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                   to={`/search?tier=${tier.slug}`}
                   className={cn(
                     'flex items-center justify-between px-3 py-2.5 hover:bg-gray-50/50 transition-colors',
-                    hoveredTier === tier.slug && 'bg-primary-50/80 text-primary-700'
+                    hoveredTier === tier.slug &&
+                      'bg-primary-50/80 text-primary-700'
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -354,11 +388,16 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                       src={tierIconMap[tier.slug]}
                       alt={tier.name}
                       className="w-7 h-7 object-contain"
+                      width={28}
+                      height={28}
                     />
                     <div>
-                      <span className="text-sm font-medium block">{tier.name}</span>
+                      <span className="text-sm font-medium block">
+                        {tier.name}
+                      </span>
                       <span className="text-xs text-gray-400">
-                        {getTierCount(tier.slug)} provider{getTierCount(tier.slug) !== 1 ? 's' : ''}
+                        {getTierCount(tier.slug)} provider
+                        {getTierCount(tier.slug) !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
@@ -393,7 +432,10 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
       {hoveredTier && currentCategories.length > 0 && (
         <div
           className="absolute top-0 w-64 bg-white/80 backdrop-blur-md rounded-r-lg shadow-lg border border-gray-200/50 z-50 overflow-hidden flex flex-col"
-          style={{ height: 'calc(100vh - 80px)', left: 'calc(16rem + 0.25rem)' }}
+          style={{
+            height: 'calc(100vh - 80px)',
+            left: 'calc(16rem + 0.25rem)',
+          }}
           onMouseEnter={() => {
             cancelClose();
             setHoveredTier(hoveredTier);
@@ -406,6 +448,8 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                 src={tierIconMap[hoveredTierObj.slug]}
                 alt={hoveredTierObj.name}
                 className="w-7 h-7 object-contain"
+                width={28}
+                height={28}
               />
             )}
             <h3 className="font-semibold text-gray-900 text-sm">
@@ -415,7 +459,9 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
           <div className="overflow-y-auto flex-1">
             {currentCategories.map(cat => {
               const catCount = providerCounts[cat.slug] || 0;
-              const hasSubs = SUBCATEGORIES.some(s => s.category_slug === cat.slug);
+              const hasSubs = SUBCATEGORIES.some(
+                s => s.category_slug === cat.slug
+              );
               return (
                 <div
                   key={cat.slug}
@@ -424,12 +470,13 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                 >
                   <Link
                     to={hasSubs ? '#' : `/search?category=${cat.slug}`}
-                    onClick={(e) => {
-                      if (hasSubs) e.preventDefault(); // prevent navigation when subcats exist
+                    onClick={e => {
+                      if (hasSubs) e.preventDefault();
                     }}
                     className={cn(
                       'flex items-center justify-between px-3 py-2.5 hover:bg-gray-50/50 transition-colors',
-                      hoveredCategory === cat.slug && 'bg-primary-50/80 text-primary-700'
+                      hoveredCategory === cat.slug &&
+                        'bg-primary-50/80 text-primary-700'
                     )}
                   >
                     <div className="flex items-center gap-2">
@@ -440,7 +487,9 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                       <span className="text-xs text-gray-400">
                         {catCount} provider{catCount !== 1 ? 's' : ''}
                       </span>
-                      {hasSubs && <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      {hasSubs && (
+                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                      )}
                     </div>
                   </Link>
                 </div>
@@ -454,7 +503,10 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
       {hoveredCategory && currentSubcategories.length > 0 && (
         <div
           className="absolute top-0 w-64 bg-white/80 backdrop-blur-md rounded-r-lg shadow-lg border border-gray-200/50 z-50 overflow-hidden flex flex-col"
-          style={{ height: 'calc(100vh - 80px)', left: 'calc(32rem + 0.5rem)' }}
+          style={{
+            height: 'calc(100vh - 80px)',
+            left: 'calc(32rem + 0.5rem)',
+          }}
           onMouseEnter={() => {
             cancelClose();
             setHoveredCategory(hoveredCategory);
@@ -476,7 +528,11 @@ export function CategorySidebar({ providerCounts, subcategoryCounts }: CategoryS
                   className="flex items-center justify-between px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 hover:text-primary-600 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    {getSubcategoryIconElement(sub.id, sub.name, hoveredCategoryObj?.slug || '')}
+                    {getSubcategoryIconElement(
+                      sub.id,
+                      sub.name,
+                      hoveredCategoryObj?.slug || ''
+                    )}
                     <span>{sub.name}</span>
                   </div>
                   <span className="text-xs text-gray-400">
