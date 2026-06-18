@@ -1,21 +1,18 @@
+// src/pages/provider/Payment.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import {
-  Upload, Send, Copy, CheckCircle, AlertTriangle, X,
+  Send, Copy, CheckCircle,
   ArrowUpRight, ArrowDownLeft, Search, Coins, Info, ChevronDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { NimartSpinner } from '../../components/common/NimartSpinner';
+import { PaystackButton } from 'react-paystack';
 import {
   NAIRA_PER_NICOIN,
-  nicoinToNaira,
-  STANDARD_BOOST_COST,
-  PREMIUM_BOOST_COST,
-  TOP_PLACEMENT_COST,
-  EXTRA_CATEGORY_COST,
 } from '../../lib/nicoinConfig';
 
 export default function ProviderPayment() {
@@ -29,10 +26,6 @@ export default function ProviderPayment() {
 
   // ---- Buy coins state ----
   const [amount, setAmount] = useState('');
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [copied, setCopied] = useState<'account' | 'number' | null>(null);
 
   // ---- Share coins state ----
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,11 +42,7 @@ export default function ProviderPayment() {
   // ---- Coin explanation expand ----
   const [coinInfoExpanded, setCoinInfoExpanded] = useState(false);
 
-  const bankDetails = {
-    bank: 'Opay',
-    accountName: 'Edidiong Godwin Edem',
-    accountNumber: '8038887589',
-  };
+  const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_live_1ce22a24b6176f6c1fcc8b59819baa9cda920487";
 
   // ---- Wallet data fetch ----
   useEffect(() => {
@@ -145,61 +134,6 @@ export default function ProviderPayment() {
     }
   };
 
-  // ---- Buy coins functions ----
-  const handleCopy = (text: string, type: 'account' | 'number') => {
-    navigator.clipboard.writeText(text);
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setProofFile(file);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    } else {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-  };
-
-  const handleBuySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return toast.error('You must be logged in');
-    if (!proofFile) return toast.error('Please upload proof of payment');
-    if (!amount || parseInt(amount) < 100) return toast.error('Amount must be at least ₦100');
-
-    setUploading(true);
-    try {
-      const fileExt = proofFile.name.split('.').pop();
-      const fileName = `${user.id}/payment-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, proofFile);
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-
-      const { error } = await supabase.from('payment_submissions').insert({
-        provider_id: user.id,
-        amount_naira: parseInt(amount),
-        proof_url: urlData.publicUrl,
-        status: 'pending',
-      });
-      if (error) throw error;
-
-      toast.success('Payment proof submitted! We will review within 24 hours.');
-      setAmount('');
-      setProofFile(null);
-      setPreviewUrl(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Submission failed');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handleSearchProvider = async () => {
     if (!searchTerm.trim()) return;
     const { data: profiles } = await supabase
@@ -220,6 +154,22 @@ export default function ProviderPayment() {
 
   // Convert amount to Nicoin for display
   const nicoinAmount = amount ? Math.floor(parseInt(amount) / NAIRA_PER_NICOIN) : 0;
+
+  // Paystack configuration
+  const paystackConfig = {
+    email: user?.email || '',
+    amount: amount ? parseInt(amount) * 100 : 0,
+    publicKey,
+    metadata: {
+      provider_id: user?.id,
+    },
+    onSuccess: () => {
+      toast.success('Payment successful! Nicoin will be credited shortly.');
+      setAmount('');
+      fetchWalletData();
+    },
+    onClose: () => toast.error('Payment cancelled'),
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
@@ -258,9 +208,8 @@ export default function ProviderPayment() {
               <li>₦{NAIRA_PER_NICOIN * 100} → 100 Nicoin</li>
             </ul>
             <p>
-              Buy Nicoin by transferring to the bank account below and uploading
-              proof. Once approved, coins are added to your balance. You can also
-              send Nicoin to other providers.
+              Pay instantly with Paystack and your Nicoin will be credited automatically.
+              You can also send Nicoin to other providers.
             </p>
           </div>
         )}
@@ -276,141 +225,54 @@ export default function ProviderPayment() {
         </p>
       </div>
 
-      {/* Buy Nicoin Section */}
+      {/* Buy Nicoin Section – Paystack only */}
       <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Buy Nicoin</h2>
         <p className="text-gray-600 text-sm mb-6">
-          Transfer the exact amount to the bank account below and upload your payment proof.
+          Enter the amount you want to purchase. You'll be redirected to Paystack to complete your payment securely.
         </p>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Bank Details */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center border-b pb-3">
-              <div>
-                <p className="text-xs text-gray-500">Bank</p>
-                <p className="font-medium">{bankDetails.bank}</p>
-              </div>
-              <button
-                onClick={() => handleCopy(bankDetails.bank, 'account')}
-                className="text-primary-600 text-sm flex items-center gap-1"
-              >
-                {copied === 'account' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{' '}
-                Copy
-              </button>
-            </div>
-            <div className="flex justify-between items-center border-b pb-3">
-              <div>
-                <p className="text-xs text-gray-500">Account Name</p>
-                <p className="font-medium">{bankDetails.accountName}</p>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs text-gray-500">Account Number</p>
-                <p className="font-mono text-xl font-bold">{bankDetails.accountNumber}</p>
-              </div>
-              <button
-                onClick={() => handleCopy(bankDetails.accountNumber, 'number')}
-                className="bg-primary-50 text-primary-700 px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 hover:bg-primary-100"
-              >
-                {copied === 'number' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{' '}
-                Copy
-              </button>
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>
-                Fake receipts lead to <strong>permanent ban</strong>. Only genuine screenshots are accepted.
-              </span>
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Amount (₦)
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              min={100}
+              step={100}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g., 1000"
+            />
+            {amount && parseInt(amount) >= 100 && (
+              <p className="text-sm text-primary-600 mt-1">
+                You'll receive <strong>{nicoinAmount} Nicoins</strong>
+              </p>
+            )}
           </div>
 
-          {/* Upload Form */}
-          <form onSubmit={handleBuySubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount (₦)
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-                min={100}
-                step={100}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g., 1000"
-              />
-              {amount && parseInt(amount) >= 100 && (
-                <p className="text-sm text-primary-600 mt-1">
-                  You'll receive <strong>{nicoinAmount} Nicoins</strong>
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {[1000, 2500, 5000, 10000].map((amt) => (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => setAmount(amt.toString())}
-                  className="px-3 py-1.5 bg-gray-100 rounded-full text-sm hover:bg-gray-200"
-                >
-                  ₦{amt.toLocaleString()}
-                </button>
-              ))}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Proof of Transfer
-              </label>
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-primary-400"
-                onClick={() => document.getElementById('proof-input')?.click()}
+          <div className="flex flex-wrap gap-2">
+            {[1000, 2500, 5000, 10000].map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => setAmount(amt.toString())}
+                className="px-3 py-1.5 bg-gray-100 rounded-full text-sm hover:bg-gray-200"
               >
-                <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                <p className="text-sm text-gray-600 mt-1">Upload screenshot</p>
-                <input
-                  id="proof-input"
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={handleFileChange}
-                />
-              </div>
-              {previewUrl && (
-                <div className="mt-3 relative">
-                  <img src={previewUrl} alt="Preview" className="w-full h-32 object-cover rounded-lg border" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProofFile(null);
-                      setPreviewUrl(null);
-                    }}
-                    className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+                ₦{amt.toLocaleString()}
+              </button>
+            ))}
+          </div>
 
-            <button
-              type="submit"
-              disabled={uploading || !proofFile || !amount}
-              className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {uploading ? (
-                'Submitting...'
-              ) : (
-                <>
-                  <Send className="h-5 w-5" /> Submit Payment Proof
-                </>
-              )}
-            </button>
-          </form>
+          <PaystackButton
+            {...paystackConfig}
+            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50"
+            text="Pay"
+            disabled={!amount || parseInt(amount) < 100}
+          />
         </div>
       </div>
 
