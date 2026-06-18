@@ -181,7 +181,6 @@ export default function ProviderSetup() {
     setDetectedArea(lgaName);
     setHasLocation(true);
 
-    // Derive state name from current state dropdown
     const stateObj = states.find(s => s.state_id === parseInt(selectedStateId));
     if (stateObj) setSelectedStateName(stateObj.state_name);
 
@@ -211,7 +210,10 @@ export default function ProviderSetup() {
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
-      await refreshProfile();
+
+      // Try to refresh the profile – if it fails, still navigate
+      try { await refreshProfile(); } catch {}
+
       localStorage.removeItem(STORAGE_KEY);
       toast.success('Profile setup complete! Please upload a profile picture and set a password.');
       navigate('/provider/profile');
