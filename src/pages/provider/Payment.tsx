@@ -42,7 +42,8 @@ export default function ProviderPayment() {
   // ---- Coin explanation expand ----
   const [coinInfoExpanded, setCoinInfoExpanded] = useState(false);
 
-  const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_live_1ce22a24b6176f6c1fcc8b59819baa9cda920487";
+  // Only from environment variable – no hardcoded fallback
+  const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 
   // ---- Wallet data fetch ----
   useEffect(() => {
@@ -155,7 +156,7 @@ export default function ProviderPayment() {
   // Convert amount to Nicoin for display
   const nicoinAmount = amount ? Math.floor(parseInt(amount) / NAIRA_PER_NICOIN) : 0;
 
-  // Paystack configuration
+  // Paystack configuration – refreshes balance on success
   const paystackConfig = {
     email: user?.email || '',
     amount: amount ? parseInt(amount) * 100 : 0,
@@ -166,7 +167,7 @@ export default function ProviderPayment() {
     onSuccess: () => {
       toast.success('Payment successful! Nicoin will be credited shortly.');
       setAmount('');
-      fetchWalletData();
+      fetchWalletData();   // ← refreshes balance instantly
     },
     onClose: () => toast.error('Payment cancelled'),
   };
