@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createHmac } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY")!;
@@ -8,9 +7,19 @@ const supabase = createClient(
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
 
+async function generateHmac(secret: string, data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-512" }, false, ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 serve(async (req) => {
   const rawBody = await req.text();
-  const hash = createHmac("sha512", PAYSTACK_SECRET).update(rawBody).digest("hex");
+  const hash = await generateHmac(PAYSTACK_SECRET, rawBody);
   const paystackSignature = req.headers.get("x-paystack-signature");
 
   if (hash !== paystackSignature) {
@@ -31,7 +40,6 @@ serve(async (req) => {
     return new Response("Missing metadata", { status: 400 });
   }
 
-  // ₦100 = 50 Nicoin → divide kobo by 200
   const nicoinAmount = Math.floor((amount / 100) / 2);
 
   try {
