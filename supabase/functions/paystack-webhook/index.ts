@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createHmac } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY")!;
@@ -7,39 +8,12 @@ const supabase = createClient(
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
 
-// Helper: generate HMAC-SHA512 signature using native Web Crypto
-async function generateHmac(secret: string, data: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-512" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(data)
-  );
-  // Convert to hex string
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 serve(async (req) => {
   const rawBody = await req.text();
-  const hash = await generateHmac(PAYSTACK_SECRET, rawBody);
+  const hash = createHmac("sha512", PAYSTACK_SECRET).update(rawBody).digest("hex");
   const paystackSignature = req.headers.get("x-paystack-signature");
 
-  // Debug logging (will appear in invocation details)
-  console.log("Body length:", rawBody.length);
-  console.log("Computed hash (first 30):", hash.substring(0, 30));
-  console.log("Header signature (first 30):", paystackSignature?.substring(0, 30));
-
   if (hash !== paystackSignature) {
-    console.error("Signature mismatch");
     return new Response("Invalid signature", { status: 401 });
   }
 
@@ -54,11 +28,11 @@ serve(async (req) => {
   const providerId = metadata?.provider_id;
 
   if (!providerId || !amount) {
-    console.error("Missing metadata/amount");
     return new Response("Missing metadata", { status: 400 });
   }
 
-  const nicoinAmount = Math.floor(amount / 100);
+  // ₦100 = 50 Nicoin → divide kobo by 200
+  const nicoinAmount = Math.floor((amount / 100) / 2);
 
   try {
     await supabase.rpc("adjust_coin_balance", { p_provider_id: providerId, p_amount: nicoinAmount });
@@ -68,8 +42,6 @@ serve(async (req) => {
       type: "paystack_purchase",
       reference_id: body.data.reference,
     });
-
-    console.log(`Credited ${nicoinAmount} Nicoin to ${providerId}`);
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
