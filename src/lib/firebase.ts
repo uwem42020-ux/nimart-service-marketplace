@@ -2,7 +2,7 @@ import { initializeApp, getApp, getApps } from "firebase/app";
 import type { Messaging } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCCSOq11ORgRJ2978hOUaQ6bsAHNWNyC2g",
+  apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   authDomain: "nimart-9ccb9.firebaseapp.com",
   projectId: "nimart-9ccb9",
   storageBucket: "nimart-9ccb9.firebasestorage.app",

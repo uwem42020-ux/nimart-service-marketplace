@@ -1,3 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = "public/firebase-messaging-sw.js"
+
+# ----- Your existing redirects -----
 [[redirects]]
   from = "/sitemap.xml"
   to = "https://qootzfndochmcoijnwxf.supabase.co/functions/v1/sitemap"
@@ -14,6 +22,7 @@
   to = "/index.html"
   status = 200
 
+# ----- Your existing headers -----
 [[headers]]
   for = "/assets/*"
   [headers.values]
