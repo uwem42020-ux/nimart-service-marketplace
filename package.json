@@ -11,6 +11,7 @@
   },
   "homepage": "https://nimart.ng",
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "@supabase/supabase-js": "^2.39.7",
     "@tanstack/react-query": "^5.24.1",
     "browser-image-compression": "^2.0.2",

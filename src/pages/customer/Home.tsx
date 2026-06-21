@@ -1,3 +1,4 @@
+// src/pages/Home.tsx
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -62,6 +63,27 @@ const siteNavSchema = {
   ]
 };
 
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Nimart",
+  "url": "https://nimart.ng",
+  "logo": "https://nimart.ng/logo.png",
+  "description": "Nigeria's trusted marketplace connecting customers with verified service professionals.",
+  "sameAs": [
+    "https://www.instagram.com/nimartng",
+    "https://www.tiktok.com/@nimart.ng",
+    "https://web.facebook.com/people/Nimart/61551209078955/",
+    "https://x.com/nimartng",
+    "https://www.youtube.com/@Nimartng"
+  ],
+  "identifier": {
+    "@type": "PropertyValue",
+    "propertyID": "Wikidata ID",
+    "value": "Q140308792"
+  }
+};
+
 // =============================================
 
 export default function Home() {
@@ -87,7 +109,6 @@ export default function Home() {
   const userLat = profile?.lat ?? globalLat ?? undefined;
   const userLng = profile?.lng ?? globalLng ?? undefined;
 
-  // AI sorting hook
   const { data: smartSortData } = useSmartSort(
     profile?.id,
     userLat,
@@ -97,7 +118,6 @@ export default function Home() {
     20
   );
 
-  // Provider counts (cached)
   const [providerCounts, setProviderCounts] = useState<Record<string, number>>(() => {
     try { const saved = localStorage.getItem('nimart_provider_counts'); return saved ? JSON.parse(saved) : {}; }
     catch { return {}; }
@@ -116,7 +136,6 @@ export default function Home() {
     if (Object.keys(subcategoryCounts).length > 0) localStorage.setItem('nimart_subcategory_counts', JSON.stringify(subcategoryCounts));
   }, [subcategoryCounts]);
 
-  // Preload states and LGAs
   useEffect(() => {
     async function preloadLocations() {
       const { data: allStates } = await supabase.from('lga_centers').select('state_id, state_name').order('state_name');
@@ -137,7 +156,6 @@ export default function Home() {
     preloadLocations();
   }, []);
 
-  // Featured providers query
   const { data: featuredProviders, isLoading } = useQuery({
     queryKey: ['featured-providers', userLat, userLng, stateFilter, lgaFilter],
     queryFn: async () => {
@@ -245,8 +263,6 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // ======== INSTANT PROFILE OPENING ========
-  // 1. Pre‑load the first 5 providers' full profile data
   useEffect(() => {
     if (!featuredProviders || featuredProviders.length === 0) return;
     const providersToPreload = featuredProviders.slice(0, 5);
@@ -254,16 +270,14 @@ export default function Home() {
       queryClient.prefetchQuery({
         queryKey: ['provider', provider.id],
         queryFn: () => fetchProviderProfile(provider.id),
-        staleTime: 1000 * 60 * 5, // matches profile page staleTime
+        staleTime: 1000 * 60 * 5,
       });
     });
   }, [featuredProviders, queryClient]);
 
-  // 2. Start downloading the profile page component JS immediately
   useEffect(() => {
     import('../../pages/customer/ProviderProfile').catch(() => {});
   }, []);
-  // =========================================
 
   useEffect(() => {
     const channel = supabase.channel('providers-status')
@@ -320,7 +334,7 @@ export default function Home() {
         title="Nimart - Nigeria's Trusted Service Marketplace"
         description="Connect with verified professionals across Nigeria. Book trusted services for home, auto, beauty, and more."
         url="https://nimart.ng"
-        schema={[homeSchema, siteNavSchema]}
+        schema={[homeSchema, siteNavSchema, organizationSchema]}
         breadcrumbs={[{ label: 'Home', to: '/' }]}
       />
 

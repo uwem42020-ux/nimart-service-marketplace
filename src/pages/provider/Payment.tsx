@@ -152,8 +152,8 @@ export default function ProviderPayment() {
     setSearchResults(filtered);
   };
 
-  // Convert amount to Nicoin for display (₦100 = 50 Nicoin)
-  const nicoinAmount = amount ? Math.floor(parseInt(amount) / 2) : 0;
+  // 1 NGN = 1 Nicoin
+  const nicoinAmount = amount ? parseInt(amount) : 0;
 
   // Paystack configuration – refreshes balance on success
   const paystackConfig = {
@@ -188,13 +188,13 @@ export default function ProviderPayment() {
         {coinInfoExpanded && (
           <div className="px-4 pb-4 text-sm text-gray-700 space-y-2">
             <p><strong>Nicoin</strong> is Nimart's virtual currency. Use it to boost your profile, get top placement, and unlock extra features.</p>
-            <p><strong>Exchange rate:</strong> <span className="text-primary-600 font-semibold">₦100 = 50 Nicoin</span></p>
+            <p><strong>Exchange rate:</strong> <span className="text-primary-600 font-semibold">₦1 = 1 Nicoin</span></p>
             <p className="font-medium">Quick conversion:</p>
             <ul className="list-disc list-inside space-y-1 text-gray-600">
-              <li>₦200 → 100 Nicoin</li>
-              <li>₦500 → 250 Nicoin</li>
-              <li>₦1000 → 500 Nicoin</li>
-              <li>₦5000 → 2500 Nicoin</li>
+              <li>₦100 → 100 Nicoin</li>
+              <li>₦200 → 200 Nicoin</li>
+              <li>₦500 → 500 Nicoin</li>
+              <li>₦1000 → 1000 Nicoin</li>
             </ul>
             <p>Pay instantly with Paystack and your Nicoin will be credited automatically. You can also send Nicoin to other providers.</p>
           </div>

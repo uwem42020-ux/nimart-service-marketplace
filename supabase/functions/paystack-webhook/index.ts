@@ -40,7 +40,8 @@ serve(async (req) => {
     return new Response("Missing metadata", { status: 400 });
   }
 
-  const nicoinAmount = Math.floor((amount / 100) / 2);
+  // 1 NGN = 1 Nicoin
+  const nicoinAmount = Math.floor(amount / 100);
 
   try {
     await supabase.rpc("adjust_coin_balance", { p_provider_id: providerId, p_amount: nicoinAmount });
