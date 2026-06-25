@@ -53,6 +53,10 @@ export const CATEGORIES: Category[] = [
   { slug: 'glass', name: 'Glass & Glazing', tier_slug: 'home-property' },
   { slug: 'appliance-repair', name: 'Appliance & Electronics Repair', tier_slug: 'home-property' },
   { slug: 'home-security', name: 'Home Security', tier_slug: 'home-property' },
+  { slug: 'cleaning', name: 'Cleaning & Laundry Services', tier_slug: 'home-property' },
+  { slug: 'solar-energy', name: 'Solar Energy Services', tier_slug: 'home-property' },
+  { slug: 'water-supply', name: 'Water Supply & Delivery', tier_slug: 'home-property' },
+  { slug: 'gardening', name: 'Gardening & Landscaping', tier_slug: 'home-property' },
   // Tier: emergency
   { slug: 'medical-emergency', name: 'Medical Emergencies', tier_slug: 'emergency' },
   { slug: 'fire-rescue', name: 'Fire & Rescue', tier_slug: 'emergency' },
@@ -63,6 +67,8 @@ export const CATEGORIES: Category[] = [
   { slug: 'business', name: 'Business Services', tier_slug: 'professional' },
   { slug: 'real-estate', name: 'Real Estate & Property', tier_slug: 'professional' },
   { slug: 'architecture', name: 'Architecture & Engineering', tier_slug: 'professional' },
+  { slug: 'pos-agent', name: 'POS & Agency Banking', tier_slug: 'professional' },
+  { slug: 'freelance', name: 'Freelance & Gig Work', tier_slug: 'professional' },
   // Tier: technology
   { slug: 'computer-it', name: 'Computer & IT Services', tier_slug: 'technology' },
   { slug: 'mobile-phone', name: 'Mobile Phone Services', tier_slug: 'technology' },
@@ -100,6 +106,7 @@ export const CATEGORIES: Category[] = [
   { slug: 'moving', name: 'Moving & Relocation', tier_slug: 'logistics' },
   { slug: 'delivery', name: 'Delivery & Courier', tier_slug: 'logistics' },
   { slug: 'rentals', name: 'Rentals (Vehicles/Equipment)', tier_slug: 'logistics' },
+  { slug: 'transport', name: 'Transport & Ride Services', tier_slug: 'logistics' },
   // Tier: social
   { slug: 'social-groups', name: 'Social Groups & Meetups', tier_slug: 'social' },
   { slug: 'venues', name: 'Event Spaces & Venues', tier_slug: 'social' },
@@ -111,6 +118,7 @@ export const CATEGORIES: Category[] = [
   { slug: 'export', name: 'Export Services', tier_slug: 'trade' },
   { slug: 'import', name: 'Import Services', tier_slug: 'trade' },
   { slug: 'cross-border', name: 'Cross-Border Traders', tier_slug: 'trade' },
+  { slug: 'agriculture', name: 'Farming & Agriculture', tier_slug: 'trade' },
 ];
 
 export const SUBCATEGORIES: Subcategory[] = [
@@ -324,6 +332,60 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: 1609, name: 'Lock Repair & Replacement', category_slug: 'home-security' },
   { id: 1610, name: 'Locksmith Services', category_slug: 'home-security' },
 
+  // ===== NEW: Cleaning & Laundry Services (1611–1624) =====
+  { id: 1611, name: 'House Cleaning', category_slug: 'cleaning' },
+  { id: 1612, name: 'Office Cleaning', category_slug: 'cleaning' },
+  { id: 1613, name: 'Post-Construction Cleaning', category_slug: 'cleaning' },
+  { id: 1614, name: 'Fumigation & Pest Control', category_slug: 'cleaning' },
+  { id: 1615, name: 'Laundry & Dry Cleaning', category_slug: 'cleaning' },
+  { id: 1616, name: 'Carpet & Upholstery Cleaning', category_slug: 'cleaning' },
+  { id: 1617, name: 'Window & Glass Cleaning', category_slug: 'cleaning' },
+  { id: 1618, name: 'Shoe Cleaning & Repair', category_slug: 'cleaning' },
+  { id: 1619, name: 'Domestic Help / Housekeeping', category_slug: 'cleaning' },
+  { id: 1620, name: 'Event Cleanup', category_slug: 'cleaning' },
+  { id: 1621, name: 'Graffiti Removal', category_slug: 'cleaning' },
+  { id: 1622, name: 'Tank Cleaning', category_slug: 'cleaning' },
+  { id: 1623, name: 'Industrial Cleaning', category_slug: 'cleaning' },
+  { id: 1624, name: 'Mattress Cleaning', category_slug: 'cleaning' },
+
+  // ===== NEW: Solar Energy Services (1625–1636) =====
+  { id: 1625, name: 'Solar Panel Installation', category_slug: 'solar-energy' },
+  { id: 1626, name: 'Solar Inverter Installation', category_slug: 'solar-energy' },
+  { id: 1627, name: 'Solar Battery Supply', category_slug: 'solar-energy' },
+  { id: 1628, name: 'Solar Street Light Installation', category_slug: 'solar-energy' },
+  { id: 1629, name: 'Solar Water Heater', category_slug: 'solar-energy' },
+  { id: 1630, name: 'Solar System Maintenance', category_slug: 'solar-energy' },
+  { id: 1631, name: 'Solar Consultation', category_slug: 'solar-energy' },
+  { id: 1632, name: 'Mini-Grid Installation', category_slug: 'solar-energy' },
+  { id: 1633, name: 'Solar Borehole Pump', category_slug: 'solar-energy' },
+  { id: 1634, name: 'Inverter Repair', category_slug: 'solar-energy' },
+  { id: 1635, name: 'Charge Controller Repair', category_slug: 'solar-energy' },
+  { id: 1636, name: 'Solar Panel Cleaning', category_slug: 'solar-energy' },
+
+  // ===== NEW: Water Supply & Delivery (1637–1646) =====
+  { id: 1637, name: 'Water Tanker Delivery', category_slug: 'water-supply' },
+  { id: 1638, name: 'Pure Water Production', category_slug: 'water-supply' },
+  { id: 1639, name: 'Sachet Water Supply', category_slug: 'water-supply' },
+  { id: 1640, name: 'Bottled Water Delivery', category_slug: 'water-supply' },
+  { id: 1641, name: 'Dispenser Water Supply', category_slug: 'water-supply' },
+  { id: 1642, name: 'Water Treatment Services', category_slug: 'water-supply' },
+  { id: 1643, name: 'Water Storage Tank Installation', category_slug: 'water-supply' },
+  { id: 1644, name: 'Rainwater Harvesting', category_slug: 'water-supply' },
+  { id: 1645, name: 'Water Quality Testing', category_slug: 'water-supply' },
+  { id: 1646, name: 'Borehole Maintenance', category_slug: 'water-supply' },
+
+  // ===== NEW: Gardening & Landscaping (1647–1656) =====
+  { id: 1647, name: 'Garden Maintenance', category_slug: 'gardening' },
+  { id: 1648, name: 'Lawn Mowing & Care', category_slug: 'gardening' },
+  { id: 1649, name: 'Flower Planting & Arrangement', category_slug: 'gardening' },
+  { id: 1650, name: 'Tree Pruning & Removal', category_slug: 'gardening' },
+  { id: 1651, name: 'Landscaping Design', category_slug: 'gardening' },
+  { id: 1652, name: 'Hedge Trimming', category_slug: 'gardening' },
+  { id: 1653, name: 'Artificial Grass Installation', category_slug: 'gardening' },
+  { id: 1654, name: 'Outdoor Decking', category_slug: 'gardening' },
+  { id: 1655, name: 'Water Fountain Installation', category_slug: 'gardening' },
+  { id: 1656, name: 'Swimming Pool Cleaning', category_slug: 'gardening' },
+
   // ====================== EMERGENCY ======================
   // Medical Emergencies (1701–1706)
   { id: 1701, name: 'Ambulance Services', category_slug: 'medical-emergency' },
@@ -398,6 +460,30 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: 2406, name: 'Quantity Surveyors', category_slug: 'architecture' },
   { id: 2407, name: 'Building Plan Approval', category_slug: 'architecture' },
   { id: 2408, name: 'Interior Designers', category_slug: 'architecture' },
+
+  // ===== NEW: POS & Agency Banking (2409–2418) =====
+  { id: 2409, name: 'POS Agent / Cash Withdrawal', category_slug: 'pos-agent' },
+  { id: 2410, name: 'Bill Payment Agent', category_slug: 'pos-agent' },
+  { id: 2411, name: 'Mobile Money Agent', category_slug: 'pos-agent' },
+  { id: 2412, name: 'BVN Enrollment', category_slug: 'pos-agent' },
+  { id: 2413, name: 'NIN Registration', category_slug: 'pos-agent' },
+  { id: 2414, name: 'Utility Bill Payment', category_slug: 'pos-agent' },
+  { id: 2415, name: 'Airtime/Data Sales', category_slug: 'pos-agent' },
+  { id: 2416, name: 'Betting Agent', category_slug: 'pos-agent' },
+  { id: 2417, name: 'Bank Account Opening Agent', category_slug: 'pos-agent' },
+  { id: 2418, name: 'Remittance & Payout Agent', category_slug: 'pos-agent' },
+
+  // ===== NEW: Freelance & Gig Work (2419–2428) =====
+  { id: 2419, name: 'Errand Runner', category_slug: 'freelance' },
+  { id: 2420, name: 'Queue/Line Standing', category_slug: 'freelance' },
+  { id: 2421, name: 'Document Delivery', category_slug: 'freelance' },
+  { id: 2422, name: 'Personal Assistant', category_slug: 'freelance' },
+  { id: 2423, name: 'Market Shopper', category_slug: 'freelance' },
+  { id: 2424, name: 'Proofreading & Editing', category_slug: 'freelance' },
+  { id: 2425, name: 'Data Entry', category_slug: 'freelance' },
+  { id: 2426, name: 'Online Tutoring', category_slug: 'freelance' },
+  { id: 2427, name: 'Task Outsourcing', category_slug: 'freelance' },
+  { id: 2428, name: 'Translation Services', category_slug: 'freelance' },
 
   // ====================== TECHNOLOGY ======================
   // Computer & IT Services (2501–2508)
@@ -701,6 +787,18 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: 5407, name: 'Sound/Lighting Equipment Rental', category_slug: 'rentals' },
   { id: 5408, name: 'Bouncy Castle/Game Rental', category_slug: 'rentals' },
 
+  // ===== NEW: Transport & Ride Services (5409–5418) =====
+  { id: 5409, name: 'Motorcycle (Okada) Transport', category_slug: 'transport' },
+  { id: 5410, name: 'Tricycle (Keke) Transport', category_slug: 'transport' },
+  { id: 5411, name: 'Airport Pickup/Drop-off', category_slug: 'transport' },
+  { id: 5412, name: 'Interstate Transport Booking', category_slug: 'transport' },
+  { id: 5413, name: 'Staff Bus Services', category_slug: 'transport' },
+  { id: 5414, name: 'School Run Services', category_slug: 'transport' },
+  { id: 5415, name: 'Executive Car Service', category_slug: 'transport' },
+  { id: 5416, name: 'Wheelchair Transport', category_slug: 'transport' },
+  { id: 5417, name: 'Boat/Ferry Transport', category_slug: 'transport' },
+  { id: 5418, name: 'Car Pooling Service', category_slug: 'transport' },
+
   // ====================== SOCIAL ======================
   // Social Groups & Meetups (5501–5506)
   { id: 5501, name: 'Book Clubs', category_slug: 'social-groups' },
@@ -771,6 +869,22 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: 6204, name: 'ECOWAS Trade Support', category_slug: 'cross-border' },
   { id: 6205, name: 'Currency Exchange', category_slug: 'cross-border' },
   { id: 6206, name: 'Cross-Border Transportation', category_slug: 'cross-border' },
+
+  // ===== NEW: Farming & Agriculture (6207–6220) =====
+  { id: 6207, name: 'Crop Farming', category_slug: 'agriculture' },
+  { id: 6208, name: 'Poultry Farming', category_slug: 'agriculture' },
+  { id: 6209, name: 'Fish Farming', category_slug: 'agriculture' },
+  { id: 6210, name: 'Snail Farming', category_slug: 'agriculture' },
+  { id: 6211, name: 'Livestock Farming', category_slug: 'agriculture' },
+  { id: 6212, name: 'Farm Produce Supply', category_slug: 'agriculture' },
+  { id: 6213, name: 'Fertilizer & Pesticide Supply', category_slug: 'agriculture' },
+  { id: 6214, name: 'Farm Equipment Rental', category_slug: 'agriculture' },
+  { id: 6215, name: 'Tractor Hiring', category_slug: 'agriculture' },
+  { id: 6216, name: 'Seedling/Nursery Supply', category_slug: 'agriculture' },
+  { id: 6217, name: 'Feed Supply', category_slug: 'agriculture' },
+  { id: 6218, name: 'Veterinary Services (Farm)', category_slug: 'agriculture' },
+  { id: 6219, name: 'Farm Laborers', category_slug: 'agriculture' },
+  { id: 6220, name: 'Irrigation Installation', category_slug: 'agriculture' },
 ];
 
 // Helper functions

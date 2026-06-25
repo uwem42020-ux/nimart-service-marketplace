@@ -99,7 +99,6 @@ export default function ProviderProfile() {
   const [similarViewMode, setSimilarViewMode] = useState<'grid' | 'list'>('grid');
   const queryClient = useQueryClient();
 
-  // New states for modals
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
 
@@ -112,12 +111,65 @@ export default function ProviderProfile() {
     callback();
   };
 
+  // ========== MESSAGE BUTTON – SMOOTH NAVIGATION WITHOUT RELOAD ==========
   const openChat = () => {
     if (!user) {
       navigate('/auth/signin');
       return;
     }
-    navigate('/customer/messages');
+    startConversation();
+  };
+
+  const startConversation = async () => {
+    if (!user || !id) return;
+
+    // 1. Check for existing thread
+    let { data: existingThread } = await supabase
+      .from('threads')
+      .select('id')
+      .eq('provider_id', user.id)
+      .eq('customer_id', id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingThread) {
+      const { data: reverse } = await supabase
+        .from('threads')
+        .select('id')
+        .eq('provider_id', id)
+        .eq('customer_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      existingThread = reverse;
+    }
+
+    const basePath = profile?.role === 'provider' ? '/provider/messages' : '/customer/messages';
+
+    if (existingThread) {
+      setTimeout(() => navigate(`${basePath}/${existingThread.id}`), 0);
+      return;
+    }
+
+    // 2. Create new thread
+    try {
+      const { data: newThread, error } = await supabase
+        .from('threads')
+        .insert({
+          provider_id: id,
+          customer_id: user.id,
+          created_by: user.id,
+          last_message_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      setTimeout(() => navigate(`${basePath}/${newThread.id}`), 0);
+    } catch (err) {
+      console.error('Failed to create conversation:', err);
+      toast.error('Could not start conversation. Please try again.');
+    }
   };
 
   const shareProviderLink = () => {
@@ -237,7 +289,6 @@ export default function ProviderProfile() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // AI sorting for similar providers
   const { data: smartSortData } = useSmartSort(
     profile?.id,
     provider?.profile?.lat ?? undefined,
@@ -324,7 +375,7 @@ export default function ProviderProfile() {
         });
       }
 
-      return enriched.slice(0, 6);
+      return enriched.slice(0, 8);
     },
     enabled: !!id && !!provider,
   });
@@ -491,7 +542,6 @@ export default function ProviderProfile() {
     "openingHours": provider.status === 'available' ? ['Mo-Su 00:00-23:59'] : undefined
   };
 
-  // Helper: short description for preview
   const shortDescription = provider.description
     ? provider.description.length > 150
       ? provider.description.substring(0, 150) + '...'
@@ -509,9 +559,8 @@ export default function ProviderProfile() {
         schema={[providerSchema, breadcrumbSchema]}
       />
 
-      {/* ============== MODERN MOBILE LAYOUT ============== */}
+      {/* ========== MOBILE LAYOUT ========== */}
       <div className="block md:hidden">
-        {/* Cover photo – use OptimizedImage with proper dimensions to prevent blur */}
         <div className="relative h-48 sm:h-52 bg-gray-100">
           {provider.profile?.cover_photo ? (
             <OptimizedImage
@@ -535,7 +584,6 @@ export default function ProviderProfile() {
           </button>
         </div>
 
-        {/* Avatar & status – clickable for full‑screen view */}
         <div className="relative flex justify-center -mt-14 mb-4 px-4">
           <div className="relative">
             <div className="w-28 h-28 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white">
@@ -575,7 +623,6 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Identity card */}
         <div className="px-4 mb-4">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center">
             <h1 className="text-xl font-bold text-gray-900">{providerName}</h1>
@@ -584,10 +631,7 @@ export default function ProviderProfile() {
               <p className="text-sm text-gray-500 mt-2 leading-relaxed break-words">
                 {shortDescription}
                 {provider.description.length > 150 && (
-                  <button
-                    onClick={() => setShowFullDescription(true)}
-                    className="text-primary-600 hover:underline ml-1 font-medium"
-                  >
+                  <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">
                     See more
                   </button>
                 )}
@@ -602,34 +646,27 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="px-2 mb-6">
           <div className="flex flex-nowrap gap-1 justify-center">
             <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white text-[10px] font-semibold rounded-xl w-14 shadow-md shadow-primary-600/20">
-              <Calendar className="h-4 w-4" />
-              <span>Book</span>
+              <Calendar className="h-4 w-4" /><span>Book</span>
             </button>
             <button onClick={() => requireAuth(openChat)} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-gray-200 bg-white text-gray-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
-              <MessageCircle className="h-4 w-4" />
-              <span>Message</span>
+              <MessageCircle className="h-4 w-4" /><span>Message</span>
             </button>
             <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-red-200 bg-red-50 text-red-600 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
-              <Flag className="h-4 w-4" />
-              <span>Report</span>
+              <Flag className="h-4 w-4" /><span>Report</span>
             </button>
             <button onClick={shareProviderLink} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-gray-200 bg-white text-gray-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
-              <Share2 className="h-4 w-4" />
-              <span>Share</span>
+              <Share2 className="h-4 w-4" /><span>Share</span>
             </button>
             {!showPhone ? (
               <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 border border-primary-200 bg-primary-50 text-primary-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
-                <Phone className="h-4 w-4" />
-                <span>Contact</span>
+                <Phone className="h-4 w-4" /><span>Contact</span>
               </button>
             ) : (
               <a href={`tel:${provider.profile?.phone || ''}`} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-50 text-primary-700 text-[10px] font-semibold rounded-xl w-14 shadow-sm">
-                <Phone className="h-4 w-4" />
-                <span className="truncate max-w-[50px]">{provider.profile?.phone || 'No phone'}</span>
+                <Phone className="h-4 w-4" /><span className="truncate max-w-[50px]">{provider.profile?.phone || 'No phone'}</span>
               </a>
             )}
             <div className="flex-shrink-0 flex flex-col items-center justify-center w-14">
@@ -638,7 +675,6 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="px-4 mb-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
             <div className="flex flex-wrap gap-2">
@@ -663,31 +699,16 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        {/* Portfolio */}
         {provider.portfolio_images?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
               <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
             </h2>
-            <div
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-            >
+            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2"
+              onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
               {provider.portfolio_images.map((image) => (
-                <Link
-                  key={image.id}
-                  to={`/provider/${id}/portfolio`}
-                  className="snap-start flex-shrink-0 w-40 h-40 rounded-2xl overflow-hidden bg-gray-100 shadow-md border border-gray-200/60"
-                >
-                  <OptimizedImage
-                    src={image.image_url}
-                    alt={image.title || 'Portfolio'}
-                    className="w-full h-full object-cover"
-                    width={160}
-                    height={160}
-                  />
+                <Link key={image.id} to={`/provider/${id}/portfolio`} className="snap-start flex-shrink-0 w-40 h-40 rounded-2xl overflow-hidden bg-gray-100 shadow-md border border-gray-200/60">
+                  <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full h-full object-cover" width={160} height={160} />
                 </Link>
               ))}
             </div>
@@ -695,7 +716,6 @@ export default function ProviderProfile() {
           </div>
         )}
 
-        {/* Services – fixed overflow */}
         {provider.services?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
@@ -703,15 +723,10 @@ export default function ProviderProfile() {
             </h2>
             <div className="space-y-3">
               {provider.services.map((service) => (
-                <div
-                  key={service.id}
-                  className="flex justify-between items-start bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
-                >
+                <div key={service.id} className="flex justify-between items-start bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm">{service.name}</p>
-                    {service.description && (
-                      <p className="text-xs text-gray-500 mt-1 break-words">{service.description}</p>
-                    )}
+                    {service.description && <p className="text-xs text-gray-500 mt-1 break-words">{service.description}</p>}
                   </div>
                   <div className="text-right ml-3 flex-shrink-0">
                     <p className="font-bold text-primary-600 text-sm">₦{service.price.toLocaleString()}</p>
@@ -723,265 +738,135 @@ export default function ProviderProfile() {
           </div>
         )}
 
-        {/* About */}
         <div className="px-4 mb-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 border-l-4 border-primary-500">
             <h2 className="text-base font-bold text-gray-900 mb-3">About</h2>
-            {provider.description && (
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed break-words">{provider.description}</p>
-            )}
+            {provider.description && <p className="text-sm text-gray-600 mb-4 leading-relaxed break-words">{provider.description}</p>}
             <div className="flex flex-wrap gap-2">
-              {provider.profile?.education && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <GraduationCap className="h-3.5 w-3.5" /> {provider.profile.education}
-                </span>
-              )}
-              {provider.profile?.languages && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <Languages className="h-3.5 w-3.5" /> {provider.profile.languages}
-                </span>
-              )}
-              {provider.profile?.gender && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <User className="h-3.5 w-3.5" /> {provider.profile.gender}
-                </span>
-              )}
-              {provider.profile?.age && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <Calendar className="h-3.5 w-3.5" /> {provider.profile.age} years
-                </span>
-              )}
+              {provider.profile?.education && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><GraduationCap className="h-3.5 w-3.5" /> {provider.profile.education}</span>}
+              {provider.profile?.languages && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Languages className="h-3.5 w-3.5" /> {provider.profile.languages}</span>}
+              {provider.profile?.gender && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><User className="h-3.5 w-3.5" /> {provider.profile.gender}</span>}
+              {provider.profile?.age && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Calendar className="h-3.5 w-3.5" /> {provider.profile.age} years</span>}
             </div>
           </div>
         </div>
 
-        {/* Reviews */}
         <div className="px-4 mb-8">
-          <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews
-          </h2>
+          <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2"><span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews</h2>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 border-l-4 border-primary-500">
             <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
 
-        {/* Similar providers */}
         {similarProviders && similarProviders.length > 0 && (
           <div className="px-4 pb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Similar Providers
-              </h2>
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-5 bg-primary-500 rounded-full"></span> Similar Providers</h2>
               <div className="flex border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <button
-                  onClick={() => setSimilarViewMode('grid')}
-                  className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'grid' && 'bg-primary-50 text-primary-600')}
-                  title="Grid view"
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setSimilarViewMode('list')}
-                  className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'list' && 'bg-primary-50 text-primary-600')}
-                  title="List view"
-                >
-                  <List className="h-4 w-4" />
-                </button>
+                <button onClick={() => setSimilarViewMode('grid')} className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'grid' && 'bg-primary-50 text-primary-600')}><LayoutGrid className="h-4 w-4" /></button>
+                <button onClick={() => setSimilarViewMode('list')} className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'list' && 'bg-primary-50 text-primary-600')}><List className="h-4 w-4" /></button>
               </div>
             </div>
             {similarViewMode === 'grid' ? (
               <div className="columns-2 gap-3">
-                {similarProviders.map((p: any) => (
-                  <div key={p.id} className="mb-3 break-inside-avoid">
-                    <ProviderCardPortrait provider={p} />
-                  </div>
-                ))}
+                {similarProviders.map((p: any) => <div key={p.id} className="mb-3 break-inside-avoid"><ProviderCardPortrait provider={p} /></div>)}
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {similarProviders.map((p: any) => (
-                  <ProviderCardHorizontal key={p.id} provider={p} />
-                ))}
+                {similarProviders.map((p: any) => <ProviderCardHorizontal key={p.id} provider={p} />)}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* ============== DESKTOP LAYOUT (unchanged except avatar & description modals) ============== */}
+      {/* ========== DESKTOP LAYOUT ========== */}
       <div className="hidden md:block">
         <Breadcrumbs items={breadcrumbItems} />
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-4 flex items-center text-sm text-gray-600 hover:text-primary-600 transition-colors font-medium"
-        >
+        <button onClick={() => navigate(-1)} className="mb-4 flex items-center text-sm text-gray-600 hover:text-primary-600 transition-colors font-medium">
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to results
         </button>
 
-        {/* Profile card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 border-l-4 border-primary-500">
-          {/* Cover */}
           <div className="relative h-56 bg-gradient-to-r from-primary-100 to-primary-50">
             {provider.profile?.cover_photo ? (
-              <OptimizedImage
-                src={provider.profile.cover_photo}
-                alt="Cover"
-                className="w-full h-full object-cover"
-                width={1200}
-                height={224}
-                loading="eager"
-                fetchpriority="high"
-              />
+              <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" width={1200} height={224} loading="eager" fetchpriority="high" />
             ) : (
               <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
 
-          {/* Main info */}
           <div className="relative px-6 sm:px-8 -mt-8 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
-            {/* Avatar – clickable */}
             <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
               {provider.profile?.avatar_url ? (
                 <button onClick={() => setAvatarModalOpen(true)} className="w-full h-full relative group">
-                  <OptimizedImage
-                    src={provider.profile.avatar_url}
-                    alt={providerName}
-                    className="w-full h-full object-cover"
-                    width={128}
-                    height={128}
-                    loading="eager"
-                    fetchpriority="high"
-                  />
+                  <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" width={128} height={128} loading="eager" fetchpriority="high" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                     <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </button>
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">
-                  {(providerName || 'P')[0]}
-                </div>
+                <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">{(providerName || 'P')[0]}</div>
               )}
-              {provider.profile?.is_verified && (
-                <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5">
-                  <CheckCircle className="h-5 w-5 text-white" />
-                </div>
-              )}
+              {provider.profile?.is_verified && <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5"><CheckCircle className="h-5 w-5 text-white" /></div>}
             </div>
 
-            {/* Name and status */}
             <div className="flex-1 mt-4 sm:mt-0 sm:ml-4 pt-6">
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
                 <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  {statusLabel[provider.status] || 'Available for Booking'}
+                  <span className="h-2 w-2 rounded-full bg-green-500" />{statusLabel[provider.status] || 'Available for Booking'}
                 </span>
               </div>
               <p className="text-sm font-medium text-primary-600">{categoryName}</p>
               {provider.description && (
                 <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
                   {shortDescription}
-                  {provider.description.length > 150 && (
-                    <button
-                      onClick={() => setShowFullDescription(true)}
-                      className="text-primary-600 hover:underline ml-1 font-medium"
-                    >
-                      See more
-                    </button>
-                  )}
+                  {provider.description.length > 150 && <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">See more</button>}
                 </p>
               )}
             </div>
 
-            {/* Action buttons */}
             <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
-              <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all">
-                <Calendar className="h-5 w-5" /> Book
-              </button>
-              <button onClick={() => requireAuth(openChat)} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all">
-                <MessageCircle className="h-5 w-5" /> Message
-              </button>
-              <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 bg-red-50 text-red-600 text-sm font-semibold rounded-xl hover:bg-red-100 shadow-sm transition-all">
-                <Flag className="h-5 w-5" /> Report
-              </button>
-              <button onClick={shareProviderLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all">
-                <Share2 className="h-5 w-5" /> Share
-              </button>
+              <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all"><Calendar className="h-5 w-5" /> Book</button>
+              <button onClick={() => requireAuth(openChat)} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><MessageCircle className="h-5 w-5" /> Message</button>
+              <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 bg-red-50 text-red-600 text-sm font-semibold rounded-xl hover:bg-red-100 shadow-sm transition-all"><Flag className="h-5 w-5" /> Report</button>
+              <button onClick={shareProviderLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><Share2 className="h-5 w-5" /> Share</button>
               {!showPhone ? (
-                <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all">
-                  <Phone className="h-5 w-5" /> Contact
-                </button>
+                <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> Contact</button>
               ) : (
-                <a href={`tel:${provider.profile?.phone || ''}`} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all">
-                  <Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}
-                </a>
+                <a href={`tel:${provider.profile?.phone || ''}`} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}</a>
               )}
-              <div className="flex items-center">
-                <FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" />
-              </div>
+              <div className="flex items-center"><FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" /></div>
             </div>
           </div>
 
-          {/* Stats bar */}
           <div className="mx-6 border-t border-gray-100 pt-4 pb-4">
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                <MapPin className="h-4 w-4 text-primary-500" /><span>{locationString}</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /><span>{avgRating.toFixed(1)} ({provider.reviews?.length || 0} reviews)</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                <Calendar className="h-4 w-4 text-gray-400" /><span>{provider.completedBookings} bookings</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                <Clock className="h-4 w-4 text-gray-400" /><span>Last seen {lastSeen}</span>
-              </div>
-              {joinedYear && (
-                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                  <User className="h-4 w-4 text-gray-400" /><span>Joined {joinedYear}</span>
-                </div>
-              )}
-              {provider.profile?.gender && (
-                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                  <User className="h-4 w-4 text-gray-400" /><span>{provider.profile.gender}</span>
-                </div>
-              )}
-              {provider.profile?.age && (
-                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                  <Calendar className="h-4 w-4 text-gray-400" /><span>{provider.profile.age} years old</span>
-                </div>
-              )}
-              {provider.profile?.education && (
-                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                  <GraduationCap className="h-4 w-4 text-gray-400" /><span>{provider.profile.education}</span>
-                </div>
-              )}
-              {provider.profile?.languages && (
-                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                  <Languages className="h-4 w-4 text-gray-400" /><span>{provider.profile.languages}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><MapPin className="h-4 w-4 text-primary-500" /><span>{locationString}</span></div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /><span>{avgRating.toFixed(1)} ({provider.reviews?.length || 0} reviews)</span></div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><Calendar className="h-4 w-4 text-gray-400" /><span>{provider.completedBookings} bookings</span></div>
+              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><Clock className="h-4 w-4 text-gray-400" /><span>Last seen {lastSeen}</span></div>
+              {joinedYear && <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><User className="h-4 w-4 text-gray-400" /><span>Joined {joinedYear}</span></div>}
+              {provider.profile?.gender && <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><User className="h-4 w-4 text-gray-400" /><span>{provider.profile.gender}</span></div>}
+              {provider.profile?.age && <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><Calendar className="h-4 w-4 text-gray-400" /><span>{provider.profile.age} years old</span></div>}
+              {provider.profile?.education && <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><GraduationCap className="h-4 w-4 text-gray-400" /><span>{provider.profile.education}</span></div>}
+              {provider.profile?.languages && <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><Languages className="h-4 w-4 text-gray-400" /><span>{provider.profile.languages}</span></div>}
             </div>
           </div>
         </div>
 
-        {/* Services & Portfolio in a two-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {provider.services?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
-              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary-600" /> Services & Pricing
-              </h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Package className="h-5 w-5 text-primary-600" /> Services & Pricing</h2>
               <div className="space-y-4">
                 {provider.services.map((service) => (
                   <div key={service.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900">{service.name}</p>
-                      {service.description && (
-                        <p className="text-sm text-gray-500 mt-1 break-words">{service.description}</p>
-                      )}
+                      {service.description && <p className="text-sm text-gray-500 mt-1 break-words">{service.description}</p>}
                     </div>
                     <div className="text-right ml-4 flex-shrink-0">
                       <p className="font-bold text-primary-600">₦{service.price.toLocaleString()}</p>
@@ -995,23 +880,12 @@ export default function ProviderProfile() {
 
           {provider.portfolio_images?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
-              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary-600" /> Portfolio
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Package className="h-5 w-5 text-primary-600" /> Portfolio</h2>
+              {/* FIX: full-width grid with 4 columns on large screens */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {provider.portfolio_images.map((image, idx) => (
-                  <Link
-                    key={image.id}
-                    to={`/provider/${id}/portfolio`}
-                    className="overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
-                  >
-                    <OptimizedImage
-                      src={image.image_url}
-                      alt={image.title || 'Portfolio'}
-                      className="w-full aspect-square object-cover"
-                      width={300}
-                      height={300}
-                    />
+                  <Link key={image.id} to={`/provider/${id}/portfolio`} className="overflow-hidden rounded-lg hover:opacity-90 transition-opacity">
+                    <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full aspect-square object-cover" width={300} height={300} />
                   </Link>
                 ))}
               </div>
@@ -1019,180 +893,93 @@ export default function ProviderProfile() {
           )}
         </div>
 
-        {/* About & Reviews columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
             <h2 className="text-lg font-bold text-gray-900 mb-4">About</h2>
-            {provider.description && (
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>
-            )}
+            {provider.description && <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>}
             <div className="flex flex-wrap gap-2">
-              {provider.profile?.education && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <GraduationCap className="h-4 w-4" /> {provider.profile.education}
-                </span>
-              )}
-              {provider.profile?.languages && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <Languages className="h-4 w-4" /> {provider.profile.languages}
-                </span>
-              )}
-              {provider.profile?.gender && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <User className="h-4 w-4" /> {provider.profile.gender}
-                </span>
-              )}
-              {provider.profile?.age && (
-                <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200">
-                  <Calendar className="h-4 w-4" /> {provider.profile.age} years
-                </span>
-              )}
+              {provider.profile?.education && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><GraduationCap className="h-4 w-4" /> {provider.profile.education}</span>}
+              {provider.profile?.languages && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Languages className="h-4 w-4" /> {provider.profile.languages}</span>}
+              {provider.profile?.gender && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><User className="h-4 w-4" /> {provider.profile.gender}</span>}
+              {provider.profile?.age && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Calendar className="h-4 w-4" /> {provider.profile.age} years</span>}
             </div>
           </div>
-
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
             <h2 className="text-lg font-bold text-gray-900 mb-4">Reviews</h2>
             <ReviewsList reviews={provider.reviews || []} />
           </div>
         </div>
 
-        {/* Similar providers */}
         {similarProviders && similarProviders.length > 0 && (
           <div className="mt-8 mb-8">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-1 h-6 bg-primary-500 rounded-full"></span> Similar Providers
-              </h2>
-              <Link
-                to={`/search?category=${encodeURIComponent(provider.selected_category_slug)}`}
-                className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors"
-              >
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-6 bg-primary-500 rounded-full"></span> Similar Providers</h2>
+              <Link to={`/search?category=${encodeURIComponent(provider.selected_category_slug)}`} className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors">
                 View all <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="columns-2 md:columns-3 lg:columns-4 gap-5">
+            {/* FIX: 4 columns on desktop using CSS grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {similarProviders.map((p: any) => (
-                <div key={p.id} className="mb-5 break-inside-avoid">
-                  <ProviderCardPortrait provider={p} />
-                </div>
+                <ProviderCardPortrait key={p.id} provider={p} />
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* ============== MODALS ============== */}
+      {/* ========== MODALS ========== */}
 
-      {/* Avatar full‑screen modal */}
       {avatarModalOpen && provider.profile?.avatar_url && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setAvatarModalOpen(false)}>
           <button className="absolute top-4 right-4 text-white" onClick={() => setAvatarModalOpen(false)}>
             <X className="h-8 w-8" />
           </button>
-          <img
-            src={provider.profile.avatar_url}
-            alt={providerName}
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <img src={provider.profile.avatar_url} alt={providerName} className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
 
-      {/* Full description modal */}
       {showFullDescription && provider.description && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowFullDescription(false)}>
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">About {providerName}</h3>
-              <button onClick={() => setShowFullDescription(false)}>
-                <X className="h-5 w-5" />
-              </button>
+              <button onClick={() => setShowFullDescription(false)}><X className="h-5 w-5" /></button>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap break-words">{provider.description}</p>
           </div>
         </div>
       )}
 
-      {/* Booking modal */}
-      <BookingFormModal
-        isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        providerId={id!}
-        providerName={providerName}
-        providerVerified={provider?.profile?.is_verified || false}
-      />
+      <BookingFormModal isOpen={showBookingModal} onClose={() => setShowBookingModal(false)} providerId={id!} providerName={providerName} providerVerified={provider?.profile?.is_verified || false} />
 
-      {/* Review modal */}
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Leave a Review</h2>
-              <button onClick={() => setShowReviewModal(false)} className="p-1 hover:bg-gray-100 rounded">
-                <X className="h-5 w-5" />
-              </button>
+              <button onClick={() => setShowReviewModal(false)} className="p-1 hover:bg-gray-100 rounded"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Rating</label>
-                <div className="flex gap-1">
-                  {[1,2,3,4,5].map(star => (
-                    <button key={star} type="button" onClick={() => setReviewRating(star)}>
-                      <Star className={cn('h-8 w-8', star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300')} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Your Review (optional)</label>
-                <textarea
-                  value={reviewContent}
-                  onChange={(e) => setReviewContent(e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="Share your experience..."
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowReviewModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button onClick={submitReview} disabled={submittingReview} className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">
-                  {submittingReview ? 'Submitting...' : 'Submit Review'}
-                </button>
-              </div>
+              <div><label className="block text-sm font-medium mb-2">Rating</label><div className="flex gap-1">{[1,2,3,4,5].map(star => <button key={star} type="button" onClick={() => setReviewRating(star)}><Star className={cn('h-8 w-8', star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300')} /></button>)}</div></div>
+              <div><label className="block text-sm font-medium mb-1">Your Review (optional)</label><textarea value={reviewContent} onChange={(e) => setReviewContent(e.target.value)} rows={4} className="w-full px-3 py-2 border rounded-lg" placeholder="Share your experience..." /></div>
+              <div className="flex gap-3 pt-2"><button onClick={() => setShowReviewModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button><button onClick={submitReview} disabled={submittingReview} className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">{submittingReview ? 'Submitting...' : 'Submit Review'}</button></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Report modal */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Report Provider</h2>
-              <button onClick={() => setShowReportModal(false)} className="p-1 hover:bg-gray-100 rounded">
-                <X className="h-5 w-5" />
-              </button>
+              <button onClick={() => setShowReportModal(false)} className="p-1 hover:bg-gray-100 rounded"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600">Please let us know why you're reporting this provider.</p>
-              <textarea
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 border rounded-lg"
-                placeholder="e.g., Fake profile, inappropriate content, etc."
-              />
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowReportModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button onClick={submitReport} disabled={submittingReport} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50">
-                  {submittingReport ? 'Submitting...' : 'Submit Report'}
-                </button>
-              </div>
+              <textarea value={reportReason} onChange={(e) => setReportReason(e.target.value)} rows={4} className="w-full px-3 py-2 border rounded-lg" placeholder="e.g., Fake profile, inappropriate content, etc." />
+              <div className="flex gap-3 pt-2"><button onClick={() => setShowReportModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button><button onClick={submitReport} disabled={submittingReport} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50">{submittingReport ? 'Submitting...' : 'Submit Report'}</button></div>
             </div>
           </div>
         </div>

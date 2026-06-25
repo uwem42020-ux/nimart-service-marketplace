@@ -24,6 +24,7 @@ serve(async (_req) => {
       { loc: "/cookies", priority: "0.3", changefreq: "yearly" },
       { loc: "/report", priority: "0.4", changefreq: "monthly" },
       { loc: "/nimart-vs-nimart", priority: "0.4", changefreq: "monthly" },
+      { loc: "/nimart-explained", priority: "0.8", changefreq: "monthly" },   // ← NEW
     ];
 
     const { data: providers, error: providerError } = await supabase

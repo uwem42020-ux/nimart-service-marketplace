@@ -1,5 +1,4 @@
 // src/pages/MapPage.tsx
-import 'leaflet/dist/leaflet.css';
 import { MapView } from '../components/map/MapView';
 import { SEO } from '../components/common/SEO';
 

@@ -1,3 +1,4 @@
+// src/routes.tsx (or wherever your createBrowserRouter is defined)
 import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
@@ -45,6 +46,7 @@ const Safety = lazy(() => import('./pages/shared/Safety'));
 const Help = lazy(() => import('./pages/shared/Help'));
 const Report = lazy(() => import('./pages/shared/Report'));
 const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
+const NimartExplained = lazy(() => import('./pages/shared/NimartExplained')); // <-- NEW
 const Careers = lazy(() => import('./pages/shared/Careers'));
 const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
@@ -104,6 +106,7 @@ export const router = createBrowserRouter([
       { path: 'help', element: <Suspense fallback={<LoadingSkeleton />}><Help /></Suspense> },
       { path: 'report', element: <Suspense fallback={<LoadingSkeleton />}><Report /></Suspense> },
       { path: 'nimart-vs-nimart', element: <Suspense fallback={<LoadingSkeleton />}><NimartVsNimart /></Suspense> },
+      { path: 'nimart-explained', element: <Suspense fallback={<LoadingSkeleton />}><NimartExplained /></Suspense> },  // <-- NEW ROUTE
       { path: '*', element: <Suspense fallback={<LoadingSkeleton />}><NotFound /></Suspense> },
     ],
   },
