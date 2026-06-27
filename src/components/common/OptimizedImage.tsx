@@ -1,20 +1,17 @@
 // src/components/common/OptimizedImage.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 
 interface OptimizedImageProps {
   src: string;
   alt: string;
   className?: string;
-  /** The display width in pixels – used for the resize proxy and helps prevent layout shift. */
+  /** The exact display width in CSS pixels (not multiplied by DPR) */
   width?: number;
-  /** The display height in pixels – used for the resize proxy and helps prevent layout shift. */
+  /** The exact display height in CSS pixels (optional) */
   height?: number;
-  /** JPEG/WebP quality (0-100). Default 60 for a good balance of speed vs quality. */
   quality?: number;
-  /** Controls native lazy loading. Use "eager" for above‑the‑fold images (LCP). Default "lazy". */
   loading?: 'lazy' | 'eager';
-  /** Hint for the browser to prioritise fetching this image. Use "high" for LCP images. Default "auto". */
   fetchpriority?: 'high' | 'low' | 'auto';
 }
 
@@ -24,48 +21,43 @@ export function OptimizedImage({
   className,
   width,
   height,
-  quality = 60,
+  quality = 80,
   loading = 'lazy',
   fetchpriority = 'auto',
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [dpr, setDpr] = useState(1);
 
-  // Build an optimised URL.
+  useEffect(() => {
+    setDpr(window.devicePixelRatio || 1);
+  }, []);
+
   let optimizedSrc = src;
 
   if (!error && width) {
     try {
-      const isSupabaseStorage = src.includes('supabase.co/storage/v1/object/public');
-
-      if (isSupabaseStorage) {
-        // ------------------------------------------------------------------
-        // Supabase Free Plan → use images.weserv.nl as a free resize proxy
-        // ------------------------------------------------------------------
+      const isSupabase = src.includes('supabase.co/storage/v1/object/public');
+      if (isSupabase) {
+        const effectiveDpr = dpr >= 2 ? 2 : 1;
         const proxy = 'https://images.weserv.nl/';
         const params = new URLSearchParams();
         params.set('url', src);
-        params.set('w', width.toString());
-        if (height) params.set('h', height.toString());
-        params.set('q', (quality || 60).toString());
-        params.set('output', 'webp');   // optional: convert to WebP
-        // Let the browser handle the final format
+        // Request the image at display width × device pixel ratio
+        params.set('w', (width * effectiveDpr).toString());
+        if (height) params.set('h', (height * effectiveDpr).toString());
+        params.set('q', quality.toString());
+        params.set('output', 'webp');
         params.set('default', '');
         optimizedSrc = `${proxy}?${params.toString()}`;
-      } else {
-        // For non‑Supabase URLs (local files, other CDNs), keep the original.
-        // You can add your own resizing logic here if needed.
-        optimizedSrc = src;
       }
     } catch {
-      // If URL parsing fails, fall back to the original src.
       optimizedSrc = src;
     }
   }
 
   return (
     <div className={cn('relative overflow-hidden bg-gray-200', className)}>
-      {/* Subtle loading placeholder until the image finishes loading */}
       {!isLoaded && <div className="absolute inset-0 animate-pulse bg-gray-300" />}
       <img
         src={optimizedSrc}
@@ -80,7 +72,7 @@ export function OptimizedImage({
         onLoad={() => setIsLoaded(true)}
         onError={() => {
           setError(true);
-          setIsLoaded(true); // hide placeholder even on error
+          setIsLoaded(true);
         }}
       />
     </div>

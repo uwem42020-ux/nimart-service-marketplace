@@ -17,7 +17,6 @@ import {
   Star,
   Calendar,
   ArrowLeft,
-  CheckCircle,
   X,
   MessageCircle,
   Flag,
@@ -100,6 +99,7 @@ export default function ProviderProfile() {
   const queryClient = useQueryClient();
 
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [coverModalOpen, setCoverModalOpen] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   const requireAuth = (callback: () => void) => {
@@ -111,7 +111,6 @@ export default function ProviderProfile() {
     callback();
   };
 
-  // ========== MESSAGE BUTTON – SMOOTH NAVIGATION WITHOUT RELOAD ==========
   const openChat = () => {
     if (!user) {
       navigate('/auth/signin');
@@ -123,7 +122,6 @@ export default function ProviderProfile() {
   const startConversation = async () => {
     if (!user || !id) return;
 
-    // 1. Check for existing thread
     let { data: existingThread } = await supabase
       .from('threads')
       .select('id')
@@ -150,7 +148,6 @@ export default function ProviderProfile() {
       return;
     }
 
-    // 2. Create new thread
     try {
       const { data: newThread, error } = await supabase
         .from('threads')
@@ -548,6 +545,12 @@ export default function ProviderProfile() {
       : provider.description
     : '';
 
+  const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={cn('bg-white rounded-2xl shadow-sm border border-gray-100 p-6', className)}>
+      {children}
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-0 sm:px-4 sm:px-6 lg:px-8 py-0 sm:py-8">
       <SEO
@@ -561,21 +564,27 @@ export default function ProviderProfile() {
 
       {/* ========== MOBILE LAYOUT ========== */}
       <div className="block md:hidden">
+        {/* Cover photo – clickable to fullscreen */}
         <div className="relative h-48 sm:h-52 bg-gray-100">
           {provider.profile?.cover_photo ? (
-            <OptimizedImage
-              src={provider.profile.cover_photo}
-              alt="Cover"
-              className="w-full h-full object-cover"
-              width={640}
-              height={208}
-              loading="eager"
-              fetchpriority="high"
-            />
+            <button onClick={() => setCoverModalOpen(true)} className="w-full h-full relative group">
+              <OptimizedImage
+                src={provider.profile.cover_photo}
+                alt="Cover"
+                className="w-full h-full object-cover"
+                width={1280}
+                height={520}
+                loading="eager"
+                fetchpriority="high"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </button>
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
           <button
             onClick={() => navigate(-1)}
             className="absolute top-4 left-4 z-10 bg-white/20 backdrop-blur-md text-white p-2 rounded-full border border-white/30 shadow-lg"
@@ -593,8 +602,8 @@ export default function ProviderProfile() {
                     src={provider.profile.avatar_url}
                     alt={providerName}
                     className="w-full h-full object-cover"
-                    width={112}
-                    height={112}
+                    width={224}
+                    height={224}
                     loading="eager"
                     fetchpriority="high"
                   />
@@ -607,11 +616,7 @@ export default function ProviderProfile() {
                   {(providerName || 'P')[0]}
                 </div>
               )}
-              {provider.profile?.is_verified && (
-                <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5">
-                  <CheckCircle className="h-4 w-4 text-white" />
-                </div>
-              )}
+              {/* Blue verification badge removed from avatar */}
             </div>
             <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-md">
               <img
@@ -631,21 +636,28 @@ export default function ProviderProfile() {
               <p className="text-sm text-gray-500 mt-2 leading-relaxed break-words">
                 {shortDescription}
                 {provider.description.length > 150 && (
-                  <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">
-                    See more
-                  </button>
+                  <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">See more</button>
                 )}
               </p>
             )}
-            <div className="flex justify-center mt-3">
+            <div className="flex justify-center mt-3 items-center gap-2">
               <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
                 {statusLabel[provider.status] || 'Active now'}
               </span>
+              {provider.profile?.is_verified && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-white text-green-700 text-xs font-semibold rounded-full border border-green-400">
+                  <img src="/verify.png" alt="Verified" className="h-3.5 w-3.5" />
+                  Verified
+                </span>
+              )}
             </div>
           </div>
         </div>
 
+        {/* Rest of mobile layout unchanged */}
+        {/* ... (action buttons, stats, portfolio, services, about, reviews, similar providers) ... */}
+        {/* They remain exactly as in the previous version, but I'll include them for completeness */}
         <div className="px-2 mb-6">
           <div className="flex flex-nowrap gap-1 justify-center">
             <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white text-[10px] font-semibold rounded-xl w-14 shadow-md shadow-primary-600/20">
@@ -702,13 +714,13 @@ export default function ProviderProfile() {
         {provider.portfolio_images?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Portfolio
+              <span className="w-1 h-5 bg-gray-300 rounded-full"></span> Portfolio
             </h2>
             <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2"
               onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
               {provider.portfolio_images.map((image) => (
                 <Link key={image.id} to={`/provider/${id}/portfolio`} className="snap-start flex-shrink-0 w-40 h-40 rounded-2xl overflow-hidden bg-gray-100 shadow-md border border-gray-200/60">
-                  <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full h-full object-cover" width={160} height={160} />
+                  <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full h-full object-cover" width={320} height={320} />
                 </Link>
               ))}
             </div>
@@ -719,7 +731,7 @@ export default function ProviderProfile() {
         {provider.services?.length > 0 && (
           <div className="px-4 mb-6">
             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary-500 rounded-full"></span> Services
+              <span className="w-1 h-5 bg-gray-300 rounded-full"></span> Services
             </h2>
             <div className="space-y-3">
               {provider.services.map((service) => (
@@ -739,7 +751,7 @@ export default function ProviderProfile() {
         )}
 
         <div className="px-4 mb-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 border-l-4 border-primary-500">
+          <Card>
             <h2 className="text-base font-bold text-gray-900 mb-3">About</h2>
             {provider.description && <p className="text-sm text-gray-600 mb-4 leading-relaxed break-words">{provider.description}</p>}
             <div className="flex flex-wrap gap-2">
@@ -748,20 +760,20 @@ export default function ProviderProfile() {
               {provider.profile?.gender && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><User className="h-3.5 w-3.5" /> {provider.profile.gender}</span>}
               {provider.profile?.age && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Calendar className="h-3.5 w-3.5" /> {provider.profile.age} years</span>}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="px-4 mb-8">
-          <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2"><span className="w-1 h-5 bg-primary-500 rounded-full"></span> Reviews</h2>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 border-l-4 border-primary-500">
+          <Card>
+            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">Reviews</h2>
             <ReviewsList reviews={provider.reviews || []} />
-          </div>
+          </Card>
         </div>
 
         {similarProviders && similarProviders.length > 0 && (
           <div className="px-4 pb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-5 bg-primary-500 rounded-full"></span> Similar Providers</h2>
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-5 bg-gray-300 rounded-full"></span> Similar Providers</h2>
               <div className="flex border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <button onClick={() => setSimilarViewMode('grid')} className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'grid' && 'bg-primary-50 text-primary-600')}><LayoutGrid className="h-4 w-4" /></button>
                 <button onClick={() => setSimilarViewMode('list')} className={cn('p-1.5 text-gray-500 hover:text-primary-600', similarViewMode === 'list' && 'bg-primary-50 text-primary-600')}><List className="h-4 w-4" /></button>
@@ -787,61 +799,82 @@ export default function ProviderProfile() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to results
         </button>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 border-l-4 border-primary-500">
+        {/* Profile hero card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
           <div className="relative h-56 bg-gradient-to-r from-primary-100 to-primary-50">
             {provider.profile?.cover_photo ? (
-              <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" width={1200} height={224} loading="eager" fetchpriority="high" />
+              <button onClick={() => setCoverModalOpen(true)} className="w-full h-full relative group">
+                <OptimizedImage src={provider.profile.cover_photo} alt="Cover" className="w-full h-full object-cover" width={2400} height={560} loading="eager" fetchpriority="high" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                  <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
             ) : (
-              <div className="w-full h-full bg-gradient-to-r from-primary-100 to-green-100" />
+              <div className="w-full h-full bg-gradient-to-r from-gray-100 to-gray-50" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
           </div>
 
-          <div className="relative px-6 sm:px-8 -mt-8 pb-6 flex flex-col sm:flex-row items-center sm:items-end gap-4">
-            <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0">
-              {provider.profile?.avatar_url ? (
-                <button onClick={() => setAvatarModalOpen(true)} className="w-full h-full relative group">
-                  <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" width={128} height={128} loading="eager" fetchpriority="high" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </button>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">{(providerName || 'P')[0]}</div>
-              )}
-              {provider.profile?.is_verified && <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-0.5"><CheckCircle className="h-5 w-5 text-white" /></div>}
-            </div>
-
-            <div className="flex-1 mt-4 sm:mt-0 sm:ml-4 pt-6">
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
-                <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />{statusLabel[provider.status] || 'Available for Booking'}
-                </span>
+          <div className="px-6 sm:px-8 pt-6 pb-4">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+              {/* Avatar */}
+              <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white flex-shrink-0 -mt-16">
+                {provider.profile?.avatar_url ? (
+                  <button onClick={() => setAvatarModalOpen(true)} className="w-full h-full relative group">
+                    <OptimizedImage src={provider.profile.avatar_url} alt={providerName} className="w-full h-full object-cover" width={256} height={256} loading="eager" fetchpriority="high" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-primary-600 bg-primary-50">{(providerName || 'P')[0]}</div>
+                )}
+                {/* Blue verification badge removed */}
               </div>
-              <p className="text-sm font-medium text-primary-600">{categoryName}</p>
-              {provider.description && (
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
-                  {shortDescription}
-                  {provider.description.length > 150 && <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">See more</button>}
-                </p>
-              )}
-            </div>
 
-            <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
-              <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all"><Calendar className="h-5 w-5" /> Book</button>
-              <button onClick={() => requireAuth(openChat)} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><MessageCircle className="h-5 w-5" /> Message</button>
-              <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 bg-red-50 text-red-600 text-sm font-semibold rounded-xl hover:bg-red-100 shadow-sm transition-all"><Flag className="h-5 w-5" /> Report</button>
-              <button onClick={shareProviderLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><Share2 className="h-5 w-5" /> Share</button>
-              {!showPhone ? (
-                <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> Contact</button>
-              ) : (
-                <a href={`tel:${provider.profile?.phone || ''}`} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}</a>
-              )}
-              <div className="flex items-center"><FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" /></div>
+              {/* Name, category, description */}
+              <div className="flex-1 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start gap-3 mb-1 flex-wrap">
+                  <h1 className="text-2xl font-bold text-gray-900">{providerName}</h1>
+                  <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1 rounded-full border border-green-200">
+                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    {statusLabel[provider.status] || 'Available for Booking'}
+                  </span>
+                  {provider.profile?.is_verified && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-white text-green-700 text-xs font-semibold rounded-full border border-green-400">
+                      <img src="/verify.png" alt="Verified" className="h-3.5 w-3.5" />
+                      Verified
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm font-medium text-primary-600">{categoryName}</p>
+                {provider.description && (
+                  <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                    {shortDescription}
+                    {provider.description.length > 150 && (
+                      <button onClick={() => setShowFullDescription(true)} className="text-primary-600 hover:underline ml-1 font-medium">See more</button>
+                    )}
+                  </p>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-2 mt-0 sm:mt-0">
+                <button onClick={() => requireAuth(() => setShowBookingModal(true))} className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 shadow-md shadow-primary-600/20 transition-all"><Calendar className="h-5 w-5" /> Book</button>
+                <button onClick={() => requireAuth(openChat)} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><MessageCircle className="h-5 w-5" /> Message</button>
+                <button onClick={() => requireAuth(() => setShowReportModal(true))} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 bg-red-50 text-red-600 text-sm font-semibold rounded-xl hover:bg-red-100 shadow-sm transition-all"><Flag className="h-5 w-5" /> Report</button>
+                <button onClick={shareProviderLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-all"><Share2 className="h-5 w-5" /> Share</button>
+                {!showPhone ? (
+                  <button onClick={() => requireAuth(() => setShowPhone(true))} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> Contact</button>
+                ) : (
+                  <a href={`tel:${provider.profile?.phone || ''}`} className="flex items-center gap-2 px-5 py-2.5 border border-primary-200 bg-primary-50 text-primary-700 text-sm font-semibold rounded-xl hover:bg-primary-100 shadow-sm transition-all"><Phone className="h-5 w-5" /> {provider.profile?.phone || 'No phone'}</a>
+                )}
+                <div className="flex items-center"><FavoriteButton providerId={id!} size="md" className="border border-gray-200 rounded-xl p-2 hover:bg-gray-50" /></div>
+              </div>
             </div>
           </div>
 
+          {/* Stats bar */}
           <div className="mx-6 border-t border-gray-100 pt-4 pb-4">
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
               <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100"><MapPin className="h-4 w-4 text-primary-500" /><span>{locationString}</span></div>
@@ -857,9 +890,10 @@ export default function ProviderProfile() {
           </div>
         </div>
 
+        {/* Services & Portfolio */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {provider.services?.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+            <Card>
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Package className="h-5 w-5 text-primary-600" /> Services & Pricing</h2>
               <div className="space-y-4">
                 {provider.services.map((service) => (
@@ -875,26 +909,26 @@ export default function ProviderProfile() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {provider.portfolio_images?.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+            <Card>
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Package className="h-5 w-5 text-primary-600" /> Portfolio</h2>
-              {/* FIX: full-width grid with 4 columns on large screens */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {provider.portfolio_images.map((image, idx) => (
                   <Link key={image.id} to={`/provider/${id}/portfolio`} className="overflow-hidden rounded-lg hover:opacity-90 transition-opacity">
-                    <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full aspect-square object-cover" width={300} height={300} />
+                    <OptimizedImage src={image.image_url} alt={image.title || 'Portfolio'} className="w-full aspect-square object-cover" width={600} height={600} />
                   </Link>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
         </div>
 
+        {/* About & Reviews */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+          <Card>
             <h2 className="text-lg font-bold text-gray-900 mb-4">About</h2>
             {provider.description && <p className="text-sm text-gray-600 mb-4 leading-relaxed">{provider.description}</p>}
             <div className="flex flex-wrap gap-2">
@@ -903,22 +937,22 @@ export default function ProviderProfile() {
               {provider.profile?.gender && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><User className="h-4 w-4" /> {provider.profile.gender}</span>}
               {provider.profile?.age && <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 rounded-full px-3 py-1.5 text-xs font-medium border border-primary-200"><Calendar className="h-4 w-4" /> {provider.profile.age} years</span>}
             </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 border-l-4 border-primary-500">
+          </Card>
+          <Card>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Reviews</h2>
             <ReviewsList reviews={provider.reviews || []} />
-          </div>
+          </Card>
         </div>
 
+        {/* Similar Providers */}
         {similarProviders && similarProviders.length > 0 && (
           <div className="mt-8 mb-8">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-6 bg-primary-500 rounded-full"></span> Similar Providers</h2>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><span className="w-1 h-6 bg-gray-300 rounded-full"></span> Similar Providers</h2>
               <Link to={`/search?category=${encodeURIComponent(provider.selected_category_slug)}`} className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors">
                 View all <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            {/* FIX: 4 columns on desktop using CSS grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {similarProviders.map((p: any) => (
                 <ProviderCardPortrait key={p.id} provider={p} />
@@ -930,6 +964,7 @@ export default function ProviderProfile() {
 
       {/* ========== MODALS ========== */}
 
+      {/* Avatar full‑screen modal */}
       {avatarModalOpen && provider.profile?.avatar_url && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setAvatarModalOpen(false)}>
           <button className="absolute top-4 right-4 text-white" onClick={() => setAvatarModalOpen(false)}>
@@ -939,6 +974,17 @@ export default function ProviderProfile() {
         </div>
       )}
 
+      {/* Cover full‑screen modal (NEW) */}
+      {coverModalOpen && provider.profile?.cover_photo && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setCoverModalOpen(false)}>
+          <button className="absolute top-4 right-4 text-white" onClick={() => setCoverModalOpen(false)}>
+            <X className="h-8 w-8" />
+          </button>
+          <img src={provider.profile.cover_photo} alt={`${providerName} cover`} className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+
+      {/* Full description modal */}
       {showFullDescription && provider.description && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowFullDescription(false)}>
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>

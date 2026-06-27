@@ -72,7 +72,8 @@ export function Footer() {
               <li><Link to="/auth/signup?role=provider" className="hover:text-white transition-colors">Become a Provider</Link></li>
               <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li>
               <li><Link to="/blog" className="hover:text-white transition-colors">Blog</Link></li>
-              <li><Link to="/nimart-explained" className="hover:text-white transition-colors">What is Nimart?</Link></li>   {/* ← NEW */}
+              <li><Link to="/nimart-explained" className="hover:text-white transition-colors">What is Nimart?</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>   {/* ← NEW */}
             </ul>
           </div>
 

@@ -62,8 +62,6 @@ SUBCATEGORIES.forEach(sub => {
 const normalizeText = (s: string) =>
   s.trim().replace(/\s+/g, ' ').replace(/&amp;/g, '&').toLowerCase();
 
-let pulsePhase = 0;
-
 export function FindProvidersRadar({
   isOpen,
   onClose,
@@ -98,18 +96,32 @@ export function FindProvidersRadar({
   );
 
   const suppressSuggestionsRef = useRef(false);
+  const locationButtonRef = useRef<HTMLButtonElement>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
   const rotationAngleRef = useRef(0);
   const scanningRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dimensions, setDimensions] = useState({ width: 400, height: 400 });
 
+  // Local pulse phase – per component instance
+  const pulsePhaseRef = useRef(0);
+
   useEffect(() => {
     scanningRef.current = scanning;
   }, [scanning]);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, []);
 
   // Canvas sizing
   useEffect(() => {
@@ -126,7 +138,7 @@ export function FindProvidersRadar({
     return () => window.removeEventListener('resize', updateSize);
   }, [isOpen]);
 
-  // Load states & LGAs internally
+  // Load states & LGAs internally – only once
   const loadLocations = useCallback(async () => {
     setLocationLoading(true);
     setLocationLoadError(false);
@@ -267,6 +279,8 @@ export function FindProvidersRadar({
     setSelectedProvider(null);
     rotationAngleRef.current = 0;
 
+    // Start animation
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
     const animate = () => {
       if (!scanningRef.current) return;
       rotationAngleRef.current = (rotationAngleRef.current + 2) % 360;
@@ -285,9 +299,9 @@ export function FindProvidersRadar({
 
       if (providersError) throw providersError;
       if (!providersData || providersData.length === 0) {
-        setErrorMsg(`No providers found in "${category}". Try a different category or check your spelling.`);
+        setErrorMsg(`No providers found for "${category}". Try a different category.`);
         setScanning(false);
-        cancelAnimationFrame(animationRef.current!);
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
         drawCanvas();
         return;
       }
@@ -343,7 +357,13 @@ export function FindProvidersRadar({
             });
           }
         }
-        nearby.sort((a, b) => a.distance - b.distance);
+        // Sort: boosted first, then by distance
+        nearby.sort((a, b) => {
+          const aBoosted = providersData.find(p => p.id === a.id)?.boost_until && new Date(providersData.find(p => p.id === a.id)!.boost_until!) > new Date() ? 1 : 0;
+          const bBoosted = providersData.find(p => p.id === b.id)?.boost_until && new Date(providersData.find(p => p.id === b.id)!.boost_until!) > new Date() ? 1 : 0;
+          if (aBoosted !== bBoosted) return bBoosted - aBoosted;
+          return a.distance - b.distance;
+        });
       }
 
       setProviders(nearby.slice(0, 50));
@@ -351,7 +371,7 @@ export function FindProvidersRadar({
         setErrorMsg(
           currentCoords === null
             ? `No providers with location data found for "${category}".`
-            : `No providers within ${radius}km. Try a wider radius, a different category, or a nearby location.`
+            : `No providers within ${radius}km. Try a wider radius.`
         );
       }
     } catch (err) {
@@ -360,7 +380,7 @@ export function FindProvidersRadar({
     } finally {
       setLoading(false);
       setScanning(false);
-      cancelAnimationFrame(animationRef.current!);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       drawCanvas();
     }
   };
@@ -527,8 +547,8 @@ export function FindProvidersRadar({
 
     // Pulsing You dot
     if (currentCoords !== null) {
-      pulsePhase = (pulsePhase + 0.05) % (2 * Math.PI);
-      const pulseRadius = 6 + Math.sin(pulsePhase) * 4;
+      pulsePhaseRef.current = (pulsePhaseRef.current + 0.05) % (2 * Math.PI);
+      const pulseRadius = 6 + Math.sin(pulsePhaseRef.current) * 4;
       ctx.fillStyle = '#3b82f6';
       ctx.shadowBlur = 12;
       ctx.shadowColor = '#3b82f6';
@@ -544,7 +564,7 @@ export function FindProvidersRadar({
       ctx.stroke();
     }
 
-    // Provider markers (only green circles)
+    // Provider markers
     if (!isScanning) {
       providers.forEach(provider => {
         if (currentCoords === null) return;
@@ -634,7 +654,7 @@ export function FindProvidersRadar({
 
         {/* Main content: Canvas + controls */}
         <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 p-4 pt-16 md:pt-4 overflow-auto">
-          {/* Canvas area – ensure full circle visible on mobile by adding top margin */}
+          {/* Canvas area */}
           <div className="flex-1 flex justify-center items-start md:items-center mt-2 md:mt-0">
             <canvas
               ref={canvasRef}
@@ -647,9 +667,8 @@ export function FindProvidersRadar({
 
           {/* Right panel with all controls */}
           <div className="flex-1 w-full max-w-md space-y-4 mt-2 md:mt-0">
-            {/* ---- Location + GPS button side-by-side on mobile ---- */}
+            {/* Location + GPS button */}
             <div className="flex flex-row gap-2">
-              {/* Location selector */}
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-300 mb-1">📍 Location</label>
                 {locationLoading ? (
@@ -660,13 +679,12 @@ export function FindProvidersRadar({
                   <div className="flex items-center gap-2 text-yellow-400">
                     <AlertTriangle className="h-4 w-4" />
                     <span className="text-sm">Failed.</span>
-                    <button onClick={loadLocations} className="underline text-cyan-400 text-sm">
-                      Retry
-                    </button>
+                    <button onClick={loadLocations} className="underline text-cyan-400 text-sm">Retry</button>
                   </div>
                 ) : (
                   <div className="relative">
                     <button
+                      ref={locationButtonRef}
                       onClick={() => setShowLocationDropdown(!showLocationDropdown)}
                       className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 flex items-center justify-between gap-1 hover:bg-gray-750 transition"
                     >
@@ -681,13 +699,12 @@ export function FindProvidersRadar({
                         onClose={() => setShowLocationDropdown(false)}
                         preloadedStates={states}
                         preloadedLgas={lgas}
+                        triggerRef={locationButtonRef}
                       />
                     )}
                   </div>
                 )}
               </div>
-
-              {/* GPS button */}
               <div className="flex items-end">
                 <button
                   onClick={requestLocationAgain}
@@ -700,7 +717,7 @@ export function FindProvidersRadar({
               </div>
             </div>
 
-            {/* Radius selector – only when location is set */}
+            {/* Radius selector */}
             {currentCoords !== null && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Search Radius</label>
@@ -750,7 +767,7 @@ export function FindProvidersRadar({
               </div>
             </div>
 
-            {/* Action buttons row */}
+            {/* Action buttons */}
             <div className="flex gap-2">
               <button
                 onClick={() => {
@@ -797,7 +814,7 @@ export function FindProvidersRadar({
               </div>
             )}
 
-            {/* Nearest Providers list */}
+            {/* Nearest Providers list – boosted first, then by distance */}
             {providers.length > 0 && !selectedProvider && (
               <div className="bg-gray-800 rounded-lg p-3 max-h-60 overflow-auto space-y-2">
                 <p className="text-sm text-gray-300 font-medium mb-1">

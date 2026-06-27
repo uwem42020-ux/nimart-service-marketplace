@@ -1,3 +1,4 @@
+// src/pages/shared/Help.tsx
 import { Link } from 'react-router-dom';
 import { Mail, Phone, HelpCircle, BookOpen, Shield, CreditCard } from 'lucide-react';
 
@@ -58,7 +59,7 @@ export default function Help() {
       </div>
 
       {/* Guides */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary-600" />
@@ -75,6 +76,25 @@ export default function Help() {
           <p className="text-gray-600 mb-4">Understand how payments work and our pricing structure.</p>
           <Link to="/terms" className="text-primary-600 hover:underline">View Terms →</Link>
         </div>
+      </div>
+
+      {/* Cross‑links to brand pages – NEW */}
+      <div className="mt-10 border-t pt-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">More about Nimart</h2>
+        <ul className="space-y-2 text-sm text-gray-600">
+          <li>
+            <Link to="/about" className="text-primary-600 hover:underline">About Nimart</Link>
+            – learn who we are and why we built this marketplace.
+          </li>
+          <li>
+            <Link to="/nimart-explained" className="text-primary-600 hover:underline">What is Nimart?</Link>
+            – a quick introduction to the platform.
+          </li>
+          <li>
+            <Link to="/nimart-vs-nimart" className="text-primary-600 hover:underline">Nimart vs. NIMART</Link>
+            – the difference between our service marketplace and the healthcare programme.
+          </li>
+        </ul>
       </div>
     </div>
   );

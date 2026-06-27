@@ -46,7 +46,8 @@ const Safety = lazy(() => import('./pages/shared/Safety'));
 const Help = lazy(() => import('./pages/shared/Help'));
 const Report = lazy(() => import('./pages/shared/Report'));
 const NimartVsNimart = lazy(() => import('./pages/shared/NimartVsNimart'));
-const NimartExplained = lazy(() => import('./pages/shared/NimartExplained')); // <-- NEW
+const NimartExplained = lazy(() => import('./pages/shared/NimartExplained'));
+const About = lazy(() => import('./pages/shared/About')); // <-- NEW
 const Careers = lazy(() => import('./pages/shared/Careers'));
 const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
@@ -106,7 +107,8 @@ export const router = createBrowserRouter([
       { path: 'help', element: <Suspense fallback={<LoadingSkeleton />}><Help /></Suspense> },
       { path: 'report', element: <Suspense fallback={<LoadingSkeleton />}><Report /></Suspense> },
       { path: 'nimart-vs-nimart', element: <Suspense fallback={<LoadingSkeleton />}><NimartVsNimart /></Suspense> },
-      { path: 'nimart-explained', element: <Suspense fallback={<LoadingSkeleton />}><NimartExplained /></Suspense> },  // <-- NEW ROUTE
+      { path: 'nimart-explained', element: <Suspense fallback={<LoadingSkeleton />}><NimartExplained /></Suspense> },
+      { path: 'about', element: <Suspense fallback={<LoadingSkeleton />}><About /></Suspense> },  // <-- NEW ROUTE
       { path: '*', element: <Suspense fallback={<LoadingSkeleton />}><NotFound /></Suspense> },
     ],
   },
